@@ -1,0 +1,12 @@
+{
+    "go.goroot": "${env:HOME}/.local/go",
+    "chat.tools.terminal.autoApprove": {
+        "go": true,
+        "env": true,
+        "gofmt": true,
+        "./bin/photosort-gui": true,
+        "git var": true,
+        "git add": true,
+        "git commit": true
+    }
+}

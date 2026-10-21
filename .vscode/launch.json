@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Photosort: preview",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/photosort",
+      "cwd": "${workspaceFolder}",
+      "args": ["--source", "${input:source}", "--destination", "${input:destination}"]
+    },
+    {
+      "name": "Photosort: copy",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/photosort",
+      "cwd": "${workspaceFolder}",
+      "args": ["--source", "${input:source}", "--destination", "${input:destination}", "--apply"]
+    }
+  ],
+  "inputs": [
+    {"id": "source", "type": "promptString", "description": "Source directory (absolute path)"},
+    {"id": "destination", "type": "promptString", "description": "Destination directory (absolute path)"}
+  ]
+}
