@@ -60,6 +60,11 @@ const fr = {
   'prefs.output': 'Dossier de sortie',
   'prefs.location': 'Géolocalisation',
   'prefs.duplicates': 'Doublons',
+  'prefs.tags': 'Tags (IA locale)',
+  'tagScenes': 'Lieux : plage, montagne, ville, campagne, château, église',
+  'tagMoment': 'Moment : lever/coucher de soleil, nuit, soleil, nuage',
+  'tagPeople': 'Personnes : People, Portrait',
+  'tags.hint': 'Hors ligne. Les tags sont écrits dans un fichier .xmp à côté de chaque copie ; vos originaux ne sont jamais modifiés. Cela ralentit un peu la copie.',
   'prefs.saved': 'Les préférences sont enregistrées automatiquement.'
 }
 
@@ -117,6 +122,11 @@ const enGB: Record<Key, string> = {
   'prefs.output': 'Output folder',
   'prefs.location': 'Geolocation',
   'prefs.duplicates': 'Duplicates',
+  'prefs.tags': 'Tags (local AI)',
+  'tagScenes': 'Places: beach, mountain, city, countryside, castle, church',
+  'tagMoment': 'Moment: sunrise/sunset, night, sun, clouds',
+  'tagPeople': 'People: People, Portrait',
+  'tags.hint': 'Offline. Tags are written to a .xmp file next to each copy; your originals are never modified. Copying is a little slower.',
   'prefs.saved': 'Preferences are saved automatically.'
 }
 
@@ -172,6 +182,11 @@ const da: Record<Key, string> = {
   'prefs.output': 'Outputmappe',
   'prefs.location': 'Geolokalisering',
   'prefs.duplicates': 'Dubletter',
+  'prefs.tags': 'Tags (lokal AI)',
+  'tagScenes': 'Steder: strand, bjerg, by, landskab, slot, kirke',
+  'tagMoment': 'Tidspunkt: solopgang/solnedgang, nat, sol, skyer',
+  'tagPeople': 'Personer: People, Portrait',
+  'tags.hint': 'Offline. Tags skrives i en .xmp-fil ved siden af hver kopi; dine originaler ændres aldrig. Kopiering bliver lidt langsommere.',
   'prefs.saved': 'Indstillinger gemmes automatisk.'
 }
 

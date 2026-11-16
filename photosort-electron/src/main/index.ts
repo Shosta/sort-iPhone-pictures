@@ -15,12 +15,19 @@ function sidecarPath(): string {
     : join(app.getAppPath(), 'resources', 'bin', name)
 }
 
+function aiDir(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'ai') : join(app.getAppPath(), 'ai-assets')
+}
+
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload)
 }
 
 function startSidecar(): void {
-  sidecar = spawn(sidecarPath(), [], { stdio: ['pipe', 'pipe', 'pipe'] })
+  sidecar = spawn(sidecarPath(), [], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PHOTOSORT_AI_DIR: aiDir() }
+  })
   createInterface({ input: sidecar.stdout }).on('line', (line) => {
     try {
       broadcast('sidecar:event', JSON.parse(line))

@@ -26,7 +26,7 @@ function Counter({ value }: { value: number }): JSX.Element {
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
-  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar } = prefs
+  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar, tagScenes, tagMoment, tagPeople } = prefs
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const accent = themeById(prefs.theme).vars.accent
@@ -112,7 +112,7 @@ export function App(): JSX.Element {
     if (!plan) return
     setPhase('copying')
     setCopied(new Set())
-    running.current = request({ op: 'copy', planId: planId.current }, (event) => {
+    running.current = request({ op: 'copy', planId: planId.current, tagScenes, tagMoment, tagPeople }, (event) => {
       if (event.type === 'progress') buffer.current.push(event.entry.source)
       else if (event.type === 'done') {
         setTimeout(() => {

@@ -7,8 +7,9 @@
   "private": true,
   "scripts": {
     "sidecar": "node scripts/build-sidecar.mjs",
+    "ai-assets": "node scripts/fetch-ai-assets.mjs",
     "dev": "npm run sidecar && node scripts/rename-dev-electron.mjs && electron-vite dev",
-    "build": "npm run sidecar && electron-vite build",
+    "build": "npm run sidecar && npm run ai-assets && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",

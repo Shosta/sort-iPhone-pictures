@@ -8,6 +8,9 @@ export interface Prefs {
   landmarks: boolean
   skipDuplicates: boolean
   groupSimilar: boolean
+  tagScenes: boolean
+  tagMoment: boolean
+  tagPeople: boolean
   language: Language
   theme: ThemeId
 }
@@ -22,6 +25,9 @@ function load(): Prefs {
     landmarks: localStorage.getItem('landmarks') !== '0',
     skipDuplicates: true,
     groupSimilar: true,
+    tagScenes: false,
+    tagMoment: false,
+    tagPeople: false,
     language: detectLanguage(),
     theme: 'aurora'
   }

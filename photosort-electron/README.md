@@ -78,6 +78,22 @@ enregistrées automatiquement (stockage local de l'application) et restaurées a
 lancement suivant. La langue initiale suit celle du système (anglais par défaut).
 Les textes sont dans `src/renderer/i18n.tsx`.
 
+## Tags automatiques (IA locale)
+
+Option des Préférences (désactivée par défaut) : après chaque copie, Photosort analyse la photo **hors ligne** et écrit les mots-clés dans un fichier `<photo>.xmp` à côté de la copie (`dc:subject`, lu par Lightroom, digiKam, etc.). Les originaux ne sont jamais modifiés.
+
+| Famille | Tags | Méthode |
+| --- | --- | --- |
+| Lieux | plage, montagne, ville, campagne, château, église | Places365 (ResNet18, ONNX) |
+| Moment | Lever de soleil, Coucher de soleil, Nuit, Soleil, Nuage | calcul solaire (date, GPS, fuseau EXIF) ; ciel pour Soleil et Nuage |
+| Personnes | People, Portrait | détection de visages YuNet (pas de reconnaissance) |
+
+La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS, les tags de moment solaires sont omis.
+
+Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : `npm run ai-assets` les télécharge (sha256 vérifié) dans `ai-assets/` pour l'OS courant (`GOOS`/`GOARCH` pour un autre), et `electron-builder` les copie dans `resources/ai`. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
+
+Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matrice CI macOS, Linux, Windows) avec `npm run sidecar`. CLI : `--tag-scenes --tag-moment --tag-people [--ai-dir …]`.
+
 ## Limites
 
 - Copie uniquement, aucun original modifié (comportement du moteur Go).
