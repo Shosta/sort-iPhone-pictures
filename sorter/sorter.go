@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"unicode"
 
 	"sort-iphone-pictures/internal/geo"
@@ -59,9 +59,22 @@ type Engine struct {
 	GroupSimilar bool
 	// Hash overrides the perceptual image hash (tests).
 	Hash func(path string) (uint64, bool)
-	// Progress, if set, reports the current planning stage ("exif", "similar")
-	// and how many photos are done out of total.
+	// Progress, if set, reports the current planning stage ("exif", then
+	// "hash" when duplicates or near-duplicates are looked for, then
+	// "similar") and how many photos are done out of total.
 	Progress func(stage string, done, total int)
+	// Draft, if set, receives each dated photo as soon as its folder is known,
+	// before duplicates and near-duplicates are resolved. Its Target is the
+	// folder joined with the original file name.
+	Draft func(Entry)
+	// OnDuplicate, if set, receives each true duplicate as soon as it is
+	// found, in source order.
+	OnDuplicate func(Duplicate)
+	// Preview, if set, receives the upright preview (at most PreviewSize
+	// pixels, often the 160×120 Exif thumbnail) of photos looked at while
+	// planning, so callers can cache it. It is called from several
+	// goroutines at once.
+	Preview func(path string, img image.Image)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
@@ -142,116 +155,119 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.ByLocation && engine.Landmarks && landmark == nil {
 		landmark = geo.DefaultPlaces().Near
 	}
-	var dedupe *deduper
-	if engine.SkipDuplicates {
-		dedupe = newDeduper(plan.Destination)
-	}
-	hasher := engine.Hash
-	if hasher == nil {
-		hasher = imageHash
-	}
-	// The expensive per-photo work (EXIF, content hashes, perceptual hash)
-	// is independent between photos: run it on all cores, then do the
-	// order-dependent planning sequentially below.
-	var finished atomic.Int64
-	prepared := prepare(ctx, ordered, func(path string) preparedPhoto {
-		var p preparedPhoto
-		p.metadata, p.err = reader(ctx, path)
-		if p.err == nil && dedupe != nil && validDate(p.metadata) {
-			p.fileSum, p.fileOK = fileHash(path)
-			p.pixelSum, p.pixelOK = pixelHash(path)
+	folderOf := func(metadata Metadata) string {
+		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
+		if !engine.ByLocation || !metadata.HasGPS {
+			return month
 		}
-		if p.err == nil && engine.GroupSimilar && validDate(p.metadata) {
-			p.imageSum, p.imageOK = hasher(path)
+		place, found := "", false
+		if engine.Landmarks && landmark != nil {
+			place, found = landmark(metadata.Lat, metadata.Lon)
+			found = found && placeName(place) != ""
+		}
+		if !found {
+			place, found = locate(metadata.Lat, metadata.Lon)
+		}
+		if folder := placeName(place); found && folder != "" {
+			return filepath.Join(month, folder)
+		}
+		return month
+	}
+
+	// Stage 1: EXIF and folder of every photo, on all cores. Each photo is
+	// reported as a draft as soon as it is known.
+	type photo struct {
+		metadata Metadata
+		err      error
+		folder   string
+	}
+	photos := make([]photo, len(ordered))
+	done := 0
+	for i := range parallel(ctx, len(ordered), func(i int) {
+		item := &photos[i]
+		item.metadata, item.err = reader(ctx, ordered[i])
+		if item.err == nil && validDate(item.metadata) {
+			item.folder = folderOf(item.metadata)
+		}
+	}) {
+		done++
+		if item := photos[i]; item.folder != "" && engine.Draft != nil {
+			engine.Draft(Entry{ordered[i], filepath.Join(item.folder, filepath.Base(ordered[i])), item.metadata})
 		}
 		if engine.Progress != nil {
-			engine.Progress("exif", int(finished.Add(1)), len(ordered))
+			engine.Progress("exif", done, len(ordered))
 		}
-		return p
-	})
+	}
 	if err := ctx.Err(); err != nil {
 		return plan, err
 	}
-	var imageSums map[string]preparedPhoto
-	if engine.GroupSimilar {
-		imageSums = make(map[string]preparedPhoto, len(ordered))
-	}
-	if dedupe != nil {
-		known := make(map[string]preparedPhoto, len(ordered))
-		for i, path := range ordered {
-			known[path] = prepared[i]
+	var dated []int
+	for i, path := range ordered {
+		switch item := photos[i]; {
+		case item.err != nil:
+			plan.Skipped = append(plan.Skipped, Issue{path, item.err.Error()})
+		case item.folder == "":
+			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
+		default:
+			dated = append(dated, i)
 		}
-		dedupe.fileSum = func(path string) (hashKey, bool) {
-			if p, ok := known[path]; ok {
-				return p.fileSum, p.fileOK
+	}
+
+	// Stage 2: content fingerprints (each photo read and decoded once, on all
+	// cores), consumed in source order so the first copy of a photo always
+	// wins.
+	pending := make([]candidate, 0, len(dated))
+	if engine.SkipDuplicates || engine.GroupSimilar {
+		var dedupe *deduper
+		if engine.SkipDuplicates {
+			dedupe = newDeduper(plan.Destination)
+		}
+		options := fingerprintOptions{
+			bytes:      engine.SkipDuplicates,
+			pixels:     engine.SkipDuplicates,
+			perceptual: engine.GroupSimilar,
+			hash:       engine.Hash,
+			preview:    engine.Preview,
+		}
+		prints := make([]fingerprint, len(dated))
+		ready := make([]bool, len(dated))
+		next, done := 0, 0
+		for k := range parallel(ctx, len(dated), func(k int) {
+			prints[k] = fingerprintOf(ordered[dated[k]], options)
+		}) {
+			ready[k] = true
+			for ; next < len(dated) && ready[next]; next++ {
+				path, item := ordered[dated[next]], photos[dated[next]]
+				if dedupe != nil {
+					if of, found := dedupe.check(path, prints[next]); found {
+						duplicate := Duplicate{path, of, within(plan.Destination, of)}
+						plan.Duplicates = append(plan.Duplicates, duplicate)
+						if engine.OnDuplicate != nil {
+							engine.OnDuplicate(duplicate)
+						}
+						continue
+					}
+				}
+				pending = append(pending, candidate{path, item.metadata, item.folder, prints[next].imageSum, prints[next].imageOK})
 			}
-			return fileHash(path)
-		}
-		dedupe.pixelSum = func(path string) (hashKey, bool) {
-			if p, ok := known[path]; ok {
-				return p.pixelSum, p.pixelOK
+			done++
+			if engine.Progress != nil {
+				engine.Progress("hash", done, len(dated))
 			}
-			return pixelHash(path)
 		}
-	}
-	if imageSums != nil {
-		for i, path := range ordered {
-			imageSums[path] = prepared[i]
-		}
-	}
-	var pending []candidate
-	reserved := make(map[string]bool)
-	counters := make(map[string]int)
-	for index, path := range ordered {
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
-		metadata, err := prepared[index].metadata, prepared[index].err
-		if err != nil {
-			if ctx.Err() != nil {
-				return plan, ctx.Err()
-			}
-			plan.Skipped = append(plan.Skipped, Issue{path, err.Error()})
-			continue
+	} else {
+		for _, i := range dated {
+			pending = append(pending, candidate{path: ordered[i], metadata: photos[i].metadata, month: photos[i].folder})
 		}
-		if metadata.TakenAt.IsZero() || metadata.TakenAt.Year() < 1 || metadata.TakenAt.Year() > 9999 {
-			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
-			continue
-		}
-		if dedupe != nil {
-			if of, found := dedupe.check(path); found {
-				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of, within(plan.Destination, of)})
-				continue
-			}
-		}
-		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
-		if engine.ByLocation && metadata.HasGPS {
-			place, found := "", false
-			if engine.Landmarks && landmark != nil {
-				place, found = landmark(metadata.Lat, metadata.Lon)
-				if found && placeName(place) == "" {
-					found = false
-				}
-			}
-			if !found {
-				place, found = locate(metadata.Lat, metadata.Lon)
-			}
-			if found {
-				if folder := placeName(place); folder != "" {
-					month = filepath.Join(month, folder)
-				}
-			}
-		}
-		pending = append(pending, candidate{path, metadata, month})
 	}
 	if engine.GroupSimilar {
 		if engine.Progress != nil {
-			engine.Progress("similar", len(ordered), len(ordered))
+			engine.Progress("similar", len(pending), len(pending))
 		}
-		groups, err := similarGroups(ctx, pending, func(path string) (uint64, bool) {
-			p := imageSums[path]
-			return p.imageSum, p.imageOK
-		})
+		groups, err := similarGroups(ctx, pending)
 		if err != nil {
 			return plan, err
 		}
@@ -261,6 +277,8 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 			}
 		}
 	}
+	reserved := make(map[string]bool)
+	counters := make(map[string]int)
 	for _, item := range pending {
 		path, metadata, month := item.path, item.metadata, item.month
 		prefix := metadata.TakenAt.Format("2006-01-02") + " - " + cameraName(metadata.Camera)
@@ -386,6 +404,10 @@ func (reader contextReader) Read(buffer []byte) (int, error) {
 		return 0, err
 	}
 	return reader.reader.Read(buffer)
+}
+
+func validDate(m Metadata) bool {
+	return !m.TakenAt.IsZero() && m.TakenAt.Year() >= 1 && m.TakenAt.Year() <= 9999
 }
 
 func supported(path string) bool {

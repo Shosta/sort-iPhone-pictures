@@ -2,11 +2,10 @@ package sorter
 
 import (
 	"context"
+	"image"
 	"math/bits"
 	"sort"
 	"time"
-
-	"sort-iphone-pictures/internal/thumbs"
 )
 
 const (
@@ -19,15 +18,13 @@ type candidate struct {
 	path     string
 	metadata Metadata
 	month    string
+	hash     uint64
+	hashOK   bool
 }
 
-// imageHash is a 64-bit difference hash: robust to small changes of framing,
+// dHash is a 64-bit difference hash: robust to small changes of framing,
 // exposure and compression, so successive shots of one scene land close.
-func imageHash(path string) (uint64, bool) {
-	img, err := thumbs.Image(path, 64)
-	if err != nil {
-		return 0, false
-	}
+func dHash(img image.Image) (uint64, bool) {
 	const w, h = 9, 8
 	bounds := img.Bounds()
 	if bounds.Dx() < 1 || bounds.Dy() < 1 {
@@ -66,14 +63,14 @@ func imageHash(path string) (uint64, bool) {
 // similarGroups returns, for each candidate, the name of its Almost
 // Duplicates folder ("" when the photo has no close sibling). Photos are
 // linked when taken within similarWindow of each other with similar hashes.
-func similarGroups(ctx context.Context, items []candidate, hasher func(string) (uint64, bool)) ([]string, error) {
+func similarGroups(ctx context.Context, items []candidate) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	hashes := make([]uint64, len(items))
 	ok := make([]bool, len(items))
 	for i, item := range items {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		hashes[i], ok[i] = hasher(item.path)
+		hashes[i], ok[i] = item.hash, item.hashOK
 	}
 	order := make([]int, len(items))
 	for i := range order {
