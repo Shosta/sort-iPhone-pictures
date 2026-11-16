@@ -34,6 +34,7 @@ type request struct {
 	ByLocation  bool     `json:"byLocation"`
 	Landmarks   bool     `json:"landmarks"`
 	Dedupe      bool     `json:"dedupe"`
+	Similar     bool     `json:"similar"`
 	PlanID      string   `json:"planId"`
 	Path        string   `json:"path"`
 	Size        int      `json:"size"`
@@ -126,7 +127,7 @@ func (s *server) handle(parent context.Context, req request) {
 func (s *server) run(ctx context.Context, req request) error {
 	switch req.Op {
 	case "plan":
-		plan, err := (sorter.Engine{ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe}).Plan(ctx, req.Sources, req.Destination)
+		plan, err := (sorter.Engine{ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe, GroupSimilar: req.Similar}).Plan(ctx, req.Sources, req.Destination)
 		if err != nil {
 			return err
 		}

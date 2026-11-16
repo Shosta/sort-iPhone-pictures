@@ -34,6 +34,11 @@ func JPEG(path string, size int) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// Image returns the decoded, oriented image scaled so its longest side is size.
+func Image(path string, size int) (image.Image, error) {
+	return render(path, size)
+}
+
 func render(path string, size int) (image.Image, error) {
 	file, err := os.Open(path)
 	if err != nil {

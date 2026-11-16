@@ -42,6 +42,7 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	landmarks := flags.Bool("landmarks", false, "With --by-location, use the name of a nearby landmark (museum, castle, stadium) instead of the city")
 	byLocation := flags.Bool("by-location", false, "Add a city folder inside each month when GPS data is available")
 	skipDuplicates := flags.Bool("skip-duplicates", false, "Leave out true duplicates (identical bytes or pixels), also compared to files already in the destination")
+	groupSimilar := flags.Bool("group-similar", false, "Put near-identical shots taken close in time into an \"Almost Duplicates\" folder")
 	asJSON := flags.Bool("json", false, "Print the plan and result as JSON")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -52,7 +53,7 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments; use --source and --destination")
 	}
-	plan, err := (sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates}).Plan(ctx, sources, *destination)
+	plan, err := (sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates, GroupSimilar: *groupSimilar}).Plan(ctx, sources, *destination)
 	if err != nil {
 		return err
 	}

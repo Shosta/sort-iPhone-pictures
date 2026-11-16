@@ -265,3 +265,38 @@ func TestSkipDuplicates(t *testing.T) {
 		t.Fatalf("destination duplicates not detected: %+v, %v", next, err)
 	}
 }
+
+func TestGroupSimilar(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "source")
+	for _, name := range []string{"a", "b", "c"} {
+		writePhoto(t, filepath.Join(source, name+".tiff"))
+		if err := os.WriteFile(filepath.Join(source, name+".tiff"), []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	taken := map[string]time.Time{
+		"a.tiff": time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC),
+		"b.tiff": time.Date(2026, 10, 20, 10, 0, 5, 0, time.UTC),
+		"c.tiff": time.Date(2026, 10, 20, 10, 0, 9, 0, time.UTC),
+	}
+	hashes := map[string]uint64{"a.tiff": 0, "b.tiff": 0b11, "c.tiff": ^uint64(0)}
+	engine := Engine{
+		GroupSimilar: true,
+		ReadMetadata: func(_ context.Context, path string) (Metadata, error) {
+			return Metadata{TakenAt: taken[filepath.Base(path)]}, nil
+		},
+		Hash: func(path string) (uint64, bool) { return hashes[filepath.Base(path)], true },
+	}
+	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+	if err != nil || len(plan.Entries) != 3 {
+		t.Fatalf("unexpected plan: %+v, %v", plan, err)
+	}
+	group := "2026/2026-10/2026-10-20 10.00.00 - Almost Duplicates/"
+	for _, entry := range plan.Entries {
+		inGroup := strings.HasPrefix(filepath.ToSlash(entry.Target), group)
+		if inGroup != (filepath.Base(entry.Source) != "c.tiff") {
+			t.Fatalf("unexpected target for %s: %s", entry.Source, entry.Target)
+		}
+	}
+}

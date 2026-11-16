@@ -105,6 +105,11 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
             <Switch on={prefs.skipDuplicates} accent={accent} />
             <span>{t('skipDuplicates')}</span>
           </label>
+          <label className={`toggle ${busy ? 'disabled' : ''}`}>
+            <input type="checkbox" checked={prefs.groupSimilar} disabled={busy} onChange={(event) => onChange({ groupSimilar: event.target.checked })} />
+            <Switch on={prefs.groupSimilar} accent={accent} />
+            <span>{t('groupSimilar')}</span>
+          </label>
         </div>
 
         <p className="hint">{t('prefs.saved')}</p>

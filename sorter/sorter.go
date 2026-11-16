@@ -53,6 +53,11 @@ type Engine struct {
 	// SkipDuplicates leaves out photos that are true duplicates (same bytes or
 	// same decoded pixels) of an earlier source or of a file in the destination.
 	SkipDuplicates bool
+	// GroupSimilar puts near-identical shots (bursts, retakes) taken close in
+	// time into a shared "Almost Duplicates" folder inside the month folder.
+	GroupSimilar bool
+	// Hash overrides the perceptual image hash (tests).
+	Hash func(path string) (uint64, bool)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
@@ -137,6 +142,7 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.SkipDuplicates {
 		dedupe = newDeduper(plan.Destination)
 	}
+	var pending []candidate
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
 	for _, path := range ordered {
@@ -179,6 +185,25 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 				}
 			}
 		}
+		pending = append(pending, candidate{path, metadata, month})
+	}
+	if engine.GroupSimilar {
+		hasher := engine.Hash
+		if hasher == nil {
+			hasher = imageHash
+		}
+		groups, err := similarGroups(ctx, pending, hasher)
+		if err != nil {
+			return plan, err
+		}
+		for index, group := range groups {
+			if group != "" {
+				pending[index].month = filepath.Join(pending[index].month, group)
+			}
+		}
+	}
+	for _, item := range pending {
+		path, metadata, month := item.path, item.metadata, item.month
 		prefix := metadata.TakenAt.Format("2006-01-02") + " - " + cameraName(metadata.Camera)
 		key := strings.ToLower(filepath.Join(month, prefix))
 		var target string
