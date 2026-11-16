@@ -2,57 +2,98 @@ package sorter
 
 import (
 	"context"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"sort"
 	"sync"
-	"sync/atomic"
 
 	"sort-iphone-pictures/internal/tagger"
 )
 
-// TagRunner analyses copied photos on a pool of goroutines, so tagging runs
-// alongside the copy instead of slowing it down. Tagging is best effort: a
-// failure never affects the copy.
-type TagRunner struct {
-	jobs chan Entry
-	wg   sync.WaitGroup
-	done atomic.Int64
+// TagResult reports one analysed photo.
+type TagResult struct {
+	Path  string
+	Tags  []string
+	Err   error
+	Done  int
+	Total int
 }
 
-// NewTagRunner starts one worker per tagger lane. onProgress (optional) is
-// called after each photo with the number of photos tagged so far; it must be
-// safe for concurrent use.
-func NewTagRunner(ctx context.Context, tg *tagger.Tagger, destination string, onProgress func(done int)) *TagRunner {
-	runner := &TagRunner{jobs: make(chan Entry, 4096)}
-	for i := 0; i < tg.Workers(); i++ {
-		runner.wg.Add(1)
+// PhotosToTag lists, in path order, the supported photos under root (hidden
+// folders and symbolic links excluded) that have no <photo>.xmp sidecar yet.
+func PhotosToTag(ctx context.Context, root string) ([]string, error) {
+	var photos []string
+	err := filepath.WalkDir(root, func(path string, item fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if walkErr != nil {
+			if path == root {
+				return walkErr
+			}
+			return nil
+		}
+		if item.IsDir() {
+			if path != root && len(item.Name()) > 1 && item.Name()[0] == '.' {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !item.Type().IsRegular() || !supported(path) {
+			return nil
+		}
+		if _, err := os.Lstat(path + ".xmp"); err == nil {
+			return nil
+		}
+		photos = append(photos, path)
+		return nil
+	})
+	sort.Strings(photos)
+	return photos, err
+}
+
+// TagPhotos analyses photos on a pool of goroutines and writes the
+// tags of each to <photo>.xmp, never overwriting an existing file. Photos are
+// never modified. onTagged (optional) is called after each photo, one call at
+// a time. It returns ctx.Err() if cancelled.
+func TagPhotos(ctx context.Context, tg *tagger.Tagger, paths []string, onTagged func(TagResult)) error {
+	jobs := make(chan string)
+	var (
+		wg   sync.WaitGroup
+		lock sync.Mutex
+		done int
+	)
+	// Twice as many workers as model lanes, so decoding overlaps inference.
+	for range min(2*tg.Workers(), max(1, len(paths))) {
+		wg.Add(1)
 		go func() {
-			defer runner.wg.Done()
-			for entry := range runner.jobs {
-				if ctx.Err() != nil {
-					continue
-				}
-				m := entry.Metadata
-				tags, _ := tg.Tags(tagger.Photo{Path: entry.Source, TakenAt: m.TakenAt, Lat: m.Lat, Lon: m.Lon,
+			defer wg.Done()
+			for path := range jobs {
+				m, _ := ReadMetadata(ctx, path)
+				tags, err := tg.Tags(tagger.Photo{Path: path, TakenAt: m.TakenAt, Lat: m.Lat, Lon: m.Lon,
 					HasGPS: m.HasGPS, UTCOffset: m.UTCOffset, HasOffset: m.HasOffset})
-				if len(tags) > 0 {
-					_ = tagger.WriteXMP(filepath.Join(destination, entry.Target)+".xmp", tags)
+				if err == nil && len(tags) > 0 {
+					err = tagger.WriteXMP(path+".xmp", tags)
 				}
-				n := int(runner.done.Add(1))
-				if onProgress != nil {
-					onProgress(n)
+				lock.Lock()
+				done++
+				if onTagged != nil {
+					onTagged(TagResult{Path: path, Tags: tags, Err: err, Done: done, Total: len(paths)})
 				}
+				lock.Unlock()
 			}
 		}()
 	}
-	return runner
-}
-
-// Submit queues a copied photo for analysis. Entries beyond the queue
-// capacity block the caller until a worker is free.
-func (r *TagRunner) Submit(entry Entry) { r.jobs <- entry }
-
-// Wait blocks until every submitted photo has been analysed.
-func (r *TagRunner) Wait() {
-	close(r.jobs)
-	r.wg.Wait()
+feed:
+	for _, path := range paths {
+		select {
+		case jobs <- path:
+		case <-ctx.Done():
+			break feed
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	return ctx.Err()
 }
