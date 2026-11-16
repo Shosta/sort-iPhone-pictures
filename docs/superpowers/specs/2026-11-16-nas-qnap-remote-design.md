@@ -9,18 +9,19 @@ gros dossier. Pouvoir les **classer** (date, lieu, doublons) et les **taguer**
 directement sur le NAS, depuis l'app Electron, **en local comme à distance**.
 La logique métier reste en Go. Les originaux ne sont jamais modifiés.
 
-## Hypothèses à confirmer
+## Faits et décisions
 
-Ces points n'ont pas encore été confirmés par l'utilisateur ; le plan en dépend.
+Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
 
-| # | Sujet | Hypothèse | Si faux |
-| --- | --- | --- | --- |
-| H1 | Processeur du NAS | x86_64 ou ARM64 avec Container Station (Docker) | Sans Docker : binaire Go statique lancé par tâche planifiée QTS (voir option B') |
-| H2 | Volume | Quelques dizaines de milliers de photos | Au-delà, l'indexation incrémentale devient prioritaire |
-| H3 | Sauvegarde iPhone | Dossier « entrée » alimenté par l'app QNAP (Qfile ou QuMagie), à ne pas perturber | Adapter la détection des fichiers en cours de synchro |
-| H4 | Classement | **Copie** vers une bibliothèque classée distincte de l'entrée | Option « déplacer après copie vérifiée » |
-| H5 | Accès distant | Par VPN (QVPN, Tailscale ou WireGuard), jamais par un port ouvert sur internet | TLS + jeton obligatoires dans tous les cas |
-| H6 | Déclenchement | Manuel depuis l'app d'abord, automatique ensuite | — |
+| # | Sujet | Décision |
+| --- | --- | --- |
+| F1 | NAS ✔ | **QNAP TS-251D** : Celeron J4005/J4025, **2 cœurs / 2 threads**, x86_64, 2 ou 4 Go de RAM (8 Go maximum). Container Station (Docker) disponible |
+| F2 | Stockage ✔ | Les photos sont dans **un dossier d'un disque du NAS** : même fonctionnement qu'en local, mais sur le disque du NAS. Entrée et bibliothèque sur le **même volume** |
+| F3 | Déclenchement ✔ | **Manuel depuis l'app** d'abord ; une case « classer automatiquement » viendra ensuite |
+| F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite, par VPN (voir plus bas) |
+| F5 | Tags existants ✔ | L'utilisateur utilise le **tagging de QNAP** (QuMagie). Les tags Photosort sont un complément, pas un remplacement |
+| F6 | Classement (hypothèse) | **Lien physique (hardlink)** de l'entrée vers la bibliothèque : aucun espace disque en plus, l'entrée reste intacte. Repli sur une **copie** si le lien est impossible (volumes différents). « Déplacer » n'est pas proposé en v1 |
+| F7 | Volume (inconnu) | Non communiqué ; la mesure de l'étape 0 le donnera |
 
 ## Approches étudiées
 
@@ -28,7 +29,7 @@ Ces points n'ont pas encore été confirmés par l'utilisateur ; le plan en dép
 | --- | --- | --- | --- |
 | A | Le Mac traite, NAS monté en SMB | Aucun code, marche déjà | Tout transite par le réseau : lent en local, inutilisable à distance |
 | **B** | **Serveur Go en Docker sur le NAS** ; l'app Electron s'y connecte | Traitement à côté des données ; seuls miniatures et progression circulent ; local et distant | Code serveur à écrire ; CPU du NAS décisif pour l'IA |
-| B' | Variante de B : binaire Go statique (sans CGO, sans IA) lancé par QTS | Pas de Docker nécessaire | Pas de tags IA sur le NAS |
+| B' | Variante de B : binaire Go statique (sans CGO, sans IA) lancé par QTS | Pas de Docker nécessaire | Pas de tags IA sur le NAS ; sans objet ici, le TS-251D gère Docker |
 | C | Tâche planifiée sur le NAS, sans UI | Entièrement automatique | Pas de prévisualisation ni de contrôle |
 
 **Recommandation : B**, puis C comme mode de fonctionnement complémentaire.
@@ -43,8 +44,7 @@ dans la CI existante.
 ### Composants
 
 - **`cmd/photosort-server`** (nouveau) : même moteur que `photosort-sidecar`, exposé
-  en HTTPS/WebSocket. Un seul service Go, une image Docker `linux/amd64` et
-  `linux/arm64`.
+  en HTTPS/WebSocket. Un seul service Go, dans une image Docker `linux/amd64`.
 - **Transport** : l'app Electron reçoit un second « backend » à côté du sidecar
   local (`sidecar.ts`) : mêmes requêtes, mêmes événements, seul le transport
   change (processus local ou WebSocket).
@@ -64,7 +64,10 @@ dans la CI existante.
    bibliothèque, tous deux sur le NAS.
 2. `plan` : le serveur lit les EXIF sur place et diffuse la progression et les
    brouillons (déjà le comportement actuel).
-3. `copy` : copie locale au NAS (pas de trafic réseau), reprenable.
+3. `copy` : lien physique local au NAS (repli : copie), sans trafic réseau,
+   reprenable. Un lien physique échoue entre deux montages Docker, même d'un
+   même volume : le conteneur monte donc **un seul dossier parent** (par exemple
+   `/photos`) qui contient l'entrée et la bibliothèque.
 4. `tag` : tags `.xmp` écrits à côté des photos, comme aujourd'hui.
 5. Semainier : le PDF est généré sur le NAS puis téléchargé dans le dossier
    choisi en préférences.
@@ -76,37 +79,83 @@ dans la CI existante.
 - Fichiers en cours de synchro : ignorés tant que leur taille ou leur date de
   modification change, ou que leur âge est inférieur à un seuil (60 s).
 - Aucune suppression ni modification d'original. Écritures limitées à la
-  bibliothèque et aux sidecars `.xmp`.
-- Compte système du conteneur sans droits en dehors des deux volumes montés ;
-  entrée montée en **lecture seule**.
+  bibliothèque et aux sidecars `.xmp` ; l'entrée n'est jamais écrite, ce que le
+  serveur impose lui-même puisque le montage unique est en lecture-écriture.
+- Un lien physique partage le contenu de l'original : modifier une photo de la
+  bibliothèque sur place modifierait aussi l'entrée. Photosort n'écrit jamais
+  dans les photos ; la copie complète reste disponible en option.
+- Compte système du conteneur sans droits en dehors du dossier monté.
 
-### Performance
+### Docker et architecture
 
-- EXIF et décodage HEIC partiels sur place, à 1/8, comme en local.
-- Parallélisme borné selon les CPU du NAS ; tags IA désactivables séparément
-  (`tagMeta` seul reste très léger).
-- Mesure préalable obligatoire (étape 0) avant de fixer ces bornes.
+Docker n'émule pas le processeur : le conteneur utilise le CPU et la RAM du NAS.
+L'architecture compte donc encore, mais le TS-251D est en **x86_64** : l'image
+`linux/amd64` convient. Ce qui pèse vraiment, c'est la puissance (2 cœurs) et la
+mémoire (2 à 4 Go, partagés avec QTS et QuMagie). Le conteneur est limité en
+mémoire et en CPU pour ne pas gêner QuMagie.
+
+### Performance (estimations à mesurer)
+
+- Sur le Mac M2, le tagging IA prend 0,06 à 0,1 s par photo. Le Celeron à
+  2 cœurs sera nettement plus lent (ordre de grandeur : 10 à 30 fois, soit
+  1 à 3 s par photo, à confirmer) : plusieurs heures pour des dizaines de
+  milliers de photos.
+- Le classement (EXIF, doublons, liens physiques) et les tags de métadonnées
+  restent légers : **activés par défaut sur le NAS**. Les tags IA
+  (scènes, moment, personnes) sont **optionnels**, pensés pour tourner en
+  tâche de fond. QuMagie fournit déjà sa propre reconnaissance.
+- Parallélisme borné à 1 ou 2 workers ; EXIF et décodage HEIC partiels sur place,
+  à 1/8, comme en local.
+- Il faut vérifier qu'ONNX Runtime tourne sur ce Celeron (sans AVX) : test
+  de l'étape 0.
+
+### Coexistence avec QuMagie
+
+- QuMagie ne doit indexer que la **bibliothèque classée**, pas l'entrée : avec
+  des liens physiques, indexer les deux créerait des doublons dans ses albums.
+- Les `.xmp` de Photosort sont écrits à côté des photos ; QuMagie les ignore,
+  ses tags restent indépendants. Un affichage des tags Photosort dans l'app
+  sert à la recherche et au semainier.
+- La sauvegarde automatique de l'iPhone n'est jamais modifiée : aucun fichier
+  de l'entrée n'est écrit, déplacé ni supprimé.
 
 ## Plan par étapes
 
-0. **Mesure (sans code produit)** : `photosort --source <entrée montée en SMB>`
-   sans `--apply`, pour chiffrer débit et durée, et valider H1 à H3.
-1. Serveur Go, authentification, TLS, accès local ; image Docker.
-2. Second backend dans l'app Electron, écran de connexion, navigateur de
-   dossiers distants.
+0. **Mesure (peu de code)** : compiler `photosort` pour Linux amd64 (en
+   conteneur `golang` ou via la CI), le lancer dans un conteneur Docker de test
+   sur le NAS, sur un échantillon de quelques centaines de photos copiées
+   ailleurs, en simulation (sans `--apply`) : durée du plan, du tag de
+   métadonnées et d'un tag IA ; vérifier qu'ONNX Runtime démarre sur le
+   Celeron. Cette étape fixe les bornes de parallélisme et dit si les tags IA
+   sont réalistes sur le NAS.
+1. Serveur Go en réseau local : jeton, TLS, chemins confinés au dossier monté,
+   mode lien physique avec repli copie ; image Docker `linux/amd64` et
+   `docker-compose.yml` prêt pour Container Station.
+2. Second backend dans l'app Electron : écran de connexion, navigateur de
+   dossiers distants, choix entrée et bibliothèque.
 3. Semainier distant (PDF rapatrié) et tags sur le NAS.
-4. Classement automatique des nouvelles photos de l'entrée (mode C), reprenable.
-5. CI : image multi-architecture ; documentation VPN (QVPN, Tailscale).
+4. Case « classer automatiquement » : surveillance de l'entrée, fichiers
+   stables seulement, reprenable.
+5. Accès à distance : voir ci-dessous ; documentation pas à pas.
+
+## Accès à distance (étape 5)
+
+Aucun accès distant n'existe aujourd'hui. Recommandation : **Tailscale**
+(disponible comme application pour QTS) : aucun port à ouvrir sur la box, pas
+de certificat à gérer côté serveur, gratuit pour un usage personnel. Alternative
+intégrée à QNAP : **QVPN** (WireGuard ou OpenVPN), qui demande d'ouvrir un port
+sur la box. Dans les deux cas, le serveur n'est jamais exposé directement sur
+internet. La v1 n'en dépend pas : tout fonctionne d'abord en réseau local.
 
 ## Hors périmètre (YAGNI)
 
 Exposition directe sur internet, multi-utilisateurs, synchronisation avec les
-albums QuMagie, suppression ou déplacement des originaux (sauf option ultérieure
-explicite), reconnaissance de visages nominative.
+albums QuMagie, déplacement ou suppression des originaux, architecture ARM,
+reconnaissance de visages nominative.
 
 ## Questions ouvertes
 
-1. Modèle du NAS (processeur, RAM) et présence de Container Station.
-2. Volume de photos et application de sauvegarde iPhone.
-3. Classement manuel depuis l'app, ou automatique dès l'arrivée des photos.
-4. Mode d'accès distant déjà en place (VPN, myQNAPcloud, autre).
+1. Volume de photos approximatif (pour dimensionner les durées).
+2. L'étape 0 peut-elle se faire sur le NAS (accès SSH ou Container Station) ?
+3. Le lien physique convient-il, ou faut-il une copie complète (QuMagie et
+   sauvegardes de la bibliothèque peuvent mieux supporter une copie réelle) ?
