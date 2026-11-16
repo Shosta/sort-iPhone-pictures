@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"sort-iphone-pictures/internal/geo"
 )
 
 type Entry struct {
@@ -34,8 +36,20 @@ type Report struct {
 	Copied int `json:"copied"`
 }
 
+// Locator maps GPS coordinates to a place name.
+type Locator func(lat, lon float64) (string, bool)
+
 type Engine struct {
 	ReadMetadata MetadataReader
+	// ByLocation adds a place folder inside each month when GPS data resolves.
+	ByLocation bool
+	// Landmarks names the folder after a nearby landmark (museum, castle,
+	// stadium...) instead of the city. Only used with ByLocation.
+	Landmarks bool
+	// LocateLandmark overrides the embedded offline landmark database.
+	LocateLandmark Locator
+	// Locate overrides the embedded offline city database.
+	Locate Locator
 }
 
 func (engine Engine) Plan(ctx context.Context, sources []string, destination string) (Plan, error) {
@@ -106,6 +120,14 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if reader == nil {
 		reader = ReadMetadata
 	}
+	locate := engine.Locate
+	if engine.ByLocation && locate == nil {
+		locate = geo.Default().Nearest
+	}
+	landmark := engine.LocateLandmark
+	if engine.ByLocation && engine.Landmarks && landmark == nil {
+		landmark = geo.DefaultPlaces().Near
+	}
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
 	for _, path := range ordered {
@@ -125,6 +147,23 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 			continue
 		}
 		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
+		if engine.ByLocation && metadata.HasGPS {
+			place, found := "", false
+			if engine.Landmarks && landmark != nil {
+				place, found = landmark(metadata.Lat, metadata.Lon)
+				if found && placeName(place) == "" {
+					found = false
+				}
+			}
+			if !found {
+				place, found = locate(metadata.Lat, metadata.Lon)
+			}
+			if found {
+				if folder := placeName(place); folder != "" {
+					month = filepath.Join(month, folder)
+				}
+			}
+		}
 		prefix := metadata.TakenAt.Format("2006-01-02") + " - " + cameraName(metadata.Camera)
 		key := strings.ToLower(filepath.Join(month, prefix))
 		var target string
@@ -250,6 +289,17 @@ func supported(path string) bool {
 }
 
 func cameraName(camera string) string {
+	if camera = sanitize(camera, 40); camera == "" {
+		return "Unknown camera"
+	}
+	return camera
+}
+
+func placeName(place string) string {
+	return sanitize(place, 60)
+}
+
+func sanitize(camera string, limit int) string {
 	camera = strings.Map(func(char rune) rune {
 		if unicode.IsControl(char) || strings.ContainsRune(`<>:"/\|?*`, char) {
 			return '-'
@@ -257,12 +307,9 @@ func cameraName(camera string) string {
 		return char
 	}, camera)
 	camera = strings.Trim(strings.Join(strings.Fields(camera), " "), " .-")
-	if camera == "" {
-		return "Unknown camera"
-	}
 	characters := []rune(camera)
-	if len(characters) > 40 {
-		camera = string(characters[:40])
+	if len(characters) > limit {
+		camera = strings.Trim(string(characters[:limit]), " .-")
 	}
 	return camera
 }

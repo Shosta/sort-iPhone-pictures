@@ -1,0 +1,7 @@
+.git/
+.vscode/
+bin/
+dist/
+.local/
+.DS_Store
+coverage.out

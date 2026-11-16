@@ -1,0 +1,19 @@
+appId: com.photosort.app
+productName: Photosort
+directories:
+  output: release
+files:
+  - out/**
+extraResources:
+  - from: resources/bin/
+    to: bin/
+    filter: ["**/*"]
+icon: resources/icon.png
+mac:
+  category: public.app-category.photography
+  target: [dmg, zip]
+win:
+  target: [nsis]
+linux:
+  target: [AppImage, deb]
+  category: Graphics

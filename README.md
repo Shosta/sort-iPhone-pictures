@@ -43,6 +43,21 @@ Le decodage HEIC/AVIF utilise une bibliotheque locale si disponible, sinon un
 decodeur WASM embarque, sans televersement ni outil externe obligatoire.
 Le depot externe de dossiers doit encore etre verifie manuellement sur Linux.
 
+## Applications Distribuables
+
+Les taches VS Code `Photosort: build macOS (.app)` et
+`Photosort: build Linux (AppImage x86_64)` generent les applications dans `dist/`.
+Le packaging est isole dans [packaging](packaging/README.md).
+
+```sh
+bash packaging/build.sh macos
+bash packaging/build.sh linux
+```
+
+Le build macOS s'execute sur un Mac. Le build Linux utilise Docker avec un moteur
+demarre, y compris depuis macOS ARM64. Voir les prerequis et limites de
+distribution dans la documentation du packaging.
+
 ## Utilisation
 
 Depuis la racine du projet, simuler un classement sans rien ecrire :
@@ -91,6 +106,19 @@ Exemple de destination :
 - Caracteres dangereux du modele remplaces ; modele limite a 40 caracteres.
 - Numerotation a partir de 1 par jour et modele, en evitant les noms deja
   presents dans la destination et ceux reserves dans le plan courant.
+- Option `--by-location` (CLI) : si la photo contient un GPS, un sous-dossier de
+  ville est ajoute dans le mois (`2026/2026-06/Rouen/...`). Sans GPS ou sans ville
+  a moins de 50 km, la photo reste a la racine du mois. La ville est trouvee hors
+  ligne dans une base GeoNames embarquee (`internal/geo`, noms locaux, licence
+  CC BY 4.0, https://www.geonames.org) ; aucune coordonnee ne quitte la machine.
+  Les quartiers et banlieues proches sont regroupes sous la ville la plus peuplee
+  (rayon de 6 km autour de la localite la plus proche). Desactive par defaut.
+  Option `--landmarks` : si la photo est a moins de ~120 m d'un monument ou
+  ~250 m d'un musee, chateau, palais, stade, salle ou theatre (Europe, Canada,
+  Etats-Unis, base GeoNames `internal/geo/places.tsv.gz`), le dossier porte le nom
+  du lieu (`.../Musee du Louvre/...`) ; sinon c'est la ville (best effort).
+  Regenerer les lieux : `go run ./internal/geo/gen poi allCountries.txt internal/geo/places.tsv.gz`.
+  Regenerer la base : `go run ./internal/geo/gen cities1000.txt internal/geo/cities.tsv.gz`.
 - Extension conservee, normalisee en minuscules ; aucune conversion d'image.
 - Sources qui se recouvrent dedupliquees par chemin canonique. Les doublons
   de contenu dans des fichiers distincts ne sont pas detectes.
