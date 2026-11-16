@@ -49,12 +49,21 @@ Requêtes (une par ligne sur stdin) :
 {"id":"1","op":"plan","sources":["/photos"],"destination":"/classement"}
 {"id":"2","op":"copy","planId":"1"}
 {"id":"3","op":"thumbnail","path":"/photos/a.heic","size":160}
-{"id":"4","op":"cancel","target":"2"}
+{"id":"4","op":"tag","folder":"/classement","tagScenes":true,"tagMoment":true,"tagPeople":true}
+{"id":"5","op":"cancel","target":"2"}
 ```
 
-Événements (un par ligne sur stdout, avec l'`id` de la requête) : `plan`,
-`progress`, `done`, `thumbnail`, `error`. Les règles de classement sont celles
-décrites dans le [README racine](../README.md).
+Événements (un par ligne sur stdout, avec l'`id` de la requête) : `draft`,
+`status`, `plan`, `progress`, `done`, `thumbnail`, `tagged`, `error`. Les règles
+de classement sont celles décrites dans le [README racine](../README.md).
+
+- `plan` envoie des `draft` au fil de la lecture EXIF (destination provisoire de
+  chaque photo, doublons trouvés) puis des `status` par étape ; le plan final
+  arrive dans l'événement `plan`.
+- `tag` accepte un dossier (`folder`) ou une liste de fichiers (`files`), ignore
+  les photos qui ont déjà un `.xmp` et envoie un `tagged` par photo.
+- Pendant un `plan`, au plus 2 miniatures sont décodées en même temps pour
+  laisser les cœurs à l'analyse.
 
 ## Classement par lieu
 
@@ -80,7 +89,9 @@ Les textes sont dans `src/renderer/i18n.tsx`.
 
 ## Tags automatiques (IA locale)
 
-Option des Préférences (désactivée par défaut) : après chaque copie, Photosort analyse la photo **hors ligne** et écrit les mots-clés dans un fichier `<photo>.xmp` à côté de la copie (`dc:subject`, lu par Lightroom, digiKam, etc.). Les originaux ne sont jamais modifiés.
+L'analyse est **séparée du tri**, car elle est bien plus lente (~0,5 s par photo sur un M2) : le tri reste rapide et on tague quand on veut. Elle s'ouvre avec le bouton 🏷️ en haut à droite (`Cmd/Ctrl+T`, menu *Tags*) ou le lien « Taguer ces photos » affiché après un tri, qui cible les photos copiées. Sinon, on choisit un dossier. Les photos qui ont déjà un `.xmp` sont ignorées.
+
+Le panneau montre la progression, le temps restant, les compteurs par tag et les derniers résultats. On peut le fermer : l'analyse continue et une pastille sur 🏷️ indique l'avancement. Tout se fait **hors ligne** : les mots-clés sont écrits dans un fichier `<photo>.xmp` à côté de la copie (`dc:subject`, lu par Lightroom, digiKam, etc.). Les originaux ne sont jamais modifiés.
 
 | Famille | Tags | Méthode |
 | --- | --- | --- |
@@ -93,6 +104,20 @@ La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS,
 Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : `npm run ai-assets` les télécharge (sha256 vérifié) dans `ai-assets/` pour l'OS courant (`GOOS`/`GOARCH` pour un autre), et `electron-builder` les copie dans `resources/ai`. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
 
 Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matrice CI macOS, Linux, Windows) avec `npm run sidecar`. CLI : `--tag-scenes --tag-moment --tag-people [--ai-dir …]`.
+
+## Performances et fluidité
+
+- Analyse en flux : la colonne « Classées » se remplit dès qu'une destination est
+  connue, sans attendre la fin du plan.
+- Empreintes de doublons calculées en une seule lecture par fichier, décodage
+  JPEG à 1/8 (DC seul) pour le hash perceptuel, et quasi-doublons recherchés
+  uniquement entre photos d'un même dossier prises à moins de 10 min d'écart.
+- Grilles virtualisées (seules les miniatures visibles sont montées) et cache LRU
+  des miniatures ; les requêtes hors écran sont annulées.
+- Fond animé sans filtre de flou en direct, animations limitées à `transform` et
+  `opacity` : l'application consomme quelques % de CPU au repos.
+- Sur macOS, le mode économie d'énergie et les antivirus qui analysent chaque
+  lecture ralentissent nettement l'analyse.
 
 ## Limites
 
