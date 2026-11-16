@@ -26,7 +26,7 @@ function Counter({ value }: { value: number }): JSX.Element {
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
-  const { destination, byLocation, landmarks } = prefs
+  const { destination, byLocation, landmarks, skipDuplicates } = prefs
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const accent = themeById(prefs.theme).vars.accent
@@ -95,7 +95,7 @@ export function App(): JSX.Element {
   const analyze = (): void => {
     resetResults()
     setPhase('analyzing')
-    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks }, (event) => {
+    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates }, (event) => {
       if (event.type === 'plan') {
         setPlan(event.plan)
         setPhase('ready')
@@ -258,6 +258,21 @@ export function App(): JSX.Element {
               </motion.span>
               <span>{t('landmarks')}</span>
             </label>
+            <label className={`toggle glass ${busy ? 'disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={skipDuplicates}
+                disabled={busy}
+                onChange={(event) => {
+                  updatePrefs({ skipDuplicates: event.target.checked })
+                  resetResults()
+                }}
+              />
+              <motion.span className="switch" animate={{ backgroundColor: skipDuplicates ? accent : 'rgba(255,255,255,0.18)' }}>
+                <motion.span className="knob" animate={{ x: skipDuplicates ? 18 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+              </motion.span>
+              <span>{t('skipDuplicates')}</span>
+            </label>
             </div>
             <div className="glass panel grow">
               <h2>
@@ -314,6 +329,7 @@ export function App(): JSX.Element {
                         : t('status.idle')}
             </motion.span>
           </AnimatePresence>
+          {plan && plan.duplicates?.length > 0 && <span className="muted">{t('duplicates', { n: plan.duplicates.length })}</span>}
           {plan && plan.skipped.length > 0 && (
             <button className="link" onClick={() => setShowSkipped(true)}>
               {t('issues', { n: plan.skipped.length })}

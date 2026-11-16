@@ -99,6 +99,14 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
           </label>
         </div>
 
+        <div className="field">
+          <label className={`toggle ${busy ? 'disabled' : ''}`}>
+            <input type="checkbox" checked={prefs.skipDuplicates} disabled={busy} onChange={(event) => onChange({ skipDuplicates: event.target.checked })} />
+            <Switch on={prefs.skipDuplicates} accent={accent} />
+            <span>{t('skipDuplicates')}</span>
+          </label>
+        </div>
+
         <p className="hint">{t('prefs.saved')}</p>
         <button className="btn" onClick={onClose}>
           {t('close')}

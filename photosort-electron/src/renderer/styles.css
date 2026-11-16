@@ -118,3 +118,4 @@ code { word-break: break-all; }
 .swatches { display: inline-flex; flex-shrink: 0; }
 .swatches i { width: 14px; height: 14px; border-radius: 50%; margin-left: -4px; box-shadow: 0 0 0 1.5px var(--surface-raised); }
 .swatches i:first-child { margin-left: 0; }
+.muted { color: var(--muted); font-size: 13px; }

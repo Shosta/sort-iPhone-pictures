@@ -30,6 +30,8 @@ type Plan struct {
 	Destination string  `json:"destination"`
 	Entries     []Entry `json:"entries"`
 	Skipped     []Issue `json:"skipped"`
+	// Duplicates lists true duplicates left out of the plan (SkipDuplicates).
+	Duplicates []Duplicate `json:"duplicates"`
 }
 
 type Report struct {
@@ -48,12 +50,15 @@ type Engine struct {
 	Landmarks bool
 	// LocateLandmark overrides the embedded offline landmark database.
 	LocateLandmark Locator
+	// SkipDuplicates leaves out photos that are true duplicates (same bytes or
+	// same decoded pixels) of an earlier source or of a file in the destination.
+	SkipDuplicates bool
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
 
 func (engine Engine) Plan(ctx context.Context, sources []string, destination string) (Plan, error) {
-	plan := Plan{Entries: []Entry{}, Skipped: []Issue{}}
+	plan := Plan{Entries: []Entry{}, Skipped: []Issue{}, Duplicates: []Duplicate{}}
 	if len(sources) == 0 || strings.TrimSpace(destination) == "" {
 		return plan, errors.New("at least one source and a destination are required")
 	}
@@ -128,6 +133,10 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.ByLocation && engine.Landmarks && landmark == nil {
 		landmark = geo.DefaultPlaces().Near
 	}
+	var dedupe *deduper
+	if engine.SkipDuplicates {
+		dedupe = newDeduper(plan.Destination)
+	}
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
 	for _, path := range ordered {
@@ -145,6 +154,12 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		if metadata.TakenAt.IsZero() || metadata.TakenAt.Year() < 1 || metadata.TakenAt.Year() > 9999 {
 			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
 			continue
+		}
+		if dedupe != nil {
+			if of, found := dedupe.check(path); found {
+				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of})
+				continue
+			}
 		}
 		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
 		if engine.ByLocation && metadata.HasGPS {

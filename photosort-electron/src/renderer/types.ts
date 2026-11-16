@@ -21,6 +21,7 @@ export interface Plan {
   destination: string
   entries: Entry[]
   skipped: Issue[]
+  duplicates: { path: string; of: string }[]
 }
 
 export type Phase = 'idle' | 'analyzing' | 'ready' | 'copying' | 'done'

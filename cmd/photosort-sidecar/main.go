@@ -3,7 +3,7 @@
 // Protocol: one JSON request per line on stdin, JSON events (one per line) on
 // stdout. Every event carries the "id" of its request. Requests:
 //
-//	{"id":"1","op":"plan","sources":[...],"destination":"...","byLocation":true,"landmarks":true}
+//	{"id":"1","op":"plan","sources":[...],"destination":"...","byLocation":true,"landmarks":true,"dedupe":true}
 //	{"id":"2","op":"copy","planId":"1"}
 //	{"id":"3","op":"thumbnail","path":"...","size":160}
 //	{"id":"4","op":"cancel","target":"2"}
@@ -33,6 +33,7 @@ type request struct {
 	Destination string   `json:"destination"`
 	ByLocation  bool     `json:"byLocation"`
 	Landmarks   bool     `json:"landmarks"`
+	Dedupe      bool     `json:"dedupe"`
 	PlanID      string   `json:"planId"`
 	Path        string   `json:"path"`
 	Size        int      `json:"size"`
@@ -125,7 +126,7 @@ func (s *server) handle(parent context.Context, req request) {
 func (s *server) run(ctx context.Context, req request) error {
 	switch req.Op {
 	case "plan":
-		plan, err := (sorter.Engine{ByLocation: req.ByLocation, Landmarks: req.Landmarks}).Plan(ctx, req.Sources, req.Destination)
+		plan, err := (sorter.Engine{ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe}).Plan(ctx, req.Sources, req.Destination)
 		if err != nil {
 			return err
 		}
