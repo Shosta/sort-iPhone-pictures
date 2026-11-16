@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
-import { thumbnail } from '../sidecar'
+import { useEffect } from 'react'
 
 export interface Flight {
   id: string
-  path: string
+  /** Thumbnail already in cache: flights never trigger a decode. */
+  url: string
   from: { x: number; y: number; size: number }
   to: { x: number; y: number }
   delay: number
@@ -12,23 +12,13 @@ export interface Flight {
 
 const DURATION = 1.5
 
-function Drop({ flight, onDone }: { flight: Flight; onDone: (id: string) => void }): JSX.Element | null {
-  const [url, setUrl] = useState<string | null>(null)
+function Drop({ flight, onDone }: { flight: Flight; onDone: (id: string) => void }): JSX.Element {
   useEffect(() => {
-    let alive = true
-    thumbnail(flight.path, 192).then((value) => alive && setUrl(value))
-    return () => {
-      alive = false
-    }
-  }, [flight.path])
-  useEffect(() => {
-    if (url === null) return
     const timer = setTimeout(() => onDone(flight.id), (DURATION + flight.delay) * 1000 + 100)
     return () => clearTimeout(timer)
-  }, [url, flight, onDone])
-  if (!url) return null
+  }, [flight, onDone])
 
-  const { from, to } = flight
+  const { url, from, to } = flight
   const half = from.size / 2
   // x eases in-out while y eases in, which bends the trajectory into a smooth arc.
   return (

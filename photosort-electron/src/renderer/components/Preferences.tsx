@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void
 }
 
-function Switch({ on, accent }: { on: boolean; accent: string }): JSX.Element {
+export function Switch({ on, accent }: { on: boolean; accent: string }): JSX.Element {
   return (
     <motion.span className="switch" animate={{ backgroundColor: on ? accent : 'rgba(255,255,255,0.18)' }}>
       <motion.span className="knob" animate={{ x: on ? 18 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} />

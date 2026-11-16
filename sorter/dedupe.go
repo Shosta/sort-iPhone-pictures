@@ -2,16 +2,10 @@ package sorter
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
-	"image"
-	"image/draw"
-	"image/jpeg"
-	"image/png"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Duplicate is a source photo that is identical to another one and is
@@ -64,8 +58,9 @@ func (d *deduper) loadDestination() {
 }
 
 // check returns the path of an identical earlier file, if any, and otherwise
-// registers path so later files can be compared to it.
-func (d *deduper) check(path string) (string, bool) {
+// registers path (with its precomputed sums) so later files can be compared
+// to it.
+func (d *deduper) check(path string, sums fingerprint) (string, bool) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", false
@@ -77,17 +72,17 @@ func (d *deduper) check(path string) (string, bool) {
 		}
 		delete(d.bySize, info.Size())
 	}
-	if sum, ok := fileHash(path); ok {
-		if other, found := d.bytes[sum]; found {
+	if sums.fileOK {
+		if other, found := d.bytes[sums.fileSum]; found {
 			return other, true
 		}
-		d.bytes[sum] = path
+		d.bytes[sums.fileSum] = path
 	}
-	if sum, ok := pixelHash(path); ok {
-		if other, found := d.pixels[sum]; found {
+	if sums.pixelOK {
+		if other, found := d.pixels[sums.pixelSum]; found {
 			return other, true
 		}
-		d.pixels[sum] = path
+		d.pixels[sums.pixelSum] = path
 	}
 	return "", false
 }
@@ -115,39 +110,6 @@ func fileHash(path string) (hashKey, bool) {
 	if _, err := io.Copy(hash, file); err != nil {
 		return sum, false
 	}
-	copy(sum[:], hash.Sum(nil))
-	return sum, true
-}
-
-func pixelHash(path string) (hashKey, bool) {
-	var sum hashKey
-	var decode func(io.Reader) (image.Image, error)
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jpg", ".jpeg":
-		decode = jpeg.Decode
-	case ".png":
-		decode = png.Decode
-	default:
-		return sum, false
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return sum, false
-	}
-	defer file.Close()
-	img, err := decode(file)
-	if err != nil {
-		return sum, false
-	}
-	bounds := img.Bounds()
-	rgba := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	draw.Draw(rgba, rgba.Bounds(), img, bounds.Min, draw.Src)
-	hash := sha256.New()
-	var size [8]byte
-	binary.BigEndian.PutUint32(size[:4], uint32(bounds.Dx()))
-	binary.BigEndian.PutUint32(size[4:], uint32(bounds.Dy()))
-	hash.Write(size[:])
-	hash.Write(rgba.Pix)
 	copy(sum[:], hash.Sum(nil))
 	return sum, true
 }

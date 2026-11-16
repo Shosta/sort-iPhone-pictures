@@ -1,41 +1,58 @@
-import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
-import { thumbnail } from '../sidecar'
+import { memo, useEffect, useRef, useState } from 'react'
+import { cachedThumbnail, loadThumbnail } from '../sidecar'
 
 interface Props {
   path: string
   label?: string
   size?: number
-  index?: number
   pending?: boolean
+  /** Plays the appear animation, after this many seconds. */
   appearDelay?: number
+  /** Load only while on screen (for tiles that are not virtualized). */
+  lazy?: boolean
 }
 
-export function Thumb({ path, label, size = 96, index = 0, pending = false, appearDelay = 0 }: Props): JSX.Element {
-  const [url, setUrl] = useState<string | null | undefined>(undefined)
+export const Thumb = memo(function Thumb({ path, label, size, pending = false, appearDelay, lazy = false }: Props): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [url, setUrl] = useState<string | null | undefined>(() => cachedThumbnail(path))
+
   useEffect(() => {
-    let alive = true
-    thumbnail(path, size * 2).then((value) => alive && setUrl(value))
-    return () => {
-      alive = false
+    const known = cachedThumbnail(path)
+    setUrl(known)
+    if (known !== undefined) return
+    let drop: (() => void) | null = null
+    const load = (): void => {
+      if (!drop) drop = loadThumbnail(path, setUrl)
     }
-  }, [path, size])
+    if (!lazy || !ref.current) {
+      load()
+      return () => drop?.()
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) load()
+      else if (drop) {
+        drop()
+        drop = null
+      }
+    })
+    observer.observe(ref.current)
+    return () => {
+      observer.disconnect()
+      drop?.()
+    }
+  }, [path, lazy])
 
   return (
-    <motion.div
+    <div
+      ref={ref}
       data-pending={pending ? path : undefined}
-      className="thumb"
-      style={{ width: size, height: size }}
-      initial={{ opacity: 0, scale: pending ? 1 : 0.6 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ opacity: { duration: 0.5, delay: appearDelay + Math.min(index, 24) * 0.02 }, scale: { duration: 0.4, delay: appearDelay } }}
-      whileHover={{ scale: 1.08, zIndex: 5 }}
+      className={`thumb${appearDelay !== undefined ? ' appear' : ''}`}
+      style={{ width: size, height: size, animationDelay: appearDelay ? `${appearDelay}s` : undefined }}
       title={label ?? path}
     >
       {url === undefined && <div className="shimmer" />}
       {url === null && <span className="thumb-missing">🖼</span>}
-      {url && <img src={url} alt="" draggable={false} />}
-    </motion.div>
+      {url && <img src={url} alt="" draggable={false} decoding="async" />}
+    </div>
   )
-}
+})

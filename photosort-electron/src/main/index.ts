@@ -15,12 +15,19 @@ function sidecarPath(): string {
     : join(app.getAppPath(), 'resources', 'bin', name)
 }
 
+function aiDir(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'ai') : join(app.getAppPath(), 'ai-assets')
+}
+
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload)
 }
 
 function startSidecar(): void {
-  sidecar = spawn(sidecarPath(), [], { stdio: ['pipe', 'pipe', 'pipe'] })
+  sidecar = spawn(sidecarPath(), [], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PHOTOSORT_AI_DIR: aiDir() }
+  })
   createInterface({ input: sidecar.stdout }).on('line', (line) => {
     try {
       broadcast('sidecar:event', JSON.parse(line))
@@ -73,17 +80,27 @@ ipcMain.handle('dialog:pickFolder', async (_event, title: string) => {
 
 ipcMain.handle('shell:reveal', (_event, path: string) => shell.openPath(path))
 
-function buildMenu(label: string): void {
+interface MenuLabels {
+  preferences: string
+  tags: string
+}
+
+function buildMenu(labels: MenuLabels): void {
   const mac = process.platform === 'darwin'
   const preferences: MenuItemConstructorOptions = {
-    label,
+    label: labels.preferences,
     accelerator: 'CmdOrCtrl+,',
     click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('menu:preferences')
   }
+  const tags: MenuItemConstructorOptions = {
+    label: labels.tags,
+    accelerator: 'CmdOrCtrl+T',
+    click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('menu:tags')
+  }
   const template: MenuItemConstructorOptions[] = [
     ...(mac
-      ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, preferences, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]
-      : [{ role: 'fileMenu', submenu: [preferences, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]),
+      ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, preferences, tags, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]
+      : [{ role: 'fileMenu', submenu: [preferences, tags, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]),
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' }
@@ -91,10 +108,10 @@ function buildMenu(label: string): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-ipcMain.on('menu:label', (_event, label: string) => buildMenu(label))
+ipcMain.on('menu:labels', (_event, labels: MenuLabels) => buildMenu(labels))
 
 app.whenReady().then(() => {
-  buildMenu('Preferences…')
+  buildMenu({ preferences: 'Preferences…', tags: 'AI tags…' })
   startSidecar()
   createWindow()
   app.on('activate', () => {

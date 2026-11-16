@@ -28,13 +28,7 @@ export function DropZone({ sources, disabled, onAdd, onRemove }: Props): JSX.Ele
         if (!disabled) onAdd(window.photosort.pathsFromDrop(Array.from(event.dataTransfer.files)))
       }}
     >
-      <motion.div
-        className="drop-icon"
-        animate={{ y: hover ? -6 : [0, -4, 0] }}
-        transition={hover ? { duration: 0.2 } : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        📂
-      </motion.div>
+      <div className="drop-icon">📂</div>
       <p className="drop-title">{hover ? t('drop.hover') : t('drop.title')}</p>
       <button
         className="btn ghost"

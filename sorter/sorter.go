@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
 	"sort-iphone-pictures/internal/geo"
@@ -58,6 +61,22 @@ type Engine struct {
 	GroupSimilar bool
 	// Hash overrides the perceptual image hash (tests).
 	Hash func(path string) (uint64, bool)
+	// Progress, if set, reports the current planning stage ("exif", then
+	// "hash" when duplicates or near-duplicates are looked for, then
+	// "similar") and how many photos are done out of total.
+	Progress func(stage string, done, total int)
+	// Draft, if set, receives each dated photo as soon as its folder is known,
+	// before duplicates and near-duplicates are resolved. Its Target is the
+	// folder joined with the original file name.
+	Draft func(Entry)
+	// OnDuplicate, if set, receives each true duplicate as soon as it is
+	// found, in source order.
+	OnDuplicate func(Duplicate)
+	// Preview, if set, receives the upright preview (at most PreviewSize
+	// pixels, often the 160×120 Exif thumbnail) of photos looked at while
+	// planning, so callers can cache it. It is called from several
+	// goroutines at once.
+	Preview func(path string, img image.Image)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
@@ -138,61 +157,131 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.ByLocation && engine.Landmarks && landmark == nil {
 		landmark = geo.DefaultPlaces().Near
 	}
-	var dedupe *deduper
-	if engine.SkipDuplicates {
-		dedupe = newDeduper(plan.Destination)
+	folderOf := func(metadata Metadata) string {
+		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
+		if !engine.ByLocation || !metadata.HasGPS {
+			return month
+		}
+		place, found := "", false
+		if engine.Landmarks && landmark != nil {
+			place, found = landmark(metadata.Lat, metadata.Lon)
+			found = found && placeName(place) != ""
+		}
+		if !found {
+			place, found = locate(metadata.Lat, metadata.Lon)
+		}
+		if folder := placeName(place); found && folder != "" {
+			return filepath.Join(month, folder)
+		}
+		return month
 	}
-	var pending []candidate
-	reserved := make(map[string]bool)
-	counters := make(map[string]int)
-	for _, path := range ordered {
+
+	// Stage 1: EXIF and folder of every photo, on all cores. Each photo is
+	// reported as a draft as soon as it is known.
+	type photo struct {
+		metadata Metadata
+		err      error
+		folder   string
+	}
+	photos := make([]photo, len(ordered))
+	done := 0
+	for i := range parallel(ctx, len(ordered), func(i int) {
+		item := &photos[i]
+		item.metadata, item.err = reader(ctx, ordered[i])
+		if item.err == nil && validDate(item.metadata) {
+			item.folder = folderOf(item.metadata)
+		}
+	}) {
+		done++
+		if item := photos[i]; item.folder != "" && engine.Draft != nil {
+			engine.Draft(Entry{ordered[i], filepath.Join(item.folder, filepath.Base(ordered[i])), item.metadata})
+		}
+		if engine.Progress != nil {
+			engine.Progress("exif", done, len(ordered))
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return plan, err
+	}
+	var dated []int
+	for i, path := range ordered {
+		switch item := photos[i]; {
+		case item.err != nil:
+			plan.Skipped = append(plan.Skipped, Issue{path, item.err.Error()})
+		case item.folder == "":
+			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
+		default:
+			dated = append(dated, i)
+		}
+	}
+
+	// Stage 2: content fingerprints (each photo read and decoded once, on all
+	// cores), consumed in source order so the first copy of a photo always
+	// wins.
+	pending := make([]candidate, 0, len(dated))
+	if engine.SkipDuplicates || engine.GroupSimilar {
+		var dedupe *deduper
+		if engine.SkipDuplicates {
+			dedupe = newDeduper(plan.Destination)
+		}
+		options := fingerprintOptions{
+			bytes:      engine.SkipDuplicates,
+			pixels:     engine.SkipDuplicates,
+			perceptual: engine.GroupSimilar,
+			hash:       engine.Hash,
+			preview:    engine.Preview,
+		}
+		prints := make([]fingerprint, len(dated))
+		ready := make([]bool, len(dated))
+		// Only photos with a neighbour close in time can be near-duplicates:
+		// the others need no perceptual hash, often the costliest part.
+		var nearby []bool
+		if engine.GroupSimilar {
+			times, folders := make([]time.Time, len(dated)), make([]string, len(dated))
+			for k, i := range dated {
+				times[k], folders[k] = photos[i].metadata.TakenAt, photos[i].folder
+			}
+			nearby = closeInTime(times, folders)
+		}
+		next, done := 0, 0
+		for k := range parallel(ctx, len(dated), func(k int) {
+			own := options
+			own.perceptual = options.perceptual && nearby[k]
+			prints[k] = fingerprintOf(ordered[dated[k]], own)
+		}) {
+			ready[k] = true
+			for ; next < len(dated) && ready[next]; next++ {
+				path, item := ordered[dated[next]], photos[dated[next]]
+				if dedupe != nil {
+					if of, found := dedupe.check(path, prints[next]); found {
+						duplicate := Duplicate{path, of, within(plan.Destination, of)}
+						plan.Duplicates = append(plan.Duplicates, duplicate)
+						if engine.OnDuplicate != nil {
+							engine.OnDuplicate(duplicate)
+						}
+						continue
+					}
+				}
+				pending = append(pending, candidate{path, item.metadata, item.folder, prints[next].imageSum, prints[next].imageOK})
+			}
+			done++
+			if engine.Progress != nil {
+				engine.Progress("hash", done, len(dated))
+			}
+		}
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
-		metadata, err := reader(ctx, path)
-		if err != nil {
-			if ctx.Err() != nil {
-				return plan, ctx.Err()
-			}
-			plan.Skipped = append(plan.Skipped, Issue{path, err.Error()})
-			continue
+	} else {
+		for _, i := range dated {
+			pending = append(pending, candidate{path: ordered[i], metadata: photos[i].metadata, month: photos[i].folder})
 		}
-		if metadata.TakenAt.IsZero() || metadata.TakenAt.Year() < 1 || metadata.TakenAt.Year() > 9999 {
-			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
-			continue
-		}
-		if dedupe != nil {
-			if of, found := dedupe.check(path); found {
-				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of, within(plan.Destination, of)})
-				continue
-			}
-		}
-		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
-		if engine.ByLocation && metadata.HasGPS {
-			place, found := "", false
-			if engine.Landmarks && landmark != nil {
-				place, found = landmark(metadata.Lat, metadata.Lon)
-				if found && placeName(place) == "" {
-					found = false
-				}
-			}
-			if !found {
-				place, found = locate(metadata.Lat, metadata.Lon)
-			}
-			if found {
-				if folder := placeName(place); folder != "" {
-					month = filepath.Join(month, folder)
-				}
-			}
-		}
-		pending = append(pending, candidate{path, metadata, month})
 	}
 	if engine.GroupSimilar {
-		hasher := engine.Hash
-		if hasher == nil {
-			hasher = imageHash
+		if engine.Progress != nil {
+			engine.Progress("similar", len(pending), len(pending))
 		}
-		groups, err := similarGroups(ctx, pending, hasher)
+		groups, err := similarGroups(ctx, pending)
 		if err != nil {
 			return plan, err
 		}
@@ -202,6 +291,8 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 			}
 		}
 	}
+	reserved := make(map[string]bool)
+	counters := make(map[string]int)
 	for _, item := range pending {
 		path, metadata, month := item.path, item.metadata, item.month
 		prefix := metadata.TakenAt.Format("2006-01-02") + " - " + cameraName(metadata.Camera)
@@ -234,6 +325,12 @@ func Copy(ctx context.Context, plan Plan) (Report, error) {
 	return CopyWithProgress(ctx, plan, nil)
 }
 
+// copyWorkers bounds concurrent copies: enough to hide fsync latency without
+// thrashing a spinning or network disk.
+const copyWorkers = 4
+
+// CopyWithProgress copies the plan with a few concurrent workers. onCopied is
+// never called concurrently, but entries may complete out of plan order.
 func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Report, error) {
 	report := Report{}
 	if err := ctx.Err(); err != nil {
@@ -258,17 +355,59 @@ func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Rep
 		return report, err
 	}
 	defer root.Close()
+	var (
+		jobs    = make(chan Entry)
+		failed  = make(chan struct{})
+		wg      sync.WaitGroup
+		lock    sync.Mutex
+		failure error
+	)
+	// Copies overlap their reads, writes and fsyncs; onCopied stays serialized.
+	for range min(copyWorkers, len(plan.Entries)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for entry := range jobs {
+				err := copyEntry(ctx, root, entry)
+				lock.Lock()
+				if err == nil {
+					report.Copied++
+					if onCopied != nil {
+						onCopied(entry)
+					}
+				} else if failure == nil {
+					failure = fmt.Errorf("copy %q: %w", entry.Source, err)
+					close(failed)
+				}
+				lock.Unlock()
+			}
+		}()
+	}
+	// After a failure no new copy starts, but those in flight finish and are kept.
+feed:
 	for _, entry := range plan.Entries {
-		if err := ctx.Err(); err != nil {
-			return report, err
+		select {
+		case <-failed:
+			break feed
+		case <-ctx.Done():
+			break feed
+		default:
 		}
-		if err := copyEntry(ctx, root, entry); err != nil {
-			return report, fmt.Errorf("copy %q: %w", entry.Source, err)
+		select {
+		case jobs <- entry:
+		case <-failed:
+			break feed
+		case <-ctx.Done():
+			break feed
 		}
-		report.Copied++
-		if onCopied != nil {
-			onCopied(entry)
-		}
+	}
+	close(jobs)
+	wg.Wait()
+	if failure != nil {
+		return report, failure
+	}
+	if report.Copied < len(plan.Entries) {
+		return report, ctx.Err()
 	}
 	return report, nil
 }
@@ -318,6 +457,10 @@ func (reader contextReader) Read(buffer []byte) (int, error) {
 		return 0, err
 	}
 	return reader.reader.Read(buffer)
+}
+
+func validDate(m Metadata) bool {
+	return !m.TakenAt.IsZero() && m.TakenAt.Year() >= 1 && m.TakenAt.Year() <= 9999
 }
 
 func supported(path string) bool {

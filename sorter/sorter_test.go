@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -269,7 +270,7 @@ func TestSkipDuplicates(t *testing.T) {
 func TestGroupSimilar(t *testing.T) {
 	base := t.TempDir()
 	source := filepath.Join(base, "source")
-	for _, name := range []string{"a", "b", "c"} {
+	for _, name := range []string{"a", "b", "c", "d"} {
 		writePhoto(t, filepath.Join(source, name+".tiff"))
 		if err := os.WriteFile(filepath.Join(source, name+".tiff"), []byte(name), 0600); err != nil {
 			t.Fatal(err)
@@ -279,24 +280,37 @@ func TestGroupSimilar(t *testing.T) {
 		"a.tiff": time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC),
 		"b.tiff": time.Date(2026, 10, 20, 10, 0, 5, 0, time.UTC),
 		"c.tiff": time.Date(2026, 10, 20, 10, 0, 9, 0, time.UTC),
+		// Same picture as a, but alone in its time window.
+		"d.tiff": time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC),
 	}
-	hashes := map[string]uint64{"a.tiff": 0, "b.tiff": 0b11, "c.tiff": ^uint64(0)}
+	hashes := map[string]uint64{"a.tiff": 0, "b.tiff": 0b11, "c.tiff": ^uint64(0), "d.tiff": 0}
+	var hashedLock sync.Mutex
+	hashed := map[string]bool{}
 	engine := Engine{
 		GroupSimilar: true,
 		ReadMetadata: func(_ context.Context, path string) (Metadata, error) {
 			return Metadata{TakenAt: taken[filepath.Base(path)]}, nil
 		},
-		Hash: func(path string) (uint64, bool) { return hashes[filepath.Base(path)], true },
+		Hash: func(path string) (uint64, bool) {
+			hashedLock.Lock()
+			defer hashedLock.Unlock()
+			hashed[filepath.Base(path)] = true
+			return hashes[filepath.Base(path)], true
+		},
 	}
 	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
-	if err != nil || len(plan.Entries) != 3 {
+	if err != nil || len(plan.Entries) != 4 {
 		t.Fatalf("unexpected plan: %+v, %v", plan, err)
 	}
 	group := "2026/2026-10/2026-10-20 10.00.00 - Almost Duplicates/"
 	for _, entry := range plan.Entries {
 		inGroup := strings.HasPrefix(filepath.ToSlash(entry.Target), group)
-		if inGroup != (filepath.Base(entry.Source) != "c.tiff") {
+		name := filepath.Base(entry.Source)
+		if inGroup != (name == "a.tiff" || name == "b.tiff") {
 			t.Fatalf("unexpected target for %s: %s", entry.Source, entry.Target)
 		}
+	}
+	if hashed["d.tiff"] || !hashed["a.tiff"] {
+		t.Fatalf("only photos close in time should be hashed: %v", hashed)
 	}
 }

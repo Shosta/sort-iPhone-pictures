@@ -8,6 +8,10 @@ export interface Prefs {
   landmarks: boolean
   skipDuplicates: boolean
   groupSimilar: boolean
+  tagScenes: boolean
+  tagMoment: boolean
+  tagPeople: boolean
+  tagMeta: boolean
   language: Language
   theme: ThemeId
 }
@@ -22,6 +26,11 @@ function load(): Prefs {
     landmarks: localStorage.getItem('landmarks') !== '0',
     skipDuplicates: true,
     groupSimilar: true,
+    // Tagging is an explicit action from its own panel, so every kind starts on.
+    tagScenes: true,
+    tagMoment: true,
+    tagPeople: true,
+    tagMeta: true,
     language: detectLanguage(),
     theme: 'aurora'
   }

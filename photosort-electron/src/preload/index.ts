@@ -9,11 +9,16 @@ const api = {
   },
   pickFolders: (title: string): Promise<string[]> => ipcRenderer.invoke('dialog:pickFolder', title),
   pathsFromDrop: (files: File[]): string[] => files.map((file) => webUtils.getPathForFile(file)).filter(Boolean),
-  setMenuLabel: (label: string): void => ipcRenderer.send('menu:label', label),
+  setMenuLabels: (labels: { preferences: string; tags: string }): void => ipcRenderer.send('menu:labels', labels),
   onPreferences: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on('menu:preferences', listener)
     return () => ipcRenderer.removeListener('menu:preferences', listener)
+  },
+  onTags: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('menu:tags', listener)
+    return () => ipcRenderer.removeListener('menu:tags', listener)
   },
   openPath: (path: string): Promise<string> => ipcRenderer.invoke('shell:reveal', path)
 }
