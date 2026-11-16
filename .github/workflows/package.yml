@@ -1,0 +1,135 @@
+name: Package Photosort
+
+# Lancement manuel : onglet Actions > "Package Photosort" > Run workflow.
+# Un tag `v*` déclenche aussi la construction et crée une release brouillon.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag de release à créer ou compléter (ex. v0.1.0). Vide : artefacts du run uniquement."
+        required: false
+        type: string
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            artifact: macos-arm64
+            os: macos-15
+            goos: darwin
+            goarch: arm64
+            builder: --mac --arm64
+          # ONNX Runtime n'est pas publié pour macOS Intel : l'étiquetage IA y est désactivé.
+          - name: macOS (Intel)
+            artifact: macos-x64
+            os: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            builder: --mac --x64
+          - name: Linux (AppImage)
+            artifact: linux-x64
+            os: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            builder: --linux AppImage --x64
+          - name: Windows
+            artifact: windows-x64
+            os: windows-latest
+            goos: windows
+            goarch: amd64
+            builder: --win nsis --x64
+    defaults:
+      run:
+        shell: bash
+        working-directory: photosort-electron
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      # Installeurs non signés : évite la recherche d'une identité de signature macOS.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: photosort-electron/package-lock.json
+
+      # Le sidecar utilise CGO (ONNX Runtime) sur tous les OS, y compris Windows (MinGW-w64 de l'image).
+      - name: Vérifier le compilateur C
+        run: gcc --version | head -1
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérifier les types
+        run: npm run typecheck
+
+      # Compile le sidecar Go, télécharge les modèles IA (sha256 vérifié) puis construit l'interface.
+      - name: Construire le sidecar et l'interface
+        run: npm run build
+
+      - name: Générer les installeurs
+        run: npx electron-builder ${{ matrix.builder }} --publish never
+
+      - name: Lister les installeurs
+        run: ls -lh release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: photosort-${{ matrix.artifact }}
+          path: |
+            photosort-electron/release/*.dmg
+            photosort-electron/release/*.zip
+            photosort-electron/release/*.exe
+            photosort-electron/release/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release brouillon
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.release_tag || github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: photosort-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publier les installeurs dans la release
+        run: |
+          ls -lh dist
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --draft --generate-notes --title "Photosort $TAG" --target "$GITHUB_SHA"
+          fi
