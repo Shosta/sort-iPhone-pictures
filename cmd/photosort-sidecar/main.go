@@ -8,6 +8,10 @@
 //	{"id":"3","op":"thumbnail","path":"...","size":256}
 //	{"id":"4","op":"tag","folder":"...","files":[...],"tagScenes":true,"tagMoment":true,"tagPeople":true,"tagMeta":true,"aiDir":"..."}
 //	{"id":"5","op":"cancel","target":"2"}
+//	{"id":"6","op":"weekDays","root":"...","from":"2026-05-04","to":"2026-06-14"}
+//	{"id":"7","op":"weekPhotos","root":"...","from":"2026-05-11","to":"2026-05-17"}
+//	{"id":"8","op":"scrapbookLayout","files":[...],"page":"a4-landscape","longSide":65,"gutter":5}
+//	{"id":"9","op":"scrapbook","files":[...],"page":"a4-landscape","longSide":65,"gutter":5,"outDir":"...","fallbackDir":"...","name":"Semaine.pdf"}
 //
 // Events:
 //   - plan: status (stage exif|hash|similar with done/total), draft (batches of
@@ -18,6 +22,13 @@
 //   - tag: status (stage tags with done/total), tagged per photo (path, tags),
 //     then done. Photos that already have a <photo>.xmp are left out; files,
 //     if given, replace the folder walk.
+//   - weekDays: days (photo count per YYYY-MM-DD) and rootOk (the folder looks
+//     like a sorted library). weekPhotos: photos (path, date), oldest first;
+//     root is the library folder, the day range is inclusive.
+//   - scrapbookLayout: layout (pageWidth and pageHeight in mm, sheets of
+//     placements in mm, failed photos that cannot be read). scrapbook: progress
+//     per photo, then done (path, pages, photos, failed, fallback). Sizes are
+//     in millimetres; a photo is never cropped, with at least 5 mm between photos.
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -38,6 +49,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sort-iphone-pictures/internal/scrapbook"
 	"sort-iphone-pictures/internal/tagger"
 	"sort-iphone-pictures/internal/thumbs"
 	"sort-iphone-pictures/sorter"
@@ -63,6 +75,15 @@ type request struct {
 	Path        string   `json:"path"`
 	Size        int      `json:"size"`
 	Target      string   `json:"target"`
+	Root        string   `json:"root"`
+	From        string   `json:"from"`
+	To          string   `json:"to"`
+	Page        string   `json:"page"`
+	LongSide    float64  `json:"longSide"`
+	Gutter      float64  `json:"gutter"`
+	OutDir      string   `json:"outDir"`
+	FallbackDir string   `json:"fallbackDir"`
+	Name        string   `json:"name"`
 }
 
 type event map[string]any
@@ -88,6 +109,7 @@ type server struct {
 	busy      atomic.Int32
 	busySlots chan struct{}
 	cache     *thumbCache
+	measurer  scrapbook.Measurer
 	wg        sync.WaitGroup
 }
 
@@ -192,6 +214,14 @@ func (s *server) run(ctx context.Context, req request) error {
 		return s.thumbnail(ctx, req)
 	case "tag":
 		return s.tag(ctx, req)
+	case "weekDays":
+		return s.weekDays(ctx, req)
+	case "weekPhotos":
+		return s.weekPhotos(ctx, req)
+	case "scrapbookLayout":
+		return s.scrapbookLayout(ctx, req)
+	case "scrapbook":
+		return s.scrapbook(ctx, req)
 	default:
 		return fmt.Errorf("unknown op %q", req.Op)
 	}

@@ -107,6 +107,9 @@ func Render(ctx context.Context, job Job) (Result, error) {
 	if err := temp.Close(); err != nil {
 		return Result{}, err
 	}
+	if err := os.Chmod(temp.Name(), 0o644); err != nil {
+		return Result{}, err
+	}
 	path, err := publish(temp.Name(), dir, SafeName(job.Name))
 	if err != nil {
 		return Result{}, err

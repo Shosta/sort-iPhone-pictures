@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -82,22 +83,29 @@ func (m *Measurer) ratio(path string) (float64, error) {
 	return ratio, nil
 }
 
-// Ratio is the width/height of the photo once upright. JPEG and PNG files are
-// measured from their header, others from a small decoded preview.
+// Ratio is the width/height of the photo once upright. It is read from the
+// file header whenever possible, since decoding a HEIC takes about two
+// seconds; other formats fall back to a small decoded preview.
 func Ratio(path string) (float64, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return 0, err
 	}
 	defer file.Close()
-	if config, format, err := image.DecodeConfig(file); err == nil && (format == "jpeg" || format == "png") && config.Width > 0 && config.Height > 0 {
+	if config, format, err := image.DecodeConfig(file); err == nil && config.Width > 0 && config.Height > 0 {
 		width, height := config.Width, config.Height
-		if _, err := file.Seek(0, 0); err == nil {
-			if metadata, err := imagemeta.Decode(file); err == nil && metadata.IFD0.Orientation >= 5 {
-				width, height = height, width
+		switch format {
+		case "jpeg", "png", "tiff":
+			if _, err := file.Seek(0, io.SeekStart); err == nil {
+				if metadata, err := imagemeta.Decode(file); err == nil && metadata.IFD0.Orientation >= 5 {
+					width, height = height, width
+				}
 			}
+			return float64(width) / float64(height), nil
+		case "heic", "avif":
+			// These decoders apply the stored rotation, and so does the size they report.
+			return float64(width) / float64(height), nil
 		}
-		return float64(width) / float64(height), nil
 	}
 	img, err := thumbs.Image(path, previewSize)
 	if err != nil {
