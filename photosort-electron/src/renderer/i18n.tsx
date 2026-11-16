@@ -59,6 +59,7 @@ const fr = {
   'theme.linen': 'Retraite en Lin Chaud',
   'prefs.output': 'Dossier de sortie',
   'prefs.location': 'Géolocalisation',
+  'prefs.duplicates': 'Doublons',
   'prefs.saved': 'Les préférences sont enregistrées automatiquement.'
 }
 
@@ -115,6 +116,7 @@ const enGB: Record<Key, string> = {
   'theme.linen': 'Warm Linen Retreat',
   'prefs.output': 'Output folder',
   'prefs.location': 'Geolocation',
+  'prefs.duplicates': 'Duplicates',
   'prefs.saved': 'Preferences are saved automatically.'
 }
 
@@ -169,6 +171,7 @@ const da: Record<Key, string> = {
   'theme.linen': 'Varm hørhygge',
   'prefs.output': 'Outputmappe',
   'prefs.location': 'Geolokalisering',
+  'prefs.duplicates': 'Dubletter',
   'prefs.saved': 'Indstillinger gemmes automatisk.'
 }
 
