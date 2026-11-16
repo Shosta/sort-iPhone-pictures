@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void
 }
 
-function Switch({ on, accent }: { on: boolean; accent: string }): JSX.Element {
+export function Switch({ on, accent }: { on: boolean; accent: string }): JSX.Element {
   return (
     <motion.span className="switch" animate={{ backgroundColor: on ? accent : 'rgba(255,255,255,0.18)' }}>
       <motion.span className="knob" animate={{ x: on ? 18 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
@@ -111,26 +111,6 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
             <Switch on={prefs.groupSimilar} accent={accent} />
             <span>{t('groupSimilar')}</span>
           </label>
-        </div>
-
-        <div className="field">
-          <label>{t('prefs.tags')}</label>
-          <label className={`toggle ${busy ? 'disabled' : ''}`}>
-            <input type="checkbox" checked={prefs.tagScenes} disabled={busy} onChange={(event) => onChange({ tagScenes: event.target.checked })} />
-            <Switch on={prefs.tagScenes} accent={accent} />
-            <span>{t('tagScenes')}</span>
-          </label>
-          <label className={`toggle ${busy ? 'disabled' : ''}`}>
-            <input type="checkbox" checked={prefs.tagMoment} disabled={busy} onChange={(event) => onChange({ tagMoment: event.target.checked })} />
-            <Switch on={prefs.tagMoment} accent={accent} />
-            <span>{t('tagMoment')}</span>
-          </label>
-          <label className={`toggle ${busy ? 'disabled' : ''}`}>
-            <input type="checkbox" checked={prefs.tagPeople} disabled={busy} onChange={(event) => onChange({ tagPeople: event.target.checked })} />
-            <Switch on={prefs.tagPeople} accent={accent} />
-            <span>{t('tagPeople')}</span>
-          </label>
-          <p className="hint">{t('tags.hint')}</p>
         </div>
 
         <p className="hint">{t('prefs.saved')}</p>

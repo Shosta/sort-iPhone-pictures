@@ -25,9 +25,10 @@ function load(): Prefs {
     landmarks: localStorage.getItem('landmarks') !== '0',
     skipDuplicates: true,
     groupSimilar: true,
-    tagScenes: false,
-    tagMoment: false,
-    tagPeople: false,
+    // Tagging is an explicit action from its own panel, so every kind starts on.
+    tagScenes: true,
+    tagMoment: true,
+    tagPeople: true,
     language: detectLanguage(),
     theme: 'aurora'
   }

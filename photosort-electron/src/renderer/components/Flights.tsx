@@ -16,7 +16,7 @@ function Drop({ flight, onDone }: { flight: Flight; onDone: (id: string) => void
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    thumbnail(flight.path, 192).then((value) => alive && setUrl(value))
+    thumbnail(flight.path).then((value) => alive && setUrl(value))
     return () => {
       alive = false
     }
