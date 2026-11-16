@@ -66,16 +66,21 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	var copyErr error
 	if *apply {
 		var afterCopy func(sorter.Entry)
+		var runner *sorter.TagRunner
 		if *tagScenes || *tagMoment || *tagPeople {
 			tg, err := tagger.New(tagger.FindAssets(*aiDir), tagger.Options{Scenes: *tagScenes, Moment: *tagMoment, People: *tagPeople})
 			if err != nil {
 				fmt.Fprintln(diagnostics, "Tags disabled:", err)
 			} else {
 				defer tg.Close()
-				afterCopy = sorter.TagHook(tg, plan.Destination)
+				runner = sorter.NewTagRunner(ctx, tg, plan.Destination, nil)
+				afterCopy = runner.Submit
 			}
 		}
 		report, copyErr = sorter.CopyWithHook(ctx, plan, afterCopy, nil)
+		if runner != nil {
+			runner.Wait()
+		}
 	}
 	if *asJSON {
 		result := struct {

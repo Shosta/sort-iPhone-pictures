@@ -313,7 +313,7 @@ export function App(): JSX.Element {
                 : phase === 'analyzing'
                   ? stage ? t(stage.name === 'similar' ? 'status.similar' : 'status.exif', { done: stage.done, total: stage.total }) : t('status.analyzing')
                   : phase === 'copying'
-                    ? stage?.name === 'tags' ? t('status.tags', { done: stage.done + 1, total: stage.total }) : t('status.copying', { done: copied.size, total: entries.length })
+                    ? stage?.name === 'tags' && copied.size >= entries.length ? t('status.tags', { done: Math.min(stage.done + 1, stage.total), total: stage.total }) : t('status.copying', { done: copied.size, total: entries.length })
                     : phase === 'done'
                       ? t('status.done', { n: copied.size })
                       : plan

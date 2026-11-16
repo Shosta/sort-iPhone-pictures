@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"unicode"
 
 	"sort-iphone-pictures/internal/geo"
@@ -145,20 +146,67 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.SkipDuplicates {
 		dedupe = newDeduper(plan.Destination)
 	}
+	hasher := engine.Hash
+	if hasher == nil {
+		hasher = imageHash
+	}
+	// The expensive per-photo work (EXIF, content hashes, perceptual hash)
+	// is independent between photos: run it on all cores, then do the
+	// order-dependent planning sequentially below.
+	var finished atomic.Int64
+	prepared := prepare(ctx, ordered, func(path string) preparedPhoto {
+		var p preparedPhoto
+		p.metadata, p.err = reader(ctx, path)
+		if p.err == nil && dedupe != nil && validDate(p.metadata) {
+			p.fileSum, p.fileOK = fileHash(path)
+			p.pixelSum, p.pixelOK = pixelHash(path)
+		}
+		if p.err == nil && engine.GroupSimilar && validDate(p.metadata) {
+			p.imageSum, p.imageOK = hasher(path)
+		}
+		if engine.Progress != nil {
+			engine.Progress("exif", int(finished.Add(1)), len(ordered))
+		}
+		return p
+	})
+	if err := ctx.Err(); err != nil {
+		return plan, err
+	}
+	var imageSums map[string]preparedPhoto
+	if engine.GroupSimilar {
+		imageSums = make(map[string]preparedPhoto, len(ordered))
+	}
+	if dedupe != nil {
+		known := make(map[string]preparedPhoto, len(ordered))
+		for i, path := range ordered {
+			known[path] = prepared[i]
+		}
+		dedupe.fileSum = func(path string) (hashKey, bool) {
+			if p, ok := known[path]; ok {
+				return p.fileSum, p.fileOK
+			}
+			return fileHash(path)
+		}
+		dedupe.pixelSum = func(path string) (hashKey, bool) {
+			if p, ok := known[path]; ok {
+				return p.pixelSum, p.pixelOK
+			}
+			return pixelHash(path)
+		}
+	}
+	if imageSums != nil {
+		for i, path := range ordered {
+			imageSums[path] = prepared[i]
+		}
+	}
 	var pending []candidate
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
-	report := func(stage string, done int) {
-		if engine.Progress != nil {
-			engine.Progress(stage, done, len(ordered))
-		}
-	}
 	for index, path := range ordered {
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
-		report("exif", index)
-		metadata, err := reader(ctx, path)
+		metadata, err := prepared[index].metadata, prepared[index].err
 		if err != nil {
 			if ctx.Err() != nil {
 				return plan, ctx.Err()
@@ -197,12 +245,13 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		pending = append(pending, candidate{path, metadata, month})
 	}
 	if engine.GroupSimilar {
-		report("similar", len(ordered))
-		hasher := engine.Hash
-		if hasher == nil {
-			hasher = imageHash
+		if engine.Progress != nil {
+			engine.Progress("similar", len(ordered), len(ordered))
 		}
-		groups, err := similarGroups(ctx, pending, hasher)
+		groups, err := similarGroups(ctx, pending, func(path string) (uint64, bool) {
+			p := imageSums[path]
+			return p.imageSum, p.imageOK
+		})
 		if err != nil {
 			return plan, err
 		}

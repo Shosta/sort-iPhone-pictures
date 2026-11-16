@@ -35,6 +35,9 @@ type deduper struct {
 	bytes       map[hashKey]string
 	pixels      map[hashKey]string
 	hashed      map[string]bool
+	// fileSum and pixelSum let the caller supply precomputed hashes.
+	fileSum  func(string) (hashKey, bool)
+	pixelSum func(string) (hashKey, bool)
 }
 
 func newDeduper(destination string) *deduper {
@@ -44,6 +47,8 @@ func newDeduper(destination string) *deduper {
 		bytes:       map[hashKey]string{},
 		pixels:      map[hashKey]string{},
 		hashed:      map[string]bool{},
+		fileSum:     fileHash,
+		pixelSum:    pixelHash,
 	}
 }
 
@@ -77,13 +82,13 @@ func (d *deduper) check(path string) (string, bool) {
 		}
 		delete(d.bySize, info.Size())
 	}
-	if sum, ok := fileHash(path); ok {
+	if sum, ok := d.fileSum(path); ok {
 		if other, found := d.bytes[sum]; found {
 			return other, true
 		}
 		d.bytes[sum] = path
 	}
-	if sum, ok := pixelHash(path); ok {
+	if sum, ok := d.pixelSum(path); ok {
 		if other, found := d.pixels[sum]; found {
 			return other, true
 		}
@@ -97,7 +102,7 @@ func (d *deduper) register(path string) {
 		return
 	}
 	d.hashed[path] = true
-	if sum, ok := fileHash(path); ok {
+	if sum, ok := d.fileSum(path); ok {
 		if _, found := d.bytes[sum]; !found {
 			d.bytes[sum] = path
 		}

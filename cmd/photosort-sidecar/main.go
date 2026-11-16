@@ -154,23 +154,25 @@ func (s *server) run(ctx context.Context, req request) error {
 		}
 		total := len(plan.Entries)
 		var afterCopy func(sorter.Entry)
+		var runner *sorter.TagRunner
 		if req.TagScenes || req.TagMoment || req.TagPeople {
 			tg, err := tagger.New(tagger.FindAssets(req.AIDir), tagger.Options{Scenes: req.TagScenes, Moment: req.TagMoment, People: req.TagPeople})
 			if err != nil {
 				s.send(event{"id": req.ID, "type": "warning", "message": "Tags disabled: " + err.Error()})
 			} else {
 				defer tg.Close()
-				hook, analysed := sorter.TagHook(tg, plan.Destination), 0
-				afterCopy = func(entry sorter.Entry) {
-					s.send(event{"id": req.ID, "type": "status", "stage": "tags", "done": analysed, "total": total})
-					hook(entry)
-					analysed++
-				}
+				runner = sorter.NewTagRunner(ctx, tg, plan.Destination, func(done int) {
+					s.send(event{"id": req.ID, "type": "status", "stage": "tags", "done": done, "total": total})
+				})
+				afterCopy = runner.Submit
 			}
 		}
 		report, err := sorter.CopyWithHook(ctx, plan, afterCopy, func(entry sorter.Entry) {
 			s.send(event{"id": req.ID, "type": "progress", "entry": entry, "total": total})
 		})
+		if runner != nil {
+			runner.Wait()
+		}
 		if err == nil {
 			s.send(event{"id": req.ID, "type": "done", "copied": report.Copied, "total": total})
 		}

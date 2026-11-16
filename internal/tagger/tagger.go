@@ -46,15 +46,18 @@ type Photo struct {
 	HasOffset bool
 }
 
-// Tagger holds the loaded models. It is safe for concurrent use.
+// Tagger holds the loaded models as several independent lanes so that many
+// photos can be analysed in parallel. It is safe for concurrent use.
 type Tagger struct {
-	opts     Options
-	lock     sync.Mutex
-	scene    *ort.AdvancedSession
-	sceneIn  *ort.Tensor[float32]
-	sceneOut *ort.Tensor[float32]
-	labels   []string
-	face     *faceModel
+	opts   Options
+	labels []string
+	lanes  chan *lane
+	all    []*lane
+}
+
+type lane struct {
+	scene *sceneModel
+	face  *faceModel
 }
 
 var (
@@ -92,6 +95,11 @@ func FindAssets(dir string) string {
 	return ""
 }
 
+// laneCount balances parallel photos against threads used by each model.
+func laneCount() int {
+	return max(1, min(runtime.NumCPU()/2, 6))
+}
+
 // New loads the models needed by opts from dir. If no model is needed (only
 // the solar moment tags) no assets are required.
 func New(dir string, opts Options) (*Tagger, error) {
@@ -113,54 +121,48 @@ func New(dir string, opts Options) (*Tagger, error) {
 	}
 	envLock.Unlock()
 	if opts.Scenes {
-		if err := t.loadScene(dir); err != nil {
-			t.Close()
-			return nil, err
+		labels, err := loadCategories(filepath.Join(dir, "categories.txt"))
+		if err != nil || len(labels) != 365 {
+			return nil, fmt.Errorf("load scene categories: %v", err)
 		}
+		t.labels = labels
 	}
-	if opts.People {
-		face, err := newFaceModel(filepath.Join(dir, "yunet.onnx"))
+	count := laneCount()
+	threads := max(1, runtime.NumCPU()/count)
+	t.lanes = make(chan *lane, count)
+	for i := 0; i < count; i++ {
+		l := &lane{}
+		t.all = append(t.all, l)
+		var err error
+		if opts.Scenes {
+			l.scene, err = newSceneModel(filepath.Join(dir, "places.onnx"), threads)
+		}
+		if err == nil && opts.People {
+			l.face, err = newFaceModel(filepath.Join(dir, "yunet.onnx"), threads)
+		}
 		if err != nil {
 			t.Close()
 			return nil, err
 		}
-		t.face = face
+		t.lanes <- l
 	}
 	return t, nil
 }
 
-func (t *Tagger) loadScene(dir string) error {
-	labels, err := loadCategories(filepath.Join(dir, "categories.txt"))
-	if err != nil || len(labels) != 365 {
-		return fmt.Errorf("load scene categories: %v", err)
-	}
-	t.labels = labels
-	if t.sceneIn, err = ort.NewEmptyTensor[float32](ort.NewShape(1, 3, sceneSize, sceneSize)); err != nil {
-		return err
-	}
-	if t.sceneOut, err = ort.NewEmptyTensor[float32](ort.NewShape(1, 365)); err != nil {
-		return err
-	}
-	t.scene, err = ort.NewAdvancedSession(filepath.Join(dir, "places.onnx"),
-		[]string{"serving_default_args_0"}, []string{"serving_default_output_0_output"},
-		[]ort.Value{t.sceneIn}, []ort.Value{t.sceneOut}, nil)
-	return err
-}
+// Workers is how many photos Tags can analyse at the same time.
+func (t *Tagger) Workers() int { return max(1, len(t.all)) }
 
 // Close releases the models.
 func (t *Tagger) Close() {
-	if t.scene != nil {
-		t.scene.Destroy()
+	for _, l := range t.all {
+		if l.scene != nil {
+			l.scene.close()
+		}
+		if l.face != nil {
+			l.face.close()
+		}
 	}
-	if t.sceneIn != nil {
-		t.sceneIn.Destroy()
-	}
-	if t.sceneOut != nil {
-		t.sceneOut.Destroy()
-	}
-	if t.face != nil {
-		t.face.close()
-	}
+	t.all = nil
 }
 
 // Tags analyses a photo and returns its tags, sorted by relevance.
@@ -171,23 +173,26 @@ func (t *Tagger) Tags(photo Photo) ([]string, error) {
 			tags = append(tags, tag)
 		}
 	}
-	if t.scene == nil && t.face == nil {
+	if len(t.all) == 0 {
 		return tags, nil
 	}
 	img, err := thumbs.Image(photo.Path, 640)
 	if err != nil {
 		return tags, err
 	}
+	l := <-t.lanes
+	defer func() { t.lanes <- l }()
 	outdoor := false
-	if t.scene != nil {
-		sceneTagList, isOutdoor, err := t.classify(img)
+	if l.scene != nil {
+		probs, err := l.scene.classify(img)
 		if err != nil {
 			return tags, err
 		}
+		sceneTagList, isOutdoor := sceneTags(t.labels, probs)
 		tags = append(tags, sceneTagList...)
 		outdoor = isOutdoor
 	}
-	if t.opts.Moment && t.scene != nil && outdoor && !hasTag(tags, TagNight) &&
+	if t.opts.Moment && l.scene != nil && outdoor && !hasTag(tags, TagNight) &&
 		isDaylight(photo.TakenAt, photo.Lat, photo.Lon, photo.UTCOffset, photo.HasOffset, photo.HasGPS) {
 		sun, cloud := skyTags(img)
 		if sun {
@@ -197,8 +202,8 @@ func (t *Tagger) Tags(photo Photo) ([]string, error) {
 			tags = append(tags, TagCloud)
 		}
 	}
-	if t.face != nil {
-		people, portrait, err := t.face.detect(img)
+	if l.face != nil {
+		people, portrait, err := l.face.detect(img)
 		if err != nil {
 			return tags, err
 		}
@@ -223,14 +228,66 @@ func hasTag(tags []string, tag string) bool {
 
 const sceneSize = 224
 
-func (t *Tagger) classify(img image.Image) ([]string, bool, error) {
+type sceneModel struct {
+	session *ort.AdvancedSession
+	in, out *ort.Tensor[float32]
+}
+
+func newSceneModel(path string, threads int) (*sceneModel, error) {
+	m := &sceneModel{}
+	var err error
+	if m.in, err = ort.NewEmptyTensor[float32](ort.NewShape(1, 3, sceneSize, sceneSize)); err != nil {
+		return nil, err
+	}
+	if m.out, err = ort.NewEmptyTensor[float32](ort.NewShape(1, 365)); err != nil {
+		m.close()
+		return nil, err
+	}
+	options, err := sessionOptions(threads)
+	if err != nil {
+		m.close()
+		return nil, err
+	}
+	defer options.Destroy()
+	m.session, err = ort.NewAdvancedSession(path, []string{"serving_default_args_0"}, []string{"serving_default_output_0_output"},
+		[]ort.Value{m.in}, []ort.Value{m.out}, options)
+	if err != nil {
+		m.close()
+		return nil, err
+	}
+	return m, nil
+}
+
+func sessionOptions(threads int) (*ort.SessionOptions, error) {
+	options, err := ort.NewSessionOptions()
+	if err != nil {
+		return nil, err
+	}
+	if err := options.SetIntraOpNumThreads(threads); err != nil {
+		options.Destroy()
+		return nil, err
+	}
+	return options, nil
+}
+
+func (m *sceneModel) close() {
+	if m.session != nil {
+		m.session.Destroy()
+	}
+	if m.in != nil {
+		m.in.Destroy()
+	}
+	if m.out != nil {
+		m.out.Destroy()
+	}
+}
+
+func (m *sceneModel) classify(img image.Image) ([]float64, error) {
 	resized := image.NewRGBA(image.Rect(0, 0, sceneSize, sceneSize))
-	draw.CatmullRom.Scale(resized, resized.Bounds(), img, img.Bounds(), draw.Src, nil)
+	draw.BiLinear.Scale(resized, resized.Bounds(), img, img.Bounds(), draw.Src, nil)
 	mean := [3]float32{0.485, 0.456, 0.406}
 	std := [3]float32{0.229, 0.224, 0.225}
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	data := t.sceneIn.GetData()
+	data := m.in.GetData()
 	plane := sceneSize * sceneSize
 	for y := 0; y < sceneSize; y++ {
 		for x := 0; x < sceneSize; x++ {
@@ -241,11 +298,10 @@ func (t *Tagger) classify(img image.Image) ([]string, bool, error) {
 			data[2*plane+i] = (float32(c.B)/255 - mean[2]) / std[2]
 		}
 	}
-	if err := t.scene.Run(); err != nil {
-		return nil, false, err
+	if err := m.session.Run(); err != nil {
+		return nil, err
 	}
-	tags, outdoor := sceneTags(t.labels, softmax(t.sceneOut.GetData()))
-	return tags, outdoor, nil
+	return softmax(m.out.GetData()), nil
 }
 
 // skyTags inspects the top third of the picture: lots of saturated blue means

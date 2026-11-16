@@ -21,7 +21,7 @@ type faceModel struct {
 	all     []ort.Value
 }
 
-func newFaceModel(path string) (*faceModel, error) {
+func newFaceModel(path string, threads int) (*faceModel, error) {
 	m := &faceModel{outputs: map[string]*ort.Tensor[float32]{}}
 	var err error
 	if m.input, err = ort.NewEmptyTensor[float32](ort.NewShape(1, 3, faceSize, faceSize)); err != nil {
@@ -45,7 +45,13 @@ func newFaceModel(path string) (*faceModel, error) {
 			names = append(names, name)
 		}
 	}
-	m.session, err = ort.NewAdvancedSession(path, []string{"input"}, names, []ort.Value{m.input}, m.all, nil)
+	options, err := sessionOptions(threads)
+	if err != nil {
+		m.close()
+		return nil, err
+	}
+	defer options.Destroy()
+	m.session, err = ort.NewAdvancedSession(path, []string{"input"}, names, []ort.Value{m.input}, m.all, options)
 	if err != nil {
 		m.close()
 		return nil, err
@@ -80,7 +86,7 @@ func (m *faceModel) detect(img image.Image) (people, portrait bool, err error) {
 	scale := math.Min(float64(faceSize)/float64(bounds.Dx()), float64(faceSize)/float64(bounds.Dy()))
 	w, h := int(math.Round(float64(bounds.Dx())*scale)), int(math.Round(float64(bounds.Dy())*scale))
 	canvas := image.NewRGBA(image.Rect(0, 0, faceSize, faceSize))
-	draw.CatmullRom.Scale(canvas, image.Rect(0, 0, w, h), img, bounds, draw.Src, nil)
+	draw.BiLinear.Scale(canvas, image.Rect(0, 0, w, h), img, bounds, draw.Src, nil)
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	data := m.input.GetData()
