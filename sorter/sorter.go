@@ -157,7 +157,7 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		}
 		if dedupe != nil {
 			if of, found := dedupe.check(path); found {
-				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of})
+				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of, within(plan.Destination, of)})
 				continue
 			}
 		}

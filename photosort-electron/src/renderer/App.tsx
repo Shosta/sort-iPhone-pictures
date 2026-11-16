@@ -329,7 +329,11 @@ export function App(): JSX.Element {
                         : t('status.idle')}
             </motion.span>
           </AnimatePresence>
-          {plan && plan.duplicates?.length > 0 && <button className="link" onClick={() => setShowSkipped(true)}>{t('duplicates', { n: plan.duplicates.length })}</button>}
+          {plan && plan.duplicates?.length > 0 && (
+            <button className="link" onClick={() => setShowSkipped(true)}>
+              {t('duplicates', { n: plan.duplicates.length })}
+            </button>
+          )}
           {plan && plan.skipped.length > 0 && (
             <button className="link" onClick={() => setShowSkipped(true)}>
               {t('issues', { n: plan.skipped.length })}
@@ -406,7 +410,9 @@ export function App(): JSX.Element {
                 {(plan.duplicates ?? []).map((duplicate) => (
                   <li key={duplicate.path}>
                     <code>{duplicate.path}</code>
-                    <span>{t('duplicateOf')} {duplicate.of}</span>
+                    <span>
+                      {duplicate.inDestination ? t('duplicateInDest') : t('duplicateOf')} {duplicate.of}
+                    </span>
                   </li>
                 ))}
               </ul>

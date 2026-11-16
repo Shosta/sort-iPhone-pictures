@@ -19,6 +19,8 @@ import (
 type Duplicate struct {
 	Path string `json:"path"`
 	Of   string `json:"of"`
+	// InDestination is true when Of is already in the destination folder.
+	InDestination bool `json:"inDestination"`
 }
 
 type hashKey [sha256.Size]byte
