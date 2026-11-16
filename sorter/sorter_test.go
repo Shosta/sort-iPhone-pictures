@@ -193,3 +193,37 @@ func TestPlanUnknownCameraAndSymlink(t *testing.T) {
 		t.Fatal("missing camera fallback")
 	}
 }
+
+func TestPlanByLocation(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "source")
+	for _, name := range []string{"a.tiff", "b.tiff", "c.tiff"} {
+		writePhoto(t, filepath.Join(source, name))
+	}
+	reader := func(_ context.Context, path string) (Metadata, error) {
+		metadata := Metadata{TakenAt: time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC), Camera: "iPhone"}
+		if !strings.HasSuffix(path, "c.tiff") {
+			metadata.Lat, metadata.Lon, metadata.HasGPS = 49.44, 1.09, true
+		}
+		return metadata, nil
+	}
+	locate := func(float64, float64) (string, bool) { return "Rouen/..", true }
+	plan, err := (Engine{ReadMetadata: reader, ByLocation: true, Locate: locate}).Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"2026/2026-06/Rouen/2026-06-12 - iPhone - 1.tiff",
+		"2026/2026-06/Rouen/2026-06-12 - iPhone - 2.tiff",
+		"2026/2026-06/2026-06-12 - iPhone - 1.tiff",
+	}
+	for index, entry := range plan.Entries {
+		if filepath.ToSlash(entry.Target) != want[index] {
+			t.Fatalf("entry %d: got %s, want %s", index, entry.Target, want[index])
+		}
+	}
+	plan, err = (Engine{ReadMetadata: reader, Locate: locate}).Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+	if err != nil || strings.Contains(plan.Entries[0].Target, "Rouen") {
+		t.Fatalf("location must be opt-in: %+v, %v", plan, err)
+	}
+}

@@ -7,6 +7,16 @@
         "./bin/photosort-gui": true,
         "git var": true,
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "command": true,
+        "xcode-select": true,
+        "/^bash -n packaging/build\\.sh$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^bash packaging/build\\.sh macos$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

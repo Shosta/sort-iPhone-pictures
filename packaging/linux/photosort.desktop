@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Photosort
+Comment=Local photo sorting
+Exec=photosort-gui
+Icon=photosort
+Terminal=false
+Categories=Graphics;Photography;

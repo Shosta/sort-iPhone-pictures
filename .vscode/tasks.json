@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Photosort: build macOS (.app)",
+            "type": "process",
+            "command": "bash",
+            "args": ["${workspaceFolder}/packaging/build.sh", "macos"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Photosort: build Linux (AppImage x86_64)",
+            "type": "process",
+            "command": "bash",
+            "args": ["${workspaceFolder}/packaging/build.sh", "linux"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}
