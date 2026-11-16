@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"sort-iphone-pictures/internal/geo"
@@ -231,9 +232,21 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		}
 		prints := make([]fingerprint, len(dated))
 		ready := make([]bool, len(dated))
+		// Only photos with a neighbour close in time can be near-duplicates:
+		// the others need no perceptual hash, often the costliest part.
+		var nearby []bool
+		if engine.GroupSimilar {
+			times, folders := make([]time.Time, len(dated)), make([]string, len(dated))
+			for k, i := range dated {
+				times[k], folders[k] = photos[i].metadata.TakenAt, photos[i].folder
+			}
+			nearby = closeInTime(times, folders)
+		}
 		next, done := 0, 0
 		for k := range parallel(ctx, len(dated), func(k int) {
-			prints[k] = fingerprintOf(ordered[dated[k]], options)
+			own := options
+			own.perceptual = options.perceptual && nearby[k]
+			prints[k] = fingerprintOf(ordered[dated[k]], own)
 		}) {
 			ready[k] = true
 			for ; next < len(dated) && ready[next]; next++ {

@@ -47,12 +47,20 @@ var errShortHuffmanData = FormatError("short Huffman data")
 // the caller is the one responsible for first checking that d.bits.n < n.
 func (d *decoder) ensureNBits(n int32) error {
 	for {
-		c, err := d.readByteStuffedByte()
-		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				return errShortHuffmanData
+		var c byte
+		if i := d.bytes.i; i+2 <= d.bytes.j && d.bytes.buf[i] != 0xff {
+			// Inlined fast path of readByteStuffedByte.
+			c = d.bytes.buf[i]
+			d.bytes.i = i + 1
+			d.bytes.nUnreadable = 1
+		} else {
+			var err error
+			if c, err = d.readByteStuffedByte(); err != nil {
+				if err == io.ErrUnexpectedEOF {
+					return errShortHuffmanData
+				}
+				return err
 			}
-			return err
 		}
 		d.bits.a = d.bits.a<<8 | uint32(c)
 		d.bits.n += 8

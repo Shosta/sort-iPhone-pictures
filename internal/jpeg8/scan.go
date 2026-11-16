@@ -234,10 +234,10 @@ func (d *decoder) processSOS(n int) error {
 					}
 
 					// Load the previous partially decoded coefficients, if applicable.
+					// Sequential blocks only need their DC coefficient, which is
+					// always decoded below: no need to clear the AC ones.
 					if d.progressive {
 						b = d.progCoeffs[compIndex][by*mxx*hi+bx]
-					} else {
-						b = block{}
 					}
 
 					if ah != 0 {
@@ -268,6 +268,9 @@ func (d *decoder) processSOS(n int) error {
 							d.eobRun--
 						} else {
 							// Decode the AC coefficients, as specified in section F.2.2.2.
+							// Only sequential scans get here (progressive AC scans are
+							// skipped) and the 1/8 scale image only uses the DC
+							// coefficient, so AC values are skipped, not decoded.
 							huff := &d.huff[acTable][scan[i].ta]
 							for ; zig <= zigEnd; zig++ {
 								value, err := d.decodeHuffman(huff)
@@ -281,11 +284,13 @@ func (d *decoder) processSOS(n int) error {
 									if zig > zigEnd {
 										break
 									}
-									ac, err := d.receiveExtend(val1)
-									if err != nil {
-										return err
+									if d.bits.n < int32(val1) {
+										if err := d.ensureNBits(int32(val1)); err != nil {
+											return err
+										}
 									}
-									b[unzig[zig]] = ac << al
+									d.bits.n -= int32(val1)
+									d.bits.m >>= val1
 								} else {
 									if val0 != 0x0f {
 										d.eobRun = uint16(1 << val0)

@@ -35,6 +35,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sort-iphone-pictures/internal/tagger"
@@ -70,6 +71,9 @@ const (
 	draftInterval  = 80 * time.Millisecond
 	statusInterval = 50 * time.Millisecond
 	cacheBudget    = 96 << 20
+	// planThumbs bounds thumbnail decodes while a plan runs, so it keeps
+	// most cores.
+	planThumbs = 2
 )
 
 type server struct {
@@ -79,8 +83,11 @@ type server struct {
 	plans   map[string]sorter.Plan
 	cancels map[string]context.CancelFunc
 	thumbs  chan struct{}
-	cache   *thumbCache
-	wg      sync.WaitGroup
+	// planning counts running plans; planSlots limits thumbnails meanwhile.
+	planning  atomic.Int32
+	planSlots chan struct{}
+	cache     *thumbCache
+	wg        sync.WaitGroup
 }
 
 func main() {
@@ -93,11 +100,12 @@ func main() {
 
 func newServer(out io.Writer) *server {
 	return &server{
-		out:     out,
-		plans:   map[string]sorter.Plan{},
-		cancels: map[string]context.CancelFunc{},
-		thumbs:  make(chan struct{}, runtime.NumCPU()),
-		cache:   newThumbCache(cacheBudget),
+		out:       out,
+		plans:     map[string]sorter.Plan{},
+		cancels:   map[string]context.CancelFunc{},
+		thumbs:    make(chan struct{}, runtime.NumCPU()),
+		planSlots: make(chan struct{}, planThumbs),
+		cache:     newThumbCache(cacheBudget),
 	}
 }
 
@@ -207,6 +215,8 @@ func (t *statusThrottle) allow(stage string, done, total int) bool {
 }
 
 func (s *server) plan(ctx context.Context, req request) error {
+	s.planning.Add(1)
+	defer s.planning.Add(-1)
 	var (
 		pendingLock sync.Mutex
 		entries     []sorter.Entry
@@ -287,6 +297,14 @@ func (s *server) thumbnail(ctx context.Context, req request) error {
 			defer func() { <-s.thumbs }()
 		case <-ctx.Done():
 			return ctx.Err()
+		}
+		if s.planning.Load() > 0 {
+			select {
+			case s.planSlots <- struct{}{}:
+				defer func() { <-s.planSlots }()
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		// Another request may have produced it while this one waited.
 		if data, ok = s.cache.get(req.Path, size); !ok {

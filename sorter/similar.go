@@ -60,6 +60,29 @@ func dHash(img image.Image) (uint64, bool) {
 	return hash, true
 }
 
+// closeInTime reports, for each photo, whether another one in the same folder
+// was taken within similarWindow of it: only those can end up in an Almost
+// Duplicates group (see similarGroups).
+func closeInTime(times []time.Time, folders []string) []bool {
+	order := make([]int, len(times))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return times[order[a]].Before(times[order[b]]) })
+	nearby := make([]bool, len(times))
+	for a, i := range order {
+		for _, j := range order[a+1:] {
+			if times[j].Sub(times[i]) > similarWindow {
+				break
+			}
+			if folders[i] == folders[j] {
+				nearby[i], nearby[j] = true, true
+			}
+		}
+	}
+	return nearby
+}
+
 // similarGroups returns, for each candidate, the name of its Almost
 // Duplicates folder ("" when the photo has no close sibling). Photos are
 // linked when taken within similarWindow of each other with similar hashes.
