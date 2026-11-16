@@ -11,6 +11,7 @@ export interface Prefs {
   tagScenes: boolean
   tagMoment: boolean
   tagPeople: boolean
+  tagMeta: boolean
   language: Language
   theme: ThemeId
 }
@@ -29,6 +30,7 @@ function load(): Prefs {
     tagScenes: true,
     tagMoment: true,
     tagPeople: true,
+    tagMeta: true,
     language: detectLanguage(),
     theme: 'aurora'
   }

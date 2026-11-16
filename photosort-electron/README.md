@@ -96,7 +96,12 @@ Le panneau montre la progression, le temps restant, les compteurs par tag et les
 | Famille | Tags | Méthode |
 | --- | --- | --- |
 | Lieux | plage, montagne, ville, campagne, château, église | Places365 (ResNet18, ONNX) |
+| Lieux (suite) | forêt, lac, rivière, cascade, neige, désert, jardin, parc ; intérieur, cuisine, chambre, restaurant, marché, supermarché ; piscine, camping, stade, scène, parc d'attractions, aire de jeux, aquarium, musée ; gare, aéroport, pont | mêmes probabilités Places365, sans calcul de plus : plusieurs catégories sont regroupées par tag (seuil 0,30) ; « intérieur » vient de la liste intérieur/extérieur officielle (seuil 0,60) |
 | Moment | Lever de soleil, Coucher de soleil, Nuit, Soleil, Nuage | calcul solaire (date, GPS, fuseau EXIF) ; ciel pour Soleil et Nuage |
+| Personnes | People, Portrait, Groupe | détection de visages YuNet (pas de reconnaissance) ; Groupe = au moins 4 visages visibles |
+| Infos de la photo | Printemps, Été, Automne, Hiver (inversées dans l'hémisphère sud d'après le GPS), année (« 2025 »), Week-end, Jour de l'an, Selfie, Capture d'écran, Panorama, Zoom, Macro, Faible luminosité | EXIF et nom de fichier, **sans modèle** ni décodage : instantané, aucun fichier d'IA nécessaire |
+
+Règles « Infos de la photo » : **Selfie** = objectif « front » (iPhone), retiré si l'analyse des personnes ne voit aucun visage ; **Capture d'écran** = commentaire EXIF « Screenshot » (iOS) ou nom de fichier commençant par `Screenshot` / `Capture d…` ; **Panorama** = côté long ≥ 2,5 × côté court ; **Zoom** = focale équivalente 35 mm ≥ 70 mm ; **Macro** = distance au sujet ≤ 15 cm ou objectif « macro » (l'iPhone n'écrit pas la distance : rarement détecté) ; **Faible luminosité** = valeur de luminosité EXIF ≤ 0 (ou ISO ≥ 1600 sans valeur). Un tag « zoo » n'existe pas dans Places365 et n'est pas proposé.| Moment | Lever de soleil, Coucher de soleil, Nuit, Soleil, Nuage | calcul solaire (date, GPS, fuseau EXIF) ; ciel pour Soleil et Nuage |
 | Personnes | People, Portrait | détection de visages YuNet (pas de reconnaissance) |
 
 Les modèles n'ont pas besoin de pleine résolution : les photos d'au moins 3584 px sont décodées à 1/8 (DC seul, ~504 px pour un iPhone), soit ~2 fois plus vite qu'un décodage complet pour des tags identiques (écart de 3 « Portrait » limites sur 173 tags, contre 2 entre 640 et 1024 px).
@@ -105,7 +110,7 @@ La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS,
 
 Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : `npm run ai-assets` les télécharge (sha256 vérifié) dans `ai-assets/` pour l'OS courant (`GOOS`/`GOARCH` pour un autre), et `electron-builder` les copie dans `resources/ai`. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
 
-Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matrice CI macOS, Linux, Windows) avec `npm run sidecar`. CLI : `--tag-scenes --tag-moment --tag-people [--ai-dir …]`.
+Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matrice CI macOS, Linux, Windows) avec `npm run sidecar`. CLI : `--tag-scenes --tag-moment --tag-people --tag-meta [--ai-dir …]`.
 
 ## Performances et fluidité
 

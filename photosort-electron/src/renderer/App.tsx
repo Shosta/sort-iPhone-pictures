@@ -93,7 +93,7 @@ function applyTagResults(job: TagJob, results: TagResult[]): TagJob {
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
-  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar, tagScenes, tagMoment, tagPeople } = prefs
+  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar, tagScenes, tagMoment, tagPeople, tagMeta } = prefs
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const [showTags, setShowTags] = useState(false)
@@ -274,7 +274,7 @@ export function App(): JSX.Element {
   const startTags = (folder: string): void => {
     const files = tagScope ?? []
     tagBuffer.current = []
-    const run = request({ op: 'tag', folder, files, tagScenes, tagMoment, tagPeople }, (event) => {
+    const run = request({ op: 'tag', folder, files, tagScenes, tagMoment, tagPeople, tagMeta }, (event) => {
       if (tagRun.current?.id !== run.id) return
       if (event.type === 'status') {
         setTagJob((job) => job && { ...job, state: 'running', total: event.total, started: performance.now() })

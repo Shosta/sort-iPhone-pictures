@@ -31,13 +31,13 @@ export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onS
   const accent = themeById(prefs.theme).vars.accent
   const [folder, setFolder] = useState(() => (job && !job.files ? job.folder : prefs.destination))
   const running = job?.state === 'loading' || job?.state === 'running'
-  const kinds = prefs.tagScenes || prefs.tagMoment || prefs.tagPeople
+  const kinds = prefs.tagScenes || prefs.tagMoment || prefs.tagPeople || prefs.tagMeta
   const ratio = job && job.total > 0 ? job.done / job.total : 0
   const elapsed = job ? (performance.now() - job.started) / 1000 : 0
   const remaining = job && job.state === 'running' && job.done >= 3 ? (elapsed / job.done) * (job.total - job.done) : null
   const counts = job ? Object.entries(job.counts).sort((a, b) => b[1] - a[1]) : []
 
-  const kind = (key: 'tagScenes' | 'tagMoment' | 'tagPeople'): JSX.Element => (
+  const kind = (key: 'tagScenes' | 'tagMoment' | 'tagPeople' | 'tagMeta'): JSX.Element => (
     <label className={`toggle ${running ? 'disabled' : ''}`}>
       <input type="checkbox" checked={prefs[key]} disabled={running} onChange={(event) => onChange({ [key]: event.target.checked })} />
       <Switch on={prefs[key]} accent={accent} />
@@ -87,6 +87,7 @@ export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onS
           {kind('tagScenes')}
           {kind('tagMoment')}
           {kind('tagPeople')}
+          {kind('tagMeta')}
           <p className="hint">{t('tags.hint')}</p>
         </div>
 
