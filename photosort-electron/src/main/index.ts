@@ -26,6 +26,7 @@ function broadcast(channel: string, payload: unknown): void {
 function startSidecar(): void {
   sidecar = spawn(sidecarPath(), [], {
     stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
     env: { ...process.env, PHOTOSORT_AI_DIR: aiDir() }
   })
   createInterface({ input: sidecar.stdout }).on('line', (line) => {

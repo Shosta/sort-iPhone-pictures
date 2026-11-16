@@ -1,5 +1,8 @@
 appId: com.photosort.app
 productName: Photosort
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+# Pas d'auto-update : la publication se fait via la release GitHub du workflow.
+publish: null
 directories:
   output: release
 files:
@@ -17,6 +20,8 @@ mac:
   target: [dmg, zip]
 win:
   target: [nsis]
+nsis:
+  artifactName: ${productName}-Setup-${version}-${os}-${arch}.${ext}
 linux:
   target: [AppImage, deb]
   category: Graphics
