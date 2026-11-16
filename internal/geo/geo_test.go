@@ -46,3 +46,17 @@ func TestPlacesNear(t *testing.T) {
 		t.Fatalf("open sea = %q", name)
 	}
 }
+
+func TestDistrictsMapToCity(t *testing.T) {
+	names := map[string]bool{"Paris": true, "Marseille": true}
+	for name, want := range map[string]string{
+		"Paris 15 Vaugirard": "Paris",
+		"Marseille 08":       "Marseille",
+		"Zona 179":           "Zona 179",
+		"Rouen":              "Rouen",
+	} {
+		if got := cityOfDistrict(name, names); got != want {
+			t.Errorf("%s: got %s, want %s", name, got, want)
+		}
+	}
+}

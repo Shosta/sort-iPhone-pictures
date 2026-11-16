@@ -27,6 +27,11 @@ const fr = {
   'choose': 'Choisir',
   'byLocation': 'Classer par lieu (ville, si la photo est géolocalisée)',
   'landmarks': 'Nommer les monuments (musée, château, stade…)',
+  'skipDuplicates': 'Ignorer les vrais doublons (photos identiques)',
+  'groupSimilar': 'Regrouper les photos quasi identiques (Almost Duplicates)',
+  'duplicates': '{n} photo(s) ignorée(s) : déjà classée(s) ou en double',
+  'duplicateOf': 'Identique à',
+  'duplicateInDest': 'Déjà présente dans le dossier de sortie :',
   'status.analyzing': 'Analyse des EXIF…',
   'status.copying': 'Copie {done}/{total}',
   'status.done': '✅ {n} photos classées',
@@ -54,6 +59,7 @@ const fr = {
   'theme.linen': 'Retraite en Lin Chaud',
   'prefs.output': 'Dossier de sortie',
   'prefs.location': 'Géolocalisation',
+  'prefs.duplicates': 'Doublons',
   'prefs.saved': 'Les préférences sont enregistrées automatiquement.'
 }
 
@@ -78,6 +84,11 @@ const enGB: Record<Key, string> = {
   'choose': 'Choose',
   'byLocation': 'Sort by place (city, when the photo is geotagged)',
   'landmarks': 'Name landmarks (museum, castle, stadium…)',
+  'skipDuplicates': 'Skip true duplicates (identical photos)',
+  'groupSimilar': 'Group near-identical photos (Almost Duplicates)',
+  'duplicates': '{n} photo(s) skipped: already sorted or duplicated',
+  'duplicateOf': 'Identical to',
+  'duplicateInDest': 'Already in the output folder:',
   'status.analyzing': 'Reading EXIF data…',
   'status.copying': 'Copying {done}/{total}',
   'status.done': '✅ {n} photos sorted',
@@ -105,6 +116,7 @@ const enGB: Record<Key, string> = {
   'theme.linen': 'Warm Linen Retreat',
   'prefs.output': 'Output folder',
   'prefs.location': 'Geolocation',
+  'prefs.duplicates': 'Duplicates',
   'prefs.saved': 'Preferences are saved automatically.'
 }
 
@@ -127,6 +139,11 @@ const da: Record<Key, string> = {
   'choose': 'Vælg',
   'byLocation': 'Sortér efter sted (by, hvis billedet er geotagget)',
   'landmarks': 'Navngiv seværdigheder (museum, slot, stadion…)',
+  'skipDuplicates': 'Spring ægte dubletter over (identiske billeder)',
+  'groupSimilar': 'Gruppér næsten ens billeder (Almost Duplicates)',
+  'duplicates': '{n} billede(r) sprunget over: allerede sorteret eller dublet',
+  'duplicateOf': 'Identisk med',
+  'duplicateInDest': 'Findes allerede i outputmappen:',
   'status.analyzing': 'Læser EXIF-data…',
   'status.copying': 'Kopierer {done}/{total}',
   'status.done': '✅ {n} billeder sorteret',
@@ -154,6 +171,7 @@ const da: Record<Key, string> = {
   'theme.linen': 'Varm hørhygge',
   'prefs.output': 'Outputmappe',
   'prefs.location': 'Geolokalisering',
+  'prefs.duplicates': 'Dubletter',
   'prefs.saved': 'Indstillinger gemmes automatisk.'
 }
 

@@ -10,6 +10,7 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,7 +83,27 @@ func Load(data []byte) (*Index, error) {
 		index.grid[key] = append(index.grid[key], int32(len(index.cities)))
 		index.cities = append(index.cities, city{fields[0], lat, lon, population})
 	}
+	names := make(map[string]bool, len(index.cities))
+	for _, c := range index.cities {
+		names[c.name] = true
+	}
+	for i := range index.cities {
+		index.cities[i].name = cityOfDistrict(index.cities[i].name, names)
+	}
 	return index, scanner.Err()
+}
+
+// districtName matches numbered city districts such as "Paris 15 Vaugirard"
+// or "Marseille 08".
+var districtName = regexp.MustCompile(`^(.+?) \d{1,2}(?: .*)?$`)
+
+// cityOfDistrict maps a district to its city when that city is itself in the
+// data, so photos are filed under "Paris" rather than "Paris 15 Vaugirard".
+func cityOfDistrict(name string, names map[string]bool) string {
+	if match := districtName.FindStringSubmatch(name); match != nil && names[match[1]] {
+		return match[1]
+	}
+	return name
 }
 
 // Len returns the number of cities in the index.

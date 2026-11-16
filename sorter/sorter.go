@@ -30,6 +30,8 @@ type Plan struct {
 	Destination string  `json:"destination"`
 	Entries     []Entry `json:"entries"`
 	Skipped     []Issue `json:"skipped"`
+	// Duplicates lists true duplicates left out of the plan (SkipDuplicates).
+	Duplicates []Duplicate `json:"duplicates"`
 }
 
 type Report struct {
@@ -48,12 +50,20 @@ type Engine struct {
 	Landmarks bool
 	// LocateLandmark overrides the embedded offline landmark database.
 	LocateLandmark Locator
+	// SkipDuplicates leaves out photos that are true duplicates (same bytes or
+	// same decoded pixels) of an earlier source or of a file in the destination.
+	SkipDuplicates bool
+	// GroupSimilar puts near-identical shots (bursts, retakes) taken close in
+	// time into a shared "Almost Duplicates" folder inside the month folder.
+	GroupSimilar bool
+	// Hash overrides the perceptual image hash (tests).
+	Hash func(path string) (uint64, bool)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
 
 func (engine Engine) Plan(ctx context.Context, sources []string, destination string) (Plan, error) {
-	plan := Plan{Entries: []Entry{}, Skipped: []Issue{}}
+	plan := Plan{Entries: []Entry{}, Skipped: []Issue{}, Duplicates: []Duplicate{}}
 	if len(sources) == 0 || strings.TrimSpace(destination) == "" {
 		return plan, errors.New("at least one source and a destination are required")
 	}
@@ -128,6 +138,11 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.ByLocation && engine.Landmarks && landmark == nil {
 		landmark = geo.DefaultPlaces().Near
 	}
+	var dedupe *deduper
+	if engine.SkipDuplicates {
+		dedupe = newDeduper(plan.Destination)
+	}
+	var pending []candidate
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
 	for _, path := range ordered {
@@ -145,6 +160,12 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		if metadata.TakenAt.IsZero() || metadata.TakenAt.Year() < 1 || metadata.TakenAt.Year() > 9999 {
 			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
 			continue
+		}
+		if dedupe != nil {
+			if of, found := dedupe.check(path); found {
+				plan.Duplicates = append(plan.Duplicates, Duplicate{path, of, within(plan.Destination, of)})
+				continue
+			}
 		}
 		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
 		if engine.ByLocation && metadata.HasGPS {
@@ -164,6 +185,25 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 				}
 			}
 		}
+		pending = append(pending, candidate{path, metadata, month})
+	}
+	if engine.GroupSimilar {
+		hasher := engine.Hash
+		if hasher == nil {
+			hasher = imageHash
+		}
+		groups, err := similarGroups(ctx, pending, hasher)
+		if err != nil {
+			return plan, err
+		}
+		for index, group := range groups {
+			if group != "" {
+				pending[index].month = filepath.Join(pending[index].month, group)
+			}
+		}
+	}
+	for _, item := range pending {
+		path, metadata, month := item.path, item.metadata, item.month
 		prefix := metadata.TakenAt.Format("2006-01-02") + " - " + cameraName(metadata.Camera)
 		key := strings.ToLower(filepath.Join(month, prefix))
 		var target string

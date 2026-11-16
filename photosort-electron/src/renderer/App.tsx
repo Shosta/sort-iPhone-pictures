@@ -26,7 +26,7 @@ function Counter({ value }: { value: number }): JSX.Element {
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
-  const { destination, byLocation, landmarks } = prefs
+  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar } = prefs
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const accent = themeById(prefs.theme).vars.accent
@@ -95,7 +95,7 @@ export function App(): JSX.Element {
   const analyze = (): void => {
     resetResults()
     setPhase('analyzing')
-    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks }, (event) => {
+    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar }, (event) => {
       if (event.type === 'plan') {
         setPlan(event.plan)
         setPhase('ready')
@@ -314,6 +314,11 @@ export function App(): JSX.Element {
                         : t('status.idle')}
             </motion.span>
           </AnimatePresence>
+          {plan && plan.duplicates?.length > 0 && (
+            <button className="link" onClick={() => setShowSkipped(true)}>
+              {t('duplicates', { n: plan.duplicates.length })}
+            </button>
+          )}
           {plan && plan.skipped.length > 0 && (
             <button className="link" onClick={() => setShowSkipped(true)}>
               {t('issues', { n: plan.skipped.length })}
@@ -385,6 +390,14 @@ export function App(): JSX.Element {
                   <li key={issue.path}>
                     <code>{issue.path}</code>
                     <span>{issue.reason}</span>
+                  </li>
+                ))}
+                {(plan.duplicates ?? []).map((duplicate) => (
+                  <li key={duplicate.path}>
+                    <code>{duplicate.path}</code>
+                    <span>
+                      {duplicate.inDestination ? t('duplicateInDest') : t('duplicateOf')} {duplicate.of}
+                    </span>
                   </li>
                 ))}
               </ul>

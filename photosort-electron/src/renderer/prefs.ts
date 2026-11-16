@@ -6,6 +6,8 @@ export interface Prefs {
   destination: string
   byLocation: boolean
   landmarks: boolean
+  skipDuplicates: boolean
+  groupSimilar: boolean
   language: Language
   theme: ThemeId
 }
@@ -18,6 +20,8 @@ function load(): Prefs {
     destination: localStorage.getItem('destination') ?? '',
     byLocation: localStorage.getItem('byLocation') !== '0',
     landmarks: localStorage.getItem('landmarks') !== '0',
+    skipDuplicates: true,
+    groupSimilar: true,
     language: detectLanguage(),
     theme: 'aurora'
   }
