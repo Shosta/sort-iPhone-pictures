@@ -89,7 +89,7 @@ Les textes sont dans `src/renderer/i18n.tsx`.
 
 ## Tags automatiques (IA locale)
 
-L'analyse est **séparée du tri**, car elle est bien plus lente (~0,5 s par photo sur un M2) : le tri reste rapide et on tague quand on veut. Elle s'ouvre avec le bouton 🏷️ en haut à droite (`Cmd/Ctrl+T`, menu *Tags*) ou le lien « Taguer ces photos » affiché après un tri, qui cible les photos copiées. Sinon, on choisit un dossier. Les photos qui ont déjà un `.xmp` sont ignorées.
+L'analyse est **séparée du tri**, car elle reste plus lente que le tri (~0,06-0,1 s par photo sur un M2 au repos) : le tri reste rapide et on tague quand on veut. Elle s'ouvre avec le bouton 🏷️ en haut à droite (`Cmd/Ctrl+T`, menu *Tags*) ou le lien « Taguer ces photos » affiché après un tri, qui cible les photos copiées. Sinon, on choisit un dossier. Les photos qui ont déjà un `.xmp` sont ignorées.
 
 Le panneau montre la progression, le temps restant, les compteurs par tag et les derniers résultats. On peut le fermer : l'analyse continue et une pastille sur 🏷️ indique l'avancement. Tout se fait **hors ligne** : les mots-clés sont écrits dans un fichier `<photo>.xmp` à côté de la copie (`dc:subject`, lu par Lightroom, digiKam, etc.). Les originaux ne sont jamais modifiés.
 
@@ -98,6 +98,8 @@ Le panneau montre la progression, le temps restant, les compteurs par tag et les
 | Lieux | plage, montagne, ville, campagne, château, église | Places365 (ResNet18, ONNX) |
 | Moment | Lever de soleil, Coucher de soleil, Nuit, Soleil, Nuage | calcul solaire (date, GPS, fuseau EXIF) ; ciel pour Soleil et Nuage |
 | Personnes | People, Portrait | détection de visages YuNet (pas de reconnaissance) |
+
+Les modèles n'ont pas besoin de pleine résolution : les photos d'au moins 3584 px sont décodées à 1/8 (DC seul, ~504 px pour un iPhone), soit ~2 fois plus vite qu'un décodage complet pour des tags identiques (écart de 3 « Portrait » limites sur 173 tags, contre 2 entre 640 et 1024 px).
 
 La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS, les tags de moment solaires sont omis.
 

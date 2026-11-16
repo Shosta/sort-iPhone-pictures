@@ -21,6 +21,13 @@ import (
 	"sort-iphone-pictures/internal/thumbs"
 )
 
+// The models look at a preview of at most analysisMax pixels. Large photos
+// are decoded at 1/8 scale as soon as that keeps analysisMin pixels.
+const (
+	analysisMin = 448
+	analysisMax = 640
+)
+
 // Tags that need no model.
 const (
 	TagSun      = "Soleil"
@@ -176,10 +183,17 @@ func (t *Tagger) Tags(photo Photo) ([]string, error) {
 	if len(t.all) == 0 {
 		return tags, nil
 	}
-	img, err := thumbs.Image(photo.Path, 640)
+	img, err := thumbs.Analysis(photo.Path, analysisMin, analysisMax)
 	if err != nil {
 		return tags, err
 	}
+	more, err := t.analyse(photo, img)
+	return append(tags, more...), err
+}
+
+// analyse runs the models on an upright preview of the photo.
+func (t *Tagger) analyse(photo Photo, img image.Image) ([]string, error) {
+	var tags []string
 	l := <-t.lanes
 	defer func() { t.lanes <- l }()
 	outdoor := false

@@ -3,6 +3,9 @@ package thumbs
 import (
 	"image"
 	"image/color"
+	"image/jpeg"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"golang.org/x/image/draw"
@@ -50,5 +53,45 @@ func TestOrientRotates(t *testing.T) {
 	}
 	if got := rotated.NRGBAAt(1, 0); got.R != 255 {
 		t.Errorf("top-left pixel should move to the top-right, got %v", got)
+	}
+}
+
+func TestAnalysisKeepsOneEighthSize(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, rect image.Rectangle) string {
+		path := filepath.Join(dir, name)
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		if err := jpeg.Encode(file, gradient(rect, image.YCbCrSubsampleRatio420), nil); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	// 1/8 scale is large enough: the natural 1/8 size is kept, not resampled.
+	img, err := Analysis(write("large.jpg", image.Rect(0, 0, 3200, 2400)), 300, 640)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := img.Bounds(); b.Dx() != 400 || b.Dy() != 300 {
+		t.Errorf("large photo: got %v, want 400x300", b)
+	}
+	// Too small for 1/8 scale: decoded fully and fitted to maxSide.
+	img, err = Analysis(write("small.jpg", image.Rect(0, 0, 1000, 500)), 300, 640)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := img.Bounds(); b.Dx() != 640 || b.Dy() != 320 {
+		t.Errorf("small photo: got %v, want 640x320", b)
+	}
+	// Above maxSide even at 1/8 scale: fitted down.
+	img, err = Analysis(write("huge.jpg", image.Rect(0, 0, 8000, 4000)), 300, 640)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := img.Bounds(); b.Dx() != 640 || b.Dy() != 320 {
+		t.Errorf("huge photo: got %v, want 640x320", b)
 	}
 }

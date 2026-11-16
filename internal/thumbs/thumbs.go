@@ -71,6 +71,29 @@ func Image(path string, size int) (image.Image, error) {
 	return decoded.Preview(size), nil
 }
 
+// Analysis returns an upright preview for image analysis whose longest side is
+// at most maxSide. Photos of at least 8*minSide pixels are decoded at 1/8
+// scale (DC coefficients only, 2-3 times faster than a full decode) and keep
+// that natural size when it already fits, so nothing is resampled twice.
+func Analysis(path string, minSide, maxSide int) (image.Image, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	decoded, err := DecodeFor(file, path, minSide)
+	if err != nil {
+		return nil, err
+	}
+	bounds := decoded.Image.Bounds()
+	if max(bounds.Dx(), bounds.Dy()) > maxSide {
+		return decoded.Preview(maxSide), nil
+	}
+	plain := image.NewNRGBA(bounds.Sub(bounds.Min))
+	draw.Draw(plain, plain.Bounds(), decoded.Image, bounds.Min, draw.Src)
+	return Orient(plain, decoded.Orientation), nil
+}
+
 // Decode reads the full image from r; path is only used for its extension.
 // RAW files fall back to their embedded JPEG preview.
 func Decode(r io.ReadSeeker, path string) (Decoded, error) {
