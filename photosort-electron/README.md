@@ -8,7 +8,7 @@ et dialogue avec lui en JSON ligne par ligne via stdin/stdout.
 
 - Node.js 20+ et npm
 - Go (version demandée par `../go.mod`) dans le `PATH`
-- Un compilateur C (clang/gcc) est requis sauf sous Windows : le sidecar utilise CGO pour ONNX Runtime (tags IA)
+- Un compilateur C est requis sur tous les OS : le sidecar utilise CGO pour ONNX Runtime (tags IA). clang/gcc sous macOS et Linux, MinGW-w64 (`gcc`) sous Windows
 
 ## Commandes
 
@@ -23,7 +23,36 @@ npm run dist       # installeurs dans release/ (dmg/zip, nsis, AppImage/deb selo
 `dist:mac`, `dist:win` et `dist:linux` ciblent un OS précis. Le sidecar est
 compilé pour l'OS courant ; pour une autre cible, définir `GOOS`/`GOARCH`
 (`scripts/build-sidecar.mjs`). Les installeurs sont à générer sur chaque OS
-(ou via une CI en matrice).
+(voir « Packaging via GitHub Actions »).
+
+## Packaging via GitHub Actions
+
+Le workflow `.github/workflows/package.yml` (« Package Photosort ») construit
+les installeurs sur des runners GitHub, un par cible :
+
+| Cible | Runner | Fichier produit |
+| --- | --- | --- |
+| macOS Apple Silicon | `macos-15` | `Photosort-<version>-mac-arm64.dmg` et `.zip` |
+| macOS Intel | `macos-15-intel` | `Photosort-<version>-mac-x64.dmg` et `.zip` |
+| Linux x64 | `ubuntu-22.04` | `Photosort-<version>-linux-x86_64.AppImage` |
+| Windows x64 | `windows-latest` | `Photosort-Setup-<version>-win-x64.exe` (NSIS) |
+
+Déclenchement (le fichier doit être présent sur la branche par défaut du dépôt GitHub pour apparaître dans l'onglet *Actions*) :
+
+- **Manuel** : onglet *Actions* > *Package Photosort* > *Run workflow*. Les
+  installeurs sont téléchargeables dans les *Artifacts* du run (30 jours). Le
+  champ optionnel `release_tag` (ex. `v0.1.0`) crée en plus une release
+  brouillon contenant les installeurs.
+- **Tag** : `git tag v0.1.0 && git push origin v0.1.0` construit et crée la
+  release brouillon `v0.1.0`.
+- En ligne de commande : `gh workflow run package.yml --ref <branche> [-f release_tag=v0.1.0]`.
+
+Le numéro de version des fichiers vient de `package.json`. Les installeurs ne
+sont pas signés : macOS demande une validation (clic droit > Ouvrir, ou
+`xattr -cr /Applications/Photosort.app`) et Windows affiche SmartScreen
+(« Informations complémentaires > Exécuter quand même »). L'AppImage doit être
+rendue exécutable (`chmod +x`). Sur macOS Intel, ONNX Runtime n'existe pas :
+les tags IA y sont désactivés.
 
 Derrière un proxy d'entreprise, si `npm install` échoue avec
 `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` : `NODE_OPTIONS=--use-system-ca npm install`.
@@ -110,7 +139,7 @@ La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS,
 
 Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : `npm run ai-assets` les télécharge (sha256 vérifié) dans `ai-assets/` pour l'OS courant (`GOOS`/`GOARCH` pour un autre), et `electron-builder` les copie dans `resources/ai`. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
 
-Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matrice CI macOS, Linux, Windows) avec `npm run sidecar`. CLI : `--tag-scenes --tag-moment --tag-people --tag-meta [--ai-dir …]`.
+Le sidecar utilise CGO sur tous les OS (MinGW-w64 sous Windows) : il faut le compiler sur chaque OS avec `npm run sidecar` (c'est ce que fait le workflow « Package Photosort », voir plus haut). CLI : `--tag-scenes --tag-moment --tag-people --tag-meta [--ai-dir …]`.
 
 ## Performances et fluidité
 
@@ -132,4 +161,4 @@ Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matri
 
 - Copie uniquement, aucun original modifié (comportement du moteur Go).
 - Les installeurs ne sont pas signés ni notarisés.
-- Pas encore de tests automatisés ni de CI.
+- Pas encore de tests automatisés (la CI ne fait que packager et vérifier les types).

@@ -1,5 +1,5 @@
 // Compile le moteur Go (sidecar) pour la plateforme cible.
-// ONNX Runtime impose CGO (sauf Windows) : compiler sur chaque OS cible.
+// ONNX Runtime impose CGO sur tous les OS (MinGW-w64 sous Windows) : compiler sur chaque OS cible.
 // Variables optionnelles : GOOS, GOARCH.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
@@ -14,6 +14,6 @@ const file = resolve(out, goos === 'windows' ? 'photosort-sidecar.exe' : 'photos
 execFileSync('go', ['build', '-trimpath', '-ldflags', '-s -w', '-o', file, './cmd/photosort-sidecar'], {
   cwd: root,
   stdio: 'inherit',
-  env: { ...process.env, CGO_ENABLED: goos === 'windows' ? '0' : '1', GOOS: goos }
+  env: { ...process.env, CGO_ENABLED: '1', GOOS: goos }
 })
 console.log('sidecar ->', file)
