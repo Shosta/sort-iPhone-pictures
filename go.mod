@@ -7,6 +7,7 @@ require (
 	github.com/evanoberholster/imagemeta v1.1.0
 	github.com/gen2brain/avif v0.6.0
 	github.com/gen2brain/heic v0.7.2
+	github.com/yalue/onnxruntime_go v1.38.0
 	golang.org/x/image v0.47.0
 )
 

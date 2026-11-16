@@ -235,6 +235,12 @@ func Copy(ctx context.Context, plan Plan) (Report, error) {
 }
 
 func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Report, error) {
+	return CopyWithHook(ctx, plan, nil, onCopied)
+}
+
+// CopyWithHook is CopyWithProgress with an afterCopy hook run on each entry
+// right after its file is copied and before onCopied is notified.
+func CopyWithHook(ctx context.Context, plan Plan, afterCopy, onCopied func(Entry)) (Report, error) {
 	report := Report{}
 	if err := ctx.Err(); err != nil {
 		return report, err
@@ -266,6 +272,9 @@ func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Rep
 			return report, fmt.Errorf("copy %q: %w", entry.Source, err)
 		}
 		report.Copied++
+		if afterCopy != nil {
+			afterCopy(entry)
+		}
 		if onCopied != nil {
 			onCopied(entry)
 		}

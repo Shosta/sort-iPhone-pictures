@@ -15,6 +15,9 @@ type Metadata struct {
 	Lat     float64
 	Lon     float64
 	HasGPS  bool
+	// UTCOffset is the capture time zone offset in seconds, valid if HasOffset.
+	UTCOffset int
+	HasOffset bool
 }
 
 type MetadataReader func(context.Context, string) (Metadata, error)
@@ -34,5 +37,11 @@ func ReadMetadata(ctx context.Context, path string) (Metadata, error) {
 	}
 	lat, lon := data.GPS.Latitude(), data.GPS.Longitude()
 	hasGPS := (lat != 0 || lon != 0) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
-	return Metadata{TakenAt: data.OriginalDate(), Camera: data.IFD0.Model, Lat: lat, Lon: lon, HasGPS: hasGPS}, nil
+	metadata := Metadata{TakenAt: data.OriginalDate(), Camera: data.IFD0.Model, Lat: lat, Lon: lon, HasGPS: hasGPS}
+	if loc := data.ExifIFD.OffsetTimeOriginal; loc != nil && !metadata.TakenAt.IsZero() {
+		wall := metadata.TakenAt
+		_, metadata.UTCOffset = time.Date(wall.Year(), wall.Month(), wall.Day(), wall.Hour(), wall.Minute(), wall.Second(), 0, loc).Zone()
+		metadata.HasOffset = true
+	}
+	return metadata, nil
 }

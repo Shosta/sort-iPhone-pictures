@@ -8,7 +8,10 @@
 //	{"id":"3","op":"thumbnail","path":"...","size":160}
 //	{"id":"4","op":"cancel","target":"2"}
 //
-// Events: plan, progress, thumbnail, done and error.
+// Copy accepts tagScenes, tagMoment and tagPeople to write <photo>.xmp keyword
+// sidecars (models are looked up in aiDir).
+//
+// Events: plan, progress, thumbnail, warning, done and error.
 package main
 
 import (
@@ -22,6 +25,7 @@ import (
 	"os"
 	"sync"
 
+	"sort-iphone-pictures/internal/tagger"
 	"sort-iphone-pictures/internal/thumbs"
 	"sort-iphone-pictures/sorter"
 )
@@ -35,6 +39,10 @@ type request struct {
 	Landmarks   bool     `json:"landmarks"`
 	Dedupe      bool     `json:"dedupe"`
 	Similar     bool     `json:"similar"`
+	TagScenes   bool     `json:"tagScenes"`
+	TagMoment   bool     `json:"tagMoment"`
+	TagPeople   bool     `json:"tagPeople"`
+	AIDir       string   `json:"aiDir"`
 	PlanID      string   `json:"planId"`
 	Path        string   `json:"path"`
 	Size        int      `json:"size"`
@@ -143,7 +151,17 @@ func (s *server) run(ctx context.Context, req request) error {
 			return errors.New("unknown plan")
 		}
 		total := len(plan.Entries)
-		report, err := sorter.CopyWithProgress(ctx, plan, func(entry sorter.Entry) {
+		var afterCopy func(sorter.Entry)
+		if req.TagScenes || req.TagMoment || req.TagPeople {
+			tg, err := tagger.New(tagger.FindAssets(req.AIDir), tagger.Options{Scenes: req.TagScenes, Moment: req.TagMoment, People: req.TagPeople})
+			if err != nil {
+				s.send(event{"id": req.ID, "type": "warning", "message": "Tags disabled: " + err.Error()})
+			} else {
+				defer tg.Close()
+				afterCopy = sorter.TagHook(tg, plan.Destination)
+			}
+		}
+		report, err := sorter.CopyWithHook(ctx, plan, afterCopy, func(entry sorter.Entry) {
 			s.send(event{"id": req.ID, "type": "progress", "entry": entry, "total": total})
 		})
 		if err == nil {
