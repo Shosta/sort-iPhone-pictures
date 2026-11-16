@@ -8,7 +8,7 @@ et dialogue avec lui en JSON ligne par ligne via stdin/stdout.
 
 - Node.js 20+ et npm
 - Go (version demandée par `../go.mod`) dans le `PATH`
-- Aucun compilateur C : le sidecar est compilé avec `CGO_ENABLED=0`
+- Un compilateur C (clang/gcc) est requis sauf sous Windows : le sidecar utilise CGO pour ONNX Runtime (tags IA)
 
 ## Commandes
 
