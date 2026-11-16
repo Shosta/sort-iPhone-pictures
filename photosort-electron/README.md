@@ -80,10 +80,13 @@ Requêtes (une par ligne sur stdin) :
 {"id":"3","op":"thumbnail","path":"/photos/a.heic","size":160}
 {"id":"4","op":"tag","folder":"/classement","tagScenes":true,"tagMoment":true,"tagPeople":true}
 {"id":"5","op":"cancel","target":"2"}
+{"id":"6","op":"weekPhotos","root":"/classement","from":"2026-11-16","to":"2026-11-22"}
+{"id":"7","op":"scrapbook","files":["/classement/2026/2026-11/a.heic"],"page":"a4-landscape","longSide":65,"gutter":5,"outDir":"/Downloads","name":"Semaine 2026-S47"}
 ```
 
 Événements (un par ligne sur stdout, avec l'`id` de la requête) : `draft`,
-`status`, `plan`, `progress`, `done`, `thumbnail`, `tagged`, `error`. Les règles
+`status`, `plan`, `progress`, `done`, `thumbnail`, `tagged`, `weekDays`, `photos`,
+`layout`, `error`. Les règles
 de classement sont celles décrites dans le [README racine](../README.md).
 
 - `plan` envoie des `draft` au fil de la lecture EXIF (destination provisoire de
@@ -93,6 +96,13 @@ de classement sont celles décrites dans le [README racine](../README.md).
   les photos qui ont déjà un `.xmp` et envoie un `tagged` par photo.
 - Pendant un `plan` ou une `copy`, au plus 2 miniatures sont décodées en même
   temps pour laisser les cœurs et le disque au moteur.
+- Semainier : `weekDays` (`root`, `from`, `to`) renvoie le nombre de photos par
+  jour ; `weekPhotos` renvoie un seul événement `photos` (chemin et date, triés
+  par date) ; `scrapbookLayout` (`files`, `page`, `longSide`, `gutter`) renvoie
+  `layout` (positions en mm, utilisées telles quelles par l'aperçu) ; `scrapbook`
+  envoie des `progress` puis `done` (`path`, `pages`, `photos`, `failed`,
+  `fallback`). Les dates sont en `AAAA-MM-JJ`, bornes incluses, plage limitée à
+  366 jours.
 
 ## Classement par lieu
 
@@ -140,6 +150,17 @@ La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS,
 Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : `npm run ai-assets` les télécharge (sha256 vérifié) dans `ai-assets/` pour l'OS courant (`GOOS`/`GOARCH` pour un autre), et `electron-builder` les copie dans `resources/ai`. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
 
 Le sidecar utilise CGO sur tous les OS (MinGW-w64 sous Windows) : il faut le compiler sur chaque OS avec `npm run sidecar` (c'est ce que fait le workflow « Package Photosort », voir plus haut). CLI : `--tag-scenes --tag-moment --tag-people --tag-meta [--ai-dir …]`.
+
+## Semainier : planche de photos à découper (PDF)
+
+Pour un semainier papier : le bouton 📅 en haut à droite (`Cmd/Ctrl+P`, menu *Semainier*) ouvre un panneau qui part du **dossier classé racine** (celui qui contient `2026/`, prérempli avec le dossier de sortie des préférences).
+
+1. On choisit une semaine (**lundi → dimanche**) dans le calendrier ; les jours qui ont des photos affichent leur nombre. La semaine courante est présélectionnée.
+2. Les photos de la semaine apparaissent (les « Almost Duplicates » comprises). **Aucune n'est cochée au départ** ; on coche celles à garder (ou « Tout cocher »).
+3. L'aperçu montre les pages en direct, avec le nombre de pages ; « Réglages de la page » permet de changer le papier (A4 paysage par défaut, A4 portrait, Letter) ; la taille du grand côté (6,5 cm) et l'espace entre photos (5 mm minimum).
+4. « Créer le PDF » écrit la planche dans le **dossier des PDF** (préférences, *Téléchargements* par défaut) sous le nom `Semaine 2026-S47 (16–22 novembre).pdf` (suffixe ` (2)` si le fichier existe) puis l'ouvre.
+
+Chaque photo garde sa forme, sans recadrage : son grand côté fait 6,5 cm (portrait : 6,5 cm de haut ; paysage : 6,5 cm de large), avec au moins 5 mm entre deux photos pour découper. Sur A4 paysage, il tient 10 portraits ou 12 paysages 3:4 par page. Les images sont réduites à 300 dpi, d'où un PDF léger. **À l'impression, choisir « Taille réelle » (100 %)**, pas « Ajuster à la page ». Les originaux ne sont jamais modifiés ; un dossier de sortie inutilisable est remplacé par *Téléchargements* avec un avertissement. Le moteur (`internal/scrapbook`, PDF avec `go-pdf/fpdf`) est en Go pur.
 
 ## Performances et fluidité
 

@@ -1,6 +1,6 @@
 # Planche scrapbooking hebdomadaire (PDF) : spécification
 
-Date : 2026-11-16 · Branche : `feat/weekly-scrapbook-pdf` · Statut : **à valider** (v2, après retours de l'utilisateur)
+Date : 2026-11-16 · Branche : `feat/weekly-scrapbook-pdf` · Statut : **validée et implémentée** (voir « Écarts avec l'implémentation »)
 
 ## Objectif
 
@@ -188,3 +188,32 @@ rester cohérent, avec un ton chaleureux de papier et de ruban adhésif.
 4. Aperçu en direct, réglages, préférences, i18n.
 5. Animations « carnet de papeterie », README, packaging inchangé (pas de nouvelle
    dépendance native : fpdf est en Go pur, compatible CGO/Windows du workflow CI).
+
+## Écarts avec l'implémentation
+
+Le contrat final du sidecar et de l'UI diffère légèrement de ce qui précède :
+
+- `weekDays` prend `{root, from, to}` (la grille visible du calendrier, semaines
+  des mois voisins comprises) et renvoie `{days, rootOk}` ; `rootOk` faux affiche
+  « aucun dossier d'année ici ».
+- `weekPhotos` renvoie **un seul** événement `photos` `{photos:[{path, date}]}`
+  trié par date, et non un flux `photo` : le scan ne lit que les noms de fichiers
+  (ou EXIF/mtime en dernier recours), c'est instantané.
+- `scrapbookLayout` prend `{files, page, longSide, gutter}` : le ratio de chaque
+  photo est lu côté Go dans l'en-tête (`image.DecodeConfig`, aperçu de 11 HEIC
+  passé de 18 s à 1 s) et non envoyé par l'UI. Il renvoie `layout` avec les
+  positions en mm et `failed` pour les photos illisibles, exclues.
+- `scrapbook` prend en plus `fallbackDir` (Téléchargements) ; `done` contient
+  `fallback` (booléen) : le dossier réellement utilisé est `dirname(path)`.
+- Les libellés (semaine, nom du fichier `Semaine 2026-S47 (16–22 novembre).pdf`)
+  sont construits dans l'UI avec `Intl` (i18n fr/en/da), pas en Go.
+- La semaine courante est présélectionnée à l'ouverture du panneau.
+- Plage limitée à 366 jours ; sélection vide ou entièrement illisible = événement
+  `error`.
+- Esthétique : ruban washi sur la semaine, feuilles crème dans l'aperçu avec
+  ressort à l'apparition, vol des miniatures et confettis à la création. Les
+  photos cochées reçoivent un anneau d'accent et une coche animée (pas de cadre
+  polaroïd ni de numéro d'ordre, jugés inutiles pour une sélection non ordonnée).
+- Raccourci `Cmd/Ctrl+P` (menu *Semainier*) en plus du bouton 📅.
+- Les préférences `scrapLongSide` et `scrapGutter` sont réglables dans le panneau
+  (50–80 mm, 5–10 mm) ; le dossier des PDF l'est dans ⚙️.
