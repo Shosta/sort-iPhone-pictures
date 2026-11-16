@@ -11,7 +11,7 @@
 // Copy accepts tagScenes, tagMoment and tagPeople to write <photo>.xmp keyword
 // sidecars (models are looked up in aiDir).
 //
-// Events: plan, progress, thumbnail, warning, done and error.
+// Events: plan, progress, thumbnail, status (stage exif|similar|tags with done/total), warning, done and error.
 package main
 
 import (
@@ -135,7 +135,9 @@ func (s *server) handle(parent context.Context, req request) {
 func (s *server) run(ctx context.Context, req request) error {
 	switch req.Op {
 	case "plan":
-		plan, err := (sorter.Engine{ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe, GroupSimilar: req.Similar}).Plan(ctx, req.Sources, req.Destination)
+		plan, err := (sorter.Engine{Progress: func(stage string, done, total int) {
+			s.send(event{"id": req.ID, "type": "status", "stage": stage, "done": done, "total": total})
+		}, ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe, GroupSimilar: req.Similar}).Plan(ctx, req.Sources, req.Destination)
 		if err != nil {
 			return err
 		}
@@ -158,7 +160,12 @@ func (s *server) run(ctx context.Context, req request) error {
 				s.send(event{"id": req.ID, "type": "warning", "message": "Tags disabled: " + err.Error()})
 			} else {
 				defer tg.Close()
-				afterCopy = sorter.TagHook(tg, plan.Destination)
+				hook, analysed := sorter.TagHook(tg, plan.Destination), 0
+				afterCopy = func(entry sorter.Entry) {
+					s.send(event{"id": req.ID, "type": "status", "stage": "tags", "done": analysed, "total": total})
+					hook(entry)
+					analysed++
+				}
 			}
 		}
 		report, err := sorter.CopyWithHook(ctx, plan, afterCopy, func(entry sorter.Entry) {

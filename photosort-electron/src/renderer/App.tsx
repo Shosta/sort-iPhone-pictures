@@ -36,6 +36,7 @@ export function App(): JSX.Element {
   const setDestination = (value: string): void => updatePrefs({ destination: value })
   const setByLocation = (value: boolean): void => updatePrefs({ byLocation: value })
   const setLandmarks = (value: boolean): void => updatePrefs({ landmarks: value })
+  const [stage, setStage] = useState<{ name: string; done: number; total: number } | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [plan, setPlan] = useState<Plan | null>(null)
   const [copied, setCopied] = useState<Set<string>>(new Set())
@@ -96,10 +97,13 @@ export function App(): JSX.Element {
     resetResults()
     setPhase('analyzing')
     const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar }, (event) => {
-      if (event.type === 'plan') {
+      if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
+      else if (event.type === 'plan') {
+        setStage(null)
         setPlan(event.plan)
         setPhase('ready')
       } else if (event.type === 'error') {
+        setStage(null)
         setPhase('idle')
         if (!event.cancelled) setError(event.message)
       }
@@ -113,13 +117,16 @@ export function App(): JSX.Element {
     setPhase('copying')
     setCopied(new Set())
     running.current = request({ op: 'copy', planId: planId.current, tagScenes, tagMoment, tagPeople }, (event) => {
-      if (event.type === 'progress') buffer.current.push(event.entry.source)
+      if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
+      else if (event.type === 'progress') buffer.current.push(event.entry.source)
       else if (event.type === 'done') {
+        setStage(null)
         setTimeout(() => {
           setPhase('done')
           confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } })
         }, 250)
       } else if (event.type === 'error') {
+        setStage(null)
         setPhase('ready')
         if (!event.cancelled) setError(event.message)
       }
@@ -304,9 +311,9 @@ export function App(): JSX.Element {
               {error
                 ? `⚠️ ${error}`
                 : phase === 'analyzing'
-                  ? t('status.analyzing')
+                  ? stage ? t(stage.name === 'similar' ? 'status.similar' : 'status.exif', { done: stage.done, total: stage.total }) : t('status.analyzing')
                   : phase === 'copying'
-                    ? t('status.copying', { done: copied.size, total: entries.length })
+                    ? stage?.name === 'tags' ? t('status.tags', { done: stage.done + 1, total: stage.total }) : t('status.copying', { done: copied.size, total: entries.length })
                     : phase === 'done'
                       ? t('status.done', { n: copied.size })
                       : plan

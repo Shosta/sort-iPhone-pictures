@@ -58,6 +58,9 @@ type Engine struct {
 	GroupSimilar bool
 	// Hash overrides the perceptual image hash (tests).
 	Hash func(path string) (uint64, bool)
+	// Progress, if set, reports the current planning stage ("exif", "similar")
+	// and how many photos are done out of total.
+	Progress func(stage string, done, total int)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
 }
@@ -145,10 +148,16 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	var pending []candidate
 	reserved := make(map[string]bool)
 	counters := make(map[string]int)
-	for _, path := range ordered {
+	report := func(stage string, done int) {
+		if engine.Progress != nil {
+			engine.Progress(stage, done, len(ordered))
+		}
+	}
+	for index, path := range ordered {
 		if err := ctx.Err(); err != nil {
 			return plan, err
 		}
+		report("exif", index)
 		metadata, err := reader(ctx, path)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -188,6 +197,7 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		pending = append(pending, candidate{path, metadata, month})
 	}
 	if engine.GroupSimilar {
+		report("similar", len(ordered))
 		hasher := engine.Hash
 		if hasher == nil {
 			hasher = imageHash
