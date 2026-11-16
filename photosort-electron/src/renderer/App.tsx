@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DropZone } from './components/DropZone'
 import { Flights, type Flight } from './components/Flights'
 import { Preferences } from './components/Preferences'
+import { ScrapbookPanel } from './components/ScrapbookPanel'
 import { TagsPanel } from './components/TagsPanel'
 import { Thumb } from './components/Thumb'
 import { VirtualGrid } from './components/VirtualGrid'
@@ -97,11 +98,13 @@ export function App(): JSX.Element {
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const [showTags, setShowTags] = useState(false)
+  const [showScrapbook, setShowScrapbook] = useState(false)
   const [tagScope, setTagScope] = useState<string[] | null>(null)
   const accent = themeById(prefs.theme).vars.accent
   useEffect(() => applyTheme(prefs.theme), [prefs.theme])
-  useEffect(() => window.photosort.setMenuLabels({ preferences: `${t('prefs')}…`, tags: `${t('tags')}…` }), [t])
+  useEffect(() => window.photosort.setMenuLabels({ preferences: `${t('prefs')}…`, tags: `${t('tags')}…`, scrapbook: `${t('scrap')}…` }), [t])
   useEffect(() => window.photosort.onPreferences(() => setShowPrefs(true)), [])
+  useEffect(() => window.photosort.onScrapbook(() => setShowScrapbook(true)), [])
   useEffect(
     () =>
       window.photosort.onTags(() => {
@@ -350,6 +353,9 @@ export function App(): JSX.Element {
           })}
         </div>
         <div className="title-actions">
+          <button className="gear" title={t('scrap')} aria-label={t('scrap')} onClick={() => setShowScrapbook(true)}>
+            📅
+          </button>
           <button
             className="gear"
             title={t('tags')}
@@ -571,6 +577,10 @@ export function App(): JSX.Element {
             onClose={() => setShowTags(false)}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showScrapbook && <ScrapbookPanel prefs={prefs} onChange={updatePrefs} onClose={() => setShowScrapbook(false)} />}
       </AnimatePresence>
 
       <AnimatePresence>

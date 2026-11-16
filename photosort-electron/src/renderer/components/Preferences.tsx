@@ -113,6 +113,27 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
           </label>
         </div>
 
+        <div className="field">
+          <label>{t('prefs.scrap')}</label>
+          <label className="hint">{t('prefs.scrapDir')}</label>
+          <div className="row">
+            <input
+              value={prefs.scrapOutputDir}
+              placeholder={t('prefs.scrapDir.placeholder')}
+              onChange={(event) => onChange({ scrapOutputDir: event.target.value })}
+            />
+            <button
+              className="btn ghost"
+              onClick={async () => {
+                const [path] = await window.photosort.pickFolders(t('prefs.scrapDir.pick'))
+                if (path) onChange({ scrapOutputDir: path })
+              }}
+            >
+              {t('choose')}
+            </button>
+          </div>
+        </div>
+
         <p className="hint">{t('prefs.saved')}</p>
         <button className="btn" onClick={onClose}>
           {t('close')}

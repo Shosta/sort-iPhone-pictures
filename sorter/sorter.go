@@ -471,6 +471,11 @@ func supported(path string) bool {
 	return false
 }
 
+// IsPhoto reports whether path has the extension of a supported photo.
+func IsPhoto(path string) bool {
+	return supported(path)
+}
+
 func cameraName(camera string) string {
 	if camera = sanitize(camera, 40); camera == "" {
 		return "Unknown camera"

@@ -12,9 +12,16 @@ export interface Prefs {
   tagMoment: boolean
   tagPeople: boolean
   tagMeta: boolean
+  // Weekly planner sheet: PDF folder ('' = Downloads), photo size and space in mm.
+  scrapOutputDir: string
+  scrapPage: ScrapPage
+  scrapLongSide: number
+  scrapGutter: number
   language: Language
   theme: ThemeId
 }
+
+export type ScrapPage = 'a4-landscape' | 'a4-portrait' | 'letter-landscape' | 'letter-portrait'
 
 const STORAGE_KEY = 'prefs'
 
@@ -31,6 +38,10 @@ function load(): Prefs {
     tagMoment: true,
     tagPeople: true,
     tagMeta: true,
+    scrapOutputDir: '',
+    scrapPage: 'a4-landscape',
+    scrapLongSide: 65,
+    scrapGutter: 5,
     language: detectLanguage(),
     theme: 'aurora'
   }
