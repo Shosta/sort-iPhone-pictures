@@ -10,7 +10,7 @@ import { VirtualGrid } from './components/VirtualGrid'
 import { I18nContext, makeTranslate, type Translate } from './i18n'
 import { usePrefs } from './prefs'
 import { applyTheme, themeById } from './themes'
-import { onFatal, request } from './sidecar'
+import { cachedThumbnail, onFatal, request } from './sidecar'
 import type { Duplicate, Entry, Phase, Plan, TagJob, TagResult } from './types'
 
 /** Thumbnails shown per destination folder in the "Sorted" panel. */
@@ -148,23 +148,34 @@ export function App(): JSX.Element {
       const panels = document.querySelectorAll('.column .panel')
       const left = panels[0]?.getBoundingClientRect()
       const right = panels[1]?.getBoundingClientRect()
+      const view = document.querySelector('.panel.list .vgrid')?.getBoundingClientRect()
       const clamp = (value: number, low: number, high: number): number => Math.min(Math.max(value, low), high)
-      const launched: Flight[] = batch.slice(0, 30).map((entry, index) => {
+      // Overscan cells are rendered but clipped: they take off from the panel instead.
+      const visible = (rect: DOMRect | undefined): rect is DOMRect =>
+        !!rect && !!view && rect.top >= view.top - 1 && rect.bottom <= view.bottom + 1
+      // Only photos whose thumbnail is already loaded take off: decoding others
+      // just for the animation would compete with the copy.
+      const launched: Flight[] = []
+      for (const entry of batch) {
+        const url = cachedThumbnail(entry.source)
+        if (!url) continue
+        if (launched.length === 30) break
+        const index = launched.length
         const origin = document.querySelector(`[data-pending="${CSS.escape(entry.source)}"]`)?.getBoundingClientRect()
         const folder = document.querySelector(`[data-month="${CSS.escape(folderOf(entry.target))}"] .month-bar`)?.getBoundingClientRect()
-        return {
+        launched.push({
           id: `${entry.source}-${performance.now()}-${index}`,
-          path: entry.source,
-          from: origin
+          url,
+          from: visible(origin)
             ? { x: origin.x + origin.width / 2, y: origin.y + origin.height / 2, size: origin.width }
             : { x: (left?.x ?? 0) + (left?.width ?? 0) / 2, y: (left?.y ?? 0) + (left?.height ?? 0) / 2, size: 96 },
           to: folder && right
             ? { x: folder.x + folder.width / 2, y: clamp(folder.y, right.y + 20, right.bottom - 20) }
             : { x: (right?.x ?? 0) + (right?.width ?? 0) / 2, y: (right?.y ?? 0) + 40 },
           delay: index * 0.07
-        }
-      })
-      setFlights((previous) => [...previous, ...launched])
+        })
+      }
+      if (launched.length > 0) setFlights((previous) => [...previous, ...launched])
       setCopied((previous) => {
         const next = new Set(previous)
         for (const entry of batch) next.add(entry.source)

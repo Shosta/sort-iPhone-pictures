@@ -62,8 +62,8 @@ de classement sont celles décrites dans le [README racine](../README.md).
   arrive dans l'événement `plan`.
 - `tag` accepte un dossier (`folder`) ou une liste de fichiers (`files`), ignore
   les photos qui ont déjà un `.xmp` et envoie un `tagged` par photo.
-- Pendant un `plan`, au plus 2 miniatures sont décodées en même temps pour
-  laisser les cœurs à l'analyse.
+- Pendant un `plan` ou une `copy`, au plus 2 miniatures sont décodées en même
+  temps pour laisser les cœurs et le disque au moteur.
 
 ## Classement par lieu
 
@@ -114,6 +114,8 @@ Le sidecar utilise CGO (sauf Windows) : il faut le compiler sur chaque OS (matri
   uniquement entre photos d'un même dossier prises à moins de 10 min d'écart.
 - Grilles virtualisées (seules les miniatures visibles sont montées) et cache LRU
   des miniatures ; les requêtes hors écran sont annulées.
+- Copie par 4 workers en parallèle ; les photos qui s'envolent vers « Classées »
+  réutilisent les miniatures déjà chargées, sans décodage supplémentaire.
 - Fond animé sans filtre de flou en direct, animations limitées à `transform` et
   `opacity` : l'application consomme quelques % de CPU au repos.
 - Sur macOS, le mode économie d'énergie et les antivirus qui analysent chaque

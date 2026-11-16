@@ -117,7 +117,3 @@ export function loadThumbnail(path: string, onReady: Waiter): () => void {
     }
   }
 }
-
-export function thumbnail(path: string): Promise<string | null> {
-  return new Promise((resolve) => loadThumbnail(path, resolve))
-}
