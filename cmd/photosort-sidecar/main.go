@@ -71,9 +71,9 @@ const (
 	draftInterval  = 80 * time.Millisecond
 	statusInterval = 50 * time.Millisecond
 	cacheBudget    = 96 << 20
-	// planThumbs bounds thumbnail decodes while a plan runs, so it keeps
-	// most cores.
-	planThumbs = 2
+	// busyThumbs bounds thumbnail decodes while a plan or a copy runs, so the
+	// engine keeps most cores (and the disk) for itself.
+	busyThumbs = 2
 )
 
 type server struct {
@@ -83,9 +83,9 @@ type server struct {
 	plans   map[string]sorter.Plan
 	cancels map[string]context.CancelFunc
 	thumbs  chan struct{}
-	// planning counts running plans; planSlots limits thumbnails meanwhile.
-	planning  atomic.Int32
-	planSlots chan struct{}
+	// busy counts running plans and copies; busySlots limits thumbnails meanwhile.
+	busy      atomic.Int32
+	busySlots chan struct{}
 	cache     *thumbCache
 	wg        sync.WaitGroup
 }
@@ -104,7 +104,7 @@ func newServer(out io.Writer) *server {
 		plans:     map[string]sorter.Plan{},
 		cancels:   map[string]context.CancelFunc{},
 		thumbs:    make(chan struct{}, runtime.NumCPU()),
-		planSlots: make(chan struct{}, planThumbs),
+		busySlots: make(chan struct{}, busyThumbs),
 		cache:     newThumbCache(cacheBudget),
 	}
 }
@@ -178,6 +178,8 @@ func (s *server) run(ctx context.Context, req request) error {
 			return errors.New("unknown plan")
 		}
 		total := len(plan.Entries)
+		s.busy.Add(1)
+		defer s.busy.Add(-1)
 		report, err := sorter.CopyWithProgress(ctx, plan, func(entry sorter.Entry) {
 			s.send(event{"id": req.ID, "type": "progress", "entry": entry, "total": total})
 		})
@@ -215,8 +217,8 @@ func (t *statusThrottle) allow(stage string, done, total int) bool {
 }
 
 func (s *server) plan(ctx context.Context, req request) error {
-	s.planning.Add(1)
-	defer s.planning.Add(-1)
+	s.busy.Add(1)
+	defer s.busy.Add(-1)
 	var (
 		pendingLock sync.Mutex
 		entries     []sorter.Entry
@@ -298,10 +300,10 @@ func (s *server) thumbnail(ctx context.Context, req request) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		if s.planning.Load() > 0 {
+		if s.busy.Load() > 0 {
 			select {
-			case s.planSlots <- struct{}{}:
-				defer func() { <-s.planSlots }()
+			case s.busySlots <- struct{}{}:
+				defer func() { <-s.busySlots }()
 			case <-ctx.Done():
 				return ctx.Err()
 			}

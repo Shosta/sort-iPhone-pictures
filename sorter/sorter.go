@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -324,6 +325,12 @@ func Copy(ctx context.Context, plan Plan) (Report, error) {
 	return CopyWithProgress(ctx, plan, nil)
 }
 
+// copyWorkers bounds concurrent copies: enough to hide fsync latency without
+// thrashing a spinning or network disk.
+const copyWorkers = 4
+
+// CopyWithProgress copies the plan with a few concurrent workers. onCopied is
+// never called concurrently, but entries may complete out of plan order.
 func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Report, error) {
 	report := Report{}
 	if err := ctx.Err(); err != nil {
@@ -348,17 +355,59 @@ func CopyWithProgress(ctx context.Context, plan Plan, onCopied func(Entry)) (Rep
 		return report, err
 	}
 	defer root.Close()
+	var (
+		jobs    = make(chan Entry)
+		failed  = make(chan struct{})
+		wg      sync.WaitGroup
+		lock    sync.Mutex
+		failure error
+	)
+	// Copies overlap their reads, writes and fsyncs; onCopied stays serialized.
+	for range min(copyWorkers, len(plan.Entries)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for entry := range jobs {
+				err := copyEntry(ctx, root, entry)
+				lock.Lock()
+				if err == nil {
+					report.Copied++
+					if onCopied != nil {
+						onCopied(entry)
+					}
+				} else if failure == nil {
+					failure = fmt.Errorf("copy %q: %w", entry.Source, err)
+					close(failed)
+				}
+				lock.Unlock()
+			}
+		}()
+	}
+	// After a failure no new copy starts, but those in flight finish and are kept.
+feed:
 	for _, entry := range plan.Entries {
-		if err := ctx.Err(); err != nil {
-			return report, err
+		select {
+		case <-failed:
+			break feed
+		case <-ctx.Done():
+			break feed
+		default:
 		}
-		if err := copyEntry(ctx, root, entry); err != nil {
-			return report, fmt.Errorf("copy %q: %w", entry.Source, err)
+		select {
+		case jobs <- entry:
+		case <-failed:
+			break feed
+		case <-ctx.Done():
+			break feed
 		}
-		report.Copied++
-		if onCopied != nil {
-			onCopied(entry)
-		}
+	}
+	close(jobs)
+	wg.Wait()
+	if failure != nil {
+		return report, failure
+	}
+	if report.Copied < len(plan.Entries) {
+		return report, ctx.Err()
 	}
 	return report, nil
 }
