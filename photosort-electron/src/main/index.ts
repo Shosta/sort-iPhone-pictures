@@ -81,9 +81,12 @@ ipcMain.handle('dialog:pickFolder', async (_event, title: string) => {
 
 ipcMain.handle('shell:reveal', (_event, path: string) => shell.openPath(path))
 
+ipcMain.handle('app:downloadsDir', () => app.getPath('downloads'))
+
 interface MenuLabels {
   preferences: string
   tags: string
+  scrapbook: string
 }
 
 function buildMenu(labels: MenuLabels): void {
@@ -98,10 +101,15 @@ function buildMenu(labels: MenuLabels): void {
     accelerator: 'CmdOrCtrl+T',
     click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('menu:tags')
   }
+  const scrapbook: MenuItemConstructorOptions = {
+    label: labels.scrapbook,
+    accelerator: 'CmdOrCtrl+P',
+    click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('menu:scrapbook')
+  }
   const template: MenuItemConstructorOptions[] = [
     ...(mac
-      ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, preferences, tags, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]
-      : [{ role: 'fileMenu', submenu: [preferences, tags, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]),
+      ? [{ role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, preferences, tags, scrapbook, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]
+      : [{ role: 'fileMenu', submenu: [preferences, tags, scrapbook, { type: 'separator' }, { role: 'quit' }] } as MenuItemConstructorOptions]),
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' }
@@ -112,7 +120,7 @@ function buildMenu(labels: MenuLabels): void {
 ipcMain.on('menu:labels', (_event, labels: MenuLabels) => buildMenu(labels))
 
 app.whenReady().then(() => {
-  buildMenu({ preferences: 'Preferences…', tags: 'AI tags…' })
+  buildMenu({ preferences: 'Preferences…', tags: 'AI tags…', scrapbook: 'Weekly planner sheet…' })
   startSidecar()
   createWindow()
   app.on('activate', () => {

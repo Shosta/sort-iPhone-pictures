@@ -54,3 +54,39 @@ export interface TagJob {
   started: number
   message?: string
 }
+
+/** A photo found in the sorted library, with the day it was taken (YYYY-MM-DD). */
+export interface ScrapPhoto {
+  path: string
+  date: string
+}
+
+/** Position of a photo on a sheet, in millimetres from the top-left corner. */
+export interface ScrapPlacement {
+  path: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface ScrapLayout {
+  pageWidth: number
+  pageHeight: number
+  sheets: { placements: ScrapPlacement[] }[]
+  failed: { path: string; error: string }[]
+}
+
+/** The PDF being written, or the last one written. */
+export interface ScrapJob {
+  state: 'running' | 'done' | 'error'
+  done: number
+  total: number
+  path?: string
+  pages?: number
+  photos?: number
+  /** The chosen folder was unusable: the PDF went to Downloads. */
+  fallback?: boolean
+  failed?: { path: string; error: string }[]
+  message?: string
+}
