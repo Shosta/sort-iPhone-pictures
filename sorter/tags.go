@@ -72,7 +72,7 @@ func TagPhotos(ctx context.Context, tg *tagger.Tagger, paths []string, onTagged 
 			for path := range jobs {
 				m, _ := ReadMetadata(ctx, path)
 				tags, err := tg.Tags(tagger.Photo{Path: path, TakenAt: m.TakenAt, Lat: m.Lat, Lon: m.Lon,
-					HasGPS: m.HasGPS, UTCOffset: m.UTCOffset, HasOffset: m.HasOffset})
+					HasGPS: m.HasGPS, UTCOffset: m.UTCOffset, HasOffset: m.HasOffset, Shot: m.Shot})
 				if err == nil && len(tags) > 0 {
 					err = tagger.WriteXMP(path+".xmp", tags)
 				}

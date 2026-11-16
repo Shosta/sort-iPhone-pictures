@@ -6,7 +6,7 @@
 //	{"id":"1","op":"plan","sources":[...],"destination":"...","byLocation":true,"landmarks":true,"dedupe":true,"similar":true}
 //	{"id":"2","op":"copy","planId":"1"}
 //	{"id":"3","op":"thumbnail","path":"...","size":256}
-//	{"id":"4","op":"tag","folder":"...","files":[...],"tagScenes":true,"tagMoment":true,"tagPeople":true,"aiDir":"..."}
+//	{"id":"4","op":"tag","folder":"...","files":[...],"tagScenes":true,"tagMoment":true,"tagPeople":true,"tagMeta":true,"aiDir":"..."}
 //	{"id":"5","op":"cancel","target":"2"}
 //
 // Events:
@@ -55,6 +55,7 @@ type request struct {
 	TagScenes   bool     `json:"tagScenes"`
 	TagMoment   bool     `json:"tagMoment"`
 	TagPeople   bool     `json:"tagPeople"`
+	TagMeta     bool     `json:"tagMeta"`
 	AIDir       string   `json:"aiDir"`
 	Folder      string   `json:"folder"`
 	Files       []string `json:"files"`
@@ -323,7 +324,7 @@ func (s *server) thumbnail(ctx context.Context, req request) error {
 }
 
 func (s *server) tag(ctx context.Context, req request) error {
-	tg, err := tagger.New(tagger.FindAssets(req.AIDir), tagger.Options{Scenes: req.TagScenes, Moment: req.TagMoment, People: req.TagPeople})
+	tg, err := tagger.New(tagger.FindAssets(req.AIDir), tagger.Options{Scenes: req.TagScenes, Moment: req.TagMoment, People: req.TagPeople, Meta: req.TagMeta})
 	if err != nil {
 		return err
 	}

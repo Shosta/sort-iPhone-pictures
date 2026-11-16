@@ -45,9 +45,10 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	byLocation := flags.Bool("by-location", false, "Add a city folder inside each month when GPS data is available")
 	skipDuplicates := flags.Bool("skip-duplicates", false, "Leave out true duplicates (identical bytes or pixels), also compared to files already in the destination")
 	groupSimilar := flags.Bool("group-similar", false, "Put near-identical shots taken close in time into an \"Almost Duplicates\" folder")
-	tagScenes := flags.Bool("tag-scenes", false, "Write XMP keyword sidecars for places (plage, montagne, ville, campagne, château, église) using local AI models")
+	tagScenes := flags.Bool("tag-scenes", false, "Write XMP keyword sidecars for places (plage, montagne, ville, forêt, intérieur, restaurant, gare...) using local AI models")
 	tagMoment := flags.Bool("tag-moment", false, "Write XMP keywords for sunrise, sunset, night, sun and clouds")
-	tagPeople := flags.Bool("tag-people", false, "Write XMP keywords People and Portrait using local face detection")
+	tagPeople := flags.Bool("tag-people", false, "Write XMP keywords People, Portrait and Groupe using local face detection")
+	tagMeta := flags.Bool("tag-meta", false, "Write XMP keywords from the metadata: season, year, weekend, selfie, screenshot, panorama, zoom, macro, low light")
 	aiDir := flags.String("ai-dir", "", "Directory with the AI models (default: $PHOTOSORT_AI_DIR or ./ai next to the executable)")
 	asJSON := flags.Bool("json", false, "Print the plan and result as JSON")
 	if err := flags.Parse(args); err != nil {
@@ -70,8 +71,8 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 		report, copyErr = sorter.CopyWithProgress(ctx, plan, func(entry sorter.Entry) {
 			copied = append(copied, filepath.Join(plan.Destination, entry.Target))
 		})
-		if (*tagScenes || *tagMoment || *tagPeople) && len(copied) > 0 {
-			tg, err := tagger.New(tagger.FindAssets(*aiDir), tagger.Options{Scenes: *tagScenes, Moment: *tagMoment, People: *tagPeople})
+		if (*tagScenes || *tagMoment || *tagPeople || *tagMeta) && len(copied) > 0 {
+			tg, err := tagger.New(tagger.FindAssets(*aiDir), tagger.Options{Scenes: *tagScenes, Moment: *tagMoment, People: *tagPeople, Meta: *tagMeta})
 			if err != nil {
 				fmt.Fprintln(diagnostics, "Tags disabled:", err)
 			} else {

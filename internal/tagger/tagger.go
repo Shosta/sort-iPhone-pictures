@@ -38,9 +38,10 @@ const (
 
 // Options selects which tag families are produced.
 type Options struct {
-	Scenes bool // plage, montagne, ville, campagne, château, église
+	Scenes bool // places: plage, montagne, ville, forêt, intérieur, restaurant, gare…
 	Moment bool // lever/coucher de soleil, nuit, soleil, nuage
-	People bool // People, Portrait
+	People bool // People, Portrait, Groupe
+	Meta   bool // from EXIF and file name, no model: saison, année, week-end, selfie, panorama…
 }
 
 // Photo is the information about a photo the tagger needs.
@@ -51,6 +52,7 @@ type Photo struct {
 	HasGPS    bool
 	UTCOffset int
 	HasOffset bool
+	Shot      Shot
 }
 
 // Tagger holds the loaded models as several independent lanes so that many
@@ -180,6 +182,9 @@ func (t *Tagger) Tags(photo Photo) ([]string, error) {
 			tags = append(tags, tag)
 		}
 	}
+	if t.opts.Meta {
+		tags = append(tags, metaTags(photo)...)
+	}
 	if len(t.all) == 0 {
 		return tags, nil
 	}
@@ -187,20 +192,24 @@ func (t *Tagger) Tags(photo Photo) ([]string, error) {
 	if err != nil {
 		return tags, err
 	}
-	more, err := t.analyse(photo, img)
+	more, seenFace, err := t.analyse(photo, img)
+	if t.opts.People && err == nil && !seenFace {
+		// A front-camera shot without any visible face is not a selfie.
+		tags = without(tags, TagSelfie)
+	}
 	return append(tags, more...), err
 }
 
-// analyse runs the models on an upright preview of the photo.
-func (t *Tagger) analyse(photo Photo, img image.Image) ([]string, error) {
-	var tags []string
+// analyse runs the models on an upright preview of the photo. seenFace
+// reports whether the face model found a visible face.
+func (t *Tagger) analyse(photo Photo, img image.Image) (tags []string, seenFace bool, err error) {
 	l := <-t.lanes
 	defer func() { t.lanes <- l }()
 	outdoor := false
 	if l.scene != nil {
 		probs, err := l.scene.classify(img)
 		if err != nil {
-			return tags, err
+			return tags, false, err
 		}
 		sceneTagList, isOutdoor := sceneTags(t.labels, probs)
 		tags = append(tags, sceneTagList...)
@@ -217,9 +226,9 @@ func (t *Tagger) analyse(photo Photo, img image.Image) ([]string, error) {
 		}
 	}
 	if l.face != nil {
-		people, portrait, err := l.face.detect(img)
+		people, portrait, faces, err := l.face.detect(img)
 		if err != nil {
-			return tags, err
+			return tags, false, err
 		}
 		if people {
 			tags = append(tags, TagPeople)
@@ -227,8 +236,12 @@ func (t *Tagger) analyse(photo Photo, img image.Image) ([]string, error) {
 		if portrait {
 			tags = append(tags, TagPortrait)
 		}
+		if faces >= groupMinFaces {
+			tags = append(tags, TagGroup)
+		}
+		seenFace = people
 	}
-	return tags, nil
+	return tags, seenFace || l.face == nil, nil
 }
 
 func hasTag(tags []string, tag string) bool {
@@ -238,6 +251,16 @@ func hasTag(tags []string, tag string) bool {
 		}
 	}
 	return false
+}
+
+func without(tags []string, tag string) []string {
+	kept := tags[:0]
+	for _, t := range tags {
+		if t != tag {
+			kept = append(kept, t)
+		}
+	}
+	return kept
 }
 
 const sceneSize = 224
@@ -385,8 +408,8 @@ func nms(boxes []faceBox, limit float64) []faceBox {
 
 // classifyFaces decides People/Portrait from boxes in fractions of the image
 // height: People when any face is visible, Portrait when one face clearly
-// dominates the frame.
-func classifyFaces(boxes []faceBox, imageHeight float64) (people, portrait bool) {
+// dominates the frame. It also returns how many faces are visible.
+func classifyFaces(boxes []faceBox, imageHeight float64) (people, portrait bool, visibleFaces int) {
 	var visible []faceBox
 	for _, box := range boxes {
 		if (box.y2-box.y1)/imageHeight >= 0.04 {
@@ -394,7 +417,7 @@ func classifyFaces(boxes []faceBox, imageHeight float64) (people, portrait bool)
 		}
 	}
 	if len(visible) == 0 {
-		return false, false
+		return false, false, 0
 	}
 	sort.Slice(visible, func(i, j int) bool { return visible[i].area() > visible[j].area() })
 	main := visible[0]
@@ -402,5 +425,5 @@ func classifyFaces(boxes []faceBox, imageHeight float64) (people, portrait bool)
 	if dominant && (len(visible) == 1 || visible[1].area() < main.area()*0.4) {
 		portrait = true
 	}
-	return true, portrait
+	return true, portrait, len(visible)
 }

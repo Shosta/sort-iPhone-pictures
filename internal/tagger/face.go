@@ -81,7 +81,8 @@ func (m *faceModel) close() {
 	}
 }
 
-func (m *faceModel) detect(img image.Image) (people, portrait bool, err error) {
+// detect returns the people/portrait verdict and how many faces are visible.
+func (m *faceModel) detect(img image.Image) (people, portrait bool, faces int, err error) {
 	bounds := img.Bounds()
 	scale := math.Min(float64(faceSize)/float64(bounds.Dx()), float64(faceSize)/float64(bounds.Dy()))
 	w, h := int(math.Round(float64(bounds.Dx())*scale)), int(math.Round(float64(bounds.Dy())*scale))
@@ -99,7 +100,7 @@ func (m *faceModel) detect(img image.Image) (people, portrait bool, err error) {
 		}
 	}
 	if err := m.session.Run(); err != nil {
-		return false, false, err
+		return false, false, 0, err
 	}
 	var boxes []faceBox
 	for _, stride := range faceStrides {
@@ -120,8 +121,8 @@ func (m *faceModel) detect(img image.Image) (people, portrait bool, err error) {
 			boxes = append(boxes, faceBox{cx - bw/2, cy - bh/2, cx + bw/2, cy + bh/2, score})
 		}
 	}
-	people, portrait = classifyFaces(nms(boxes, 0.3), float64(h))
-	return people, portrait, nil
+	people, portrait, faces = classifyFaces(nms(boxes, 0.3), float64(h))
+	return people, portrait, faces, nil
 }
 
 func clamp01(v float64) float64 { return math.Max(0, math.Min(1, v)) }
