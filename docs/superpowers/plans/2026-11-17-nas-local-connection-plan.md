@@ -76,11 +76,11 @@ Faite en ligne : API stables de la bibliothèque standard et code du dépôt, pa
 **Sortie** : un compte `photosort` qui ne peut que lire l'entrée et écrire la bibliothèque, et un partage monté sur le Mac.
 **Vérification** (manuelle, 5 contrôles) : avec ce compte monté sur le Mac, (1) créer un fichier dans l'entrée échoue, (2) supprimer ou renommer une photo de l'entrée échoue, (3) créer puis supprimer un fichier dans la bibliothèque réussit, (4) les autres dossiers du partage et les autres partages sont refusés, (5) les comptes existants (la sauvegarde de l'iPhone, QuMagie) fonctionnent comme avant.
 
-Étapes (la procédure détaillée entrera dans `docs/nas-qnap.md`, phase 7) :
+Procédure pas à pas : [`docs/nas-qnap.md`](../../nas-qnap.md). Résumé :
 - [ ] Sauvegarder la configuration QTS (*Backup / Restore*) avant tout changement.
 - [ ] Créer l'utilisateur `photosort`, mot de passe long et unique, **hors** groupe `administrators`.
 - [ ] Activer *Advanced Folder Permissions* (réglage global).
-- [ ] Sur le partage : `photosort` en lecture-écriture sur la bibliothèque, **lecture seule** sur l'entrée, **refus** sur le reste ; refus sur tous les autres partages.
+- [ ] Sur le partage : `photosort` en lecture-écriture sur la bibliothèque, **lecture seule** sur l'entrée, **refus** sur le reste ; refus sur tous les autres partages. Règle QNAP : un droit lecture seule ou un refus sur la racine s'impose aux sous-dossiers ; la racine reçoit donc lecture-écriture avec *Only admin can create files and folders* et *Only the owner can delete the contents* (propriétaire `admin`).
 - [ ] Limiter les applications accessibles au compte (SMB seulement ; pas de File Station, FTP, SSH).
 - [ ] Options SMB (à confirmer dans QTS) : version minimale SMB 3, signature activée.
 - [ ] Monter `smb://<nas>/<partage>` depuis le Finder avec ce compte, enregistrer le mot de passe dans le trousseau.
@@ -152,7 +152,7 @@ Tâches :
 
 ## Phase 7 — Documentation `[parallel]`
 
-- [ ] `docs/nas-qnap.md` : procédure complète de la phase 0b avec captures (français), rappel de ne jamais exposer SMB sur internet.
+- [ ] `docs/nas-qnap.md` (rédigé, sans captures) : l'ajuster après la recette (menus réellement observés, captures éventuelles) et le lier depuis le README.
 - [ ] `README.md` : section « NAS QNAP en réseau local », renvoi vers ce document ; notes Windows (lecteur réseau) et Linux (`mount.cifs`).
 - [ ] Spec : statut mis à jour.
 
