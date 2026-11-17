@@ -136,7 +136,11 @@ mémoire et en CPU pour ne pas gêner QuMagie.
 3. Semainier distant (PDF rapatrié) et tags sur le NAS.
 4. Case « classer automatiquement » : surveillance de l'entrée, fichiers
    stables seulement, reprenable.
-5. Accès à distance : voir ci-dessous ; documentation pas à pas.
+5. Accès à distance : voir ci-dessous ; documentation pas à pas. Commencer par
+   un **test de relais** sans code Photosort : un conteneur HTTP minimal sur le
+   NAS, joint depuis un réseau extérieur (partage de connexion du téléphone)
+   par l'adresse `qlink.to/<id>` de myQNAPcloud Link. Seul ce test dit si le
+   relais accepte un service autre que les applis QTS.
 
 ## Accès à distance (étape 5)
 
