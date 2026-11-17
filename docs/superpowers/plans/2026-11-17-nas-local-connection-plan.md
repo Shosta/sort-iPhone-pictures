@@ -1,161 +1,179 @@
-# Plan : classement et tags sur le NAS, connexion en réseau local
+# Plan : classement et tags sur le NAS, connexion en réseau local (Mac + SMB)
 
-Date : 2026-11-17 · Branche : `feat/nas-qnap-remote` · Statut : **plan proposé, en attente d'approbation** (aucun code écrit)
+Date : 2026-11-17 · Branche : `feat/nas-qnap-remote` · Statut : **plan révisé, en attente d'approbation** (aucun code écrit)
 Spec parente : `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
+Plan différé (serveur Docker) : `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`
+
+## Pourquoi ce plan remplace le précédent
+
+Réponses de l'utilisateur (2026-11-17) :
+- entrée et bibliothèque sont **deux sous-dossiers d'un même partage** ;
+- la bibliothèque existe déjà et est **massive** ;
+- **Container Station n'est pas installé** et le **SSH reste désactivé** (surface d'attaque) ;
+- l'entrée contient **quelques centaines de photos**.
+
+Conséquences : le serveur Docker (Container Station + import d'image) ajouterait
+au NAS un démon root et de la maintenance pour traiter quelques centaines de
+photos. L'app sait déjà lire un dossier d'entrée et écrire dans un dossier de
+destination : un partage SMB monté sur le Mac suffit. **Rien à installer sur le
+NAS, aucun port nouveau.** Le Mac (Apple M2) rend en plus les tags IA
+réalistes, ce que le Celeron du NAS ne garantissait pas.
 
 ## Objectif
 
-Depuis l'app Electron du Mac, sur le même réseau local, se connecter à un
-`photosort-server` qui tourne dans Docker sur le QNAP TS-251D : classer
-l'entrée en vrac, taguer la bibliothèque classée et produire le PDF du
-semainier. **Le conteneur ne peut rien toucher d'autre** : même compromis, il ne
-modifie ni le dossier iPhone ni le reste du NAS. L'accès à distance viendra
-dans un second plan, sans changer ce que le conteneur a le droit de faire.
+Depuis l'app Electron du Mac, sur le même réseau local : classer l'entrée en
+vrac dans la bibliothèque du NAS, taguer la bibliothèque et produire le PDF du
+semainier, avec un compte QTS dédié aux droits minimaux. L'accès à distance et
+le traitement sans le Mac viendront dans des plans ultérieurs.
 
 ## Contraintes
 
 - Logique métier en Go ; moteur existant réutilisé (`sorter`, `internal/tagger`, `internal/scrapbook`).
-- **Entrée jamais écrite** : trois verrous indépendants (droits QTS de l'utilisateur dédié, montage Docker `:ro`, garde au démarrage du serveur).
-- Utilisateur QTS dédié `photosort` : lecture seule sur l'entrée, lecture-écriture sur la bibliothèque, **aucun droit ailleurs**.
-- Conteneur durci : non-root, `cap_drop: ALL`, `no-new-privileges`, racine en lecture seule, ni `privileged`, ni réseau hôte, ni `docker.sock`.
-- Réseau local seulement ; le serveur écoute via une interface `net.Listener` (remplaçable plus tard par un overlay).
-- TS-251D : 2 cœurs, 2 à 4 Go partagés avec QTS et QuMagie → parallélisme et mémoire bornés.
+- **Entrée jamais écrite**, bibliothèque seul dossier inscriptible.
+- Compte QTS dédié `photosort` : lecture seule sur l'entrée, lecture-écriture sur la bibliothèque, **aucun droit ailleurs**, SMB seulement.
+- **Rien d'installé sur le NAS**, ni SSH, ni Container Station, ni QPKG tiers.
+- Le comportement local actuel ne change pas par défaut (toute nouveauté est une option ou un durcissement neutre).
+- Aucun secret dans l'app : le montage est fait par l'OS (trousseau macOS).
 - Branche `feat/nas-qnap-remote`, aucun merge dans `main` sans demande, trailer `Co-authored-by` sur chaque commit.
-- Aucune nouvelle dépendance côté Electron si possible (`node:tls`, `safeStorage`).
 
 ## Décisions (retenues par défaut, à confirmer)
 
 | # | Décision | Raison |
 | --- | --- | --- |
-| D1 | **Copie, pas de lien physique.** Le lien physique est abandonné | Avec `fs.protected_hardlinks=1`, un utilisateur ne peut lier que des fichiers qu'il possède ou sur lesquels il a lecture **et écriture** ([doc noyau](https://docs.kernel.org/admin-guide/sysctl/fs.html)) : incompatible avec une entrée en lecture seule. Contrepartie : l'espace disque des photos classées s'ajoute (contrôle d'espace avant copie) |
-| D2 | Transport : **TLS + JSON ligne par ligne**, le protocole du sidecar tel quel | `serve(ctx, io.Reader)` et `send` existent déjà ; Electron le parle avec `node:tls`. Pas de WebSocket : pas de dépendance, et le `WebSocket` global de Node 20 (Electron 33.4.11 embarque Node 20.18.3) n'est pas assuré |
-| D3 | **Deux racines fixes** : `/inbox` (lecture seule) et `/library` (écriture) | Surface d'attaque minimale ; pas de navigateur de dossiers distants en v1 |
-| D4 | Authentification : jeton de 256 bits (le serveur n'en garde que l'empreinte SHA-256) + certificat auto-signé **épinglé par empreinte**, vérifiée **avant** d'envoyer le jeton | Le jeton ne circule jamais vers un serveur non reconnu |
-| D5 | Déconnexion = **annulation** des opérations en cours ; reprise en relançant le plan (les doublons déjà copiés sont ignorés, à tester) | Même sémantique que le sidecar ; opérations détachées et reprise par identifiant reportées au plan « accès distant » |
-| D6 | PDF : généré dans le dossier de travail du serveur puis rapatrié par une opération `fetch` (blocs base64) ; le renderer ne change pas | Le PDF arrive dans le dossier choisi en préférences (Téléchargements par défaut) |
-| D7 | Image livrée en **archive `docker save`** (aucun registre requis) | Le dépôt n'a pas de remote ; import dans Container Station |
-| D8 | Tags de métadonnées activés ; **tags IA désactivés tant que l'étape NAS n'a pas mesuré** | Celeron probablement 10 à 30 fois plus lent ; AVX non garanti |
+| N1 | **Voie A' : l'app sur le Mac, le partage monté en SMB** avec le compte dédié. Le serveur Docker est différé | Aucune installation ni SSH ; quelques centaines de photos transitent en secondes sur le LAN |
+| N2 | Droits : **Advanced Folder Permissions** de QTS (droits par sous-dossier : lecture, lecture-écriture, refus) | Documenté par QNAP ; seul moyen de séparer deux sous-dossiers d'un même partage sans Docker. Réglage global du NAS : voir risques |
+| N3 | Montage par l'**OS** (Finder `smb://`, lecteur réseau Windows, `mount.cifs`) ; l'app ne monte rien et ne voit jamais le mot de passe | Le trousseau gère le secret ; aucune dépendance |
+| N4 | **Contrôle préalable** `nasCheck` (Go) : l'entrée doit refuser l'écriture, la bibliothèque doit l'accepter | Seconde barrière : si l'ACL QTS est mal réglée, l'app refuse de lancer l'opération (échoue fermé) |
+| N5 | **Copie** (pas de lien physique) vers la bibliothèque | Un lien physique ne passe pas sur un montage SMB et contredit la lecture seule de l'entrée |
+| N6 | Dédoublonnage **à portée** (option) : ne parcourir dans la bibliothèque que les mois concernés par le plan | `loadDestination` (`sorter/dedupe.go:44`) parcourt toute la destination avec un `lstat` par fichier : coûteux sur SMB avec une bibliothèque massive |
+| N7 | Ignorer les dossiers et fichiers **système** (`.@__thumb`, `@Recycle`, `@Recently-Snapshot`, `@eaDir`, `._*`, `.DS_Store`) | `Plan` (`sorter.go:122`) et `deduper` ne sautent aucun dossier caché alors que `tags.go:39` et `scrapbook/scan.go:101` le font déjà ; QTS crée des `.@__thumb` partout |
+| N8 | Copie **atomique** : écriture dans `<cible>.part` puis renommage | Une coupure réseau laisserait sinon un fichier tronqué au nom final (`copyEntry`, `sorter.go:415`), pris ensuite pour une photo valide |
+| N9 | Semainier et tags inchangés : lecture de la bibliothèque en SMB, **PDF écrit localement** (Téléchargements) | Rien à rapatrier |
+| N10 | Tags IA **autorisés** (calculés sur le Mac) | Le blocage du Celeron disparaît |
 
 ## Phase 0 — Documentation (inventaire des API)
 
 Faite en ligne : API stables de la bibliothèque standard et code du dépôt, pas de sous-agents.
 
-**API autorisées**
-- Go (1.27.3) : `crypto/tls` (`MinVersion: tls.VersionTLS13`, `tls.NewListener`), `crypto/x509.CreateCertificate`, `crypto/ecdsa` + `elliptic.P256`, `crypto/sha256` (empreinte de `cert.Raw`), `crypto/subtle.ConstantTimeCompare`, `crypto/rand`, `net.Listener`, `syscall.Access` et `syscall.Statfs` (build tag `unix`), `os.OpenRoot` (déjà utilisé : `sorter/sorter.go:415`).
-- Electron 33.4.11 / Node 20.18.3 (vérifié dans le binaire) : `tls.connect`, `socket.getPeerCertificate().fingerprint256`, `readline` (déjà utilisé : `main/index.ts:4`), `safeStorage.isEncryptionAvailable/encryptString/decryptString`.
-- Docker 29.8.2 en local ; clés compose : `user`, `read_only`, `tmpfs`, `cap_drop`, `security_opt: no-new-privileges:true`, `mem_limit`, `cpus`, `pids_limit`, volumes `:ro`.
-- ONNX Runtime : `photosort-electron/scripts/fetch-ai-assets.mjs` sait déjà récupérer `linux-amd64` (sha256 épinglé) : à réutiliser dans l'image.
+**Vérifié dans le code**
+- `Plan` parcourt les sources avec `WalkDir` sans sauter les dossiers cachés (`sorter.go:122`) ; `deduper.loadDestination` parcourt toute la destination (`dedupe.go:44-60`) et ne hache que les fichiers de **même taille** qu'une source (`dedupe.go:69`) ; la destination n'est comparée qu'**octet pour octet** (`register`, `dedupe.go:90`).
+- `copyEntry` crée le fichier final en `O_EXCL`, mode 0600 (`sorter.go:435`) et ne nettoie qu'en cas d'erreur rattrapée.
+- `copyWorkers = 4` (`sorter.go:330`) : adapté à un disque réseau.
+- `tags.go:39` et `scrapbook/scan.go:101` sautent les dossiers dont le nom commence par `.`.
+
+**Vérifié dans la documentation QNAP** : *Control Panel > Privilege > Shared Folders > Advanced Permissions > Enable Advanced Folder Permissions* permet de fixer lecture, lecture-écriture ou refus par utilisateur pour chaque dossier et sous-dossier ([QTS 5.2](https://docs.qnap.com/operating-system/qts/5.2.x/en-us/configuring-advanced-folder-permissions-16E9201B.html), [FAQ QNAP](https://www.qnap.com/en/how-to/faq/article/should-i-enable-advanced-folder-permissions-or-windows-acl-support)). « Windows ACL » est une alternative, configurée depuis l'Explorateur Windows : non retenue.
 
 **À ne pas faire**
-- Ne pas exposer `aiDir`, `outDir`, `fallbackDir` aux clients du réseau : le serveur impose les siens.
-- Ne pas présenter `os.Root` comme un confinement du moteur : il n'est utilisé que pour la copie ; la vraie barrière est le système (utilisateur, montage), la validation des chemins n'est que la seconde.
-- Ne pas utiliser `rejectUnauthorized:false` sans vérifier l'empreinte avant toute écriture ; ne jamais stocker le jeton en clair.
-- Ne pas lancer le conteneur en root, ni monter le socket Docker.
+- Ne jamais tester l'écriture de l'entrée autrement que par une tentative qui **doit échouer** ; si elle réussit, supprimer la sonde et refuser.
+- Ne pas stocker de mot de passe dans l'app ; ne pas monter de partage depuis l'app.
+- Ne pas exposer SMB (port 445) sur internet, ni le rediriger sur la box.
+- Ne pas changer le comportement local par défaut (dédoublonnage complet de la destination conservé).
 
-**Non vérifié (à lever à la phase 7)** : application des droits QTS aux montages Docker ; compose dans Container Station ; UID/GID de l'utilisateur QTS ; AVX et ONNX Runtime sur le Celeron ; lisibilité des copies par QuMagie.
+**Non vérifié (à lever à la phase 6)** : effet de l'Advanced Folder Permissions sur les accès existants ; mode des fichiers créés (0600) vu par QuMagie et les autres comptes ; options de sécurité SMB disponibles dans la version de QTS installée (version SMB minimale, signature) ; accès du compte aux applications QTS (restriction « Application Privilege ») ; durée réelle du parcours de la bibliothèque sur SMB ; normalisation Unicode des noms de lieux accentués ; organisation de la bibliothèque existante (voir questions).
 
-## Phase 1 — Refactor sans changement de comportement
+## Phase 0b — Préparer le NAS `[utilisateur, aucune ligne de code]`
 
-**Sortie** : le serveur du sidecar devient un paquet réutilisable.
-**Vérification** : `go test ./cmd/photosort-sidecar/... ./internal/rpc/...` : tests existants inchangés et verts ; le sidecar se lance et répond comme avant.
+**Sortie** : un compte `photosort` qui ne peut que lire l'entrée et écrire la bibliothèque, et un partage monté sur le Mac.
+**Vérification** (manuelle, 5 contrôles) : avec ce compte monté sur le Mac, (1) créer un fichier dans l'entrée échoue, (2) supprimer ou renommer une photo de l'entrée échoue, (3) créer puis supprimer un fichier dans la bibliothèque réussit, (4) les autres dossiers du partage et les autres partages sont refusés, (5) les comptes existants (la sauvegarde de l'iPhone, QuMagie) fonctionnent comme avant.
 
-- [ ] Déplacer `server`, `thumbCache` et les opérations (`cmd/photosort-sidecar/{main,cache,scrapbook}.go`) vers `internal/rpc` (`NewServer`, `Serve(ctx, in, out)`), avec une interface `Policy` appelée avant chaque requête (identité par défaut : tout est permis, comme le sidecar)
-- [ ] Rendre configurables (options) le dossier de sortie du PDF et le nombre de workers
-- [ ] `cmd/photosort-sidecar/main.go` : appel mince, comportement inchangé
-- [ ] Déplacer les tests avec le code (`main_test.go`, `scrapbook_test.go`)
+Étapes (la procédure détaillée entrera dans `docs/nas-qnap.md`, phase 7) :
+- [ ] Sauvegarder la configuration QTS (*Backup / Restore*) avant tout changement.
+- [ ] Créer l'utilisateur `photosort`, mot de passe long et unique, **hors** groupe `administrators`.
+- [ ] Activer *Advanced Folder Permissions* (réglage global).
+- [ ] Sur le partage : `photosort` en lecture-écriture sur la bibliothèque, **lecture seule** sur l'entrée, **refus** sur le reste ; refus sur tous les autres partages.
+- [ ] Limiter les applications accessibles au compte (SMB seulement ; pas de File Station, FTP, SSH).
+- [ ] Options SMB (à confirmer dans QTS) : version minimale SMB 3, signature activée.
+- [ ] Monter `smb://<nas>/<partage>` depuis le Finder avec ce compte, enregistrer le mot de passe dans le trousseau.
 
-## Phase 2 — Moteur : options de copie et contrôle d'espace `[parallel avec 1]`
+## Phase 1 — Moteur : ignorer les noms système
 
-**Sortie** : la copie accepte un mode de fichier ; l'espace libre se contrôle.
-**Vérification** : `go test ./sorter/...` ; `CopyWithProgress` garde le mode 0600 par défaut (comportement local inchangé).
+**Sortie** : un point unique décide quels dossiers et fichiers sont ignorés, utilisé par les quatre parcours.
+**Vérification** : `go test ./sorter/... ./internal/scrapbook/...` ; test avec un arbre contenant `.@__thumb/x.jpg`, `@Recycle/y.jpg`, `._IMG_1.HEIC`, `.DS_Store`, `vrai/IMG_2.HEIC` : seul `vrai/IMG_2.HEIC` est vu par `Plan`, `deduper`, `PhotosToTag` et `scanMonth`.
 
-- [ ] `sorter.CopyOptions{FileMode}` + `CopyWithOptions` ; `CopyWithProgress` en devient l'enveloppe (aujourd'hui `copyEntry` écrit en 0600, ce qui rendrait les copies illisibles pour QuMagie et SMB : `sorter/sorter.go:435`)
-- [ ] Fonction `FreeSpace(dir)` (`syscall.Statfs`, build tag `unix`) et comparaison avec la taille du plan
-- [ ] Tests : mode 0644 appliqué ; échec propre si l'espace manque ; copie interrompue sans fichier partiel (comportement existant, à verrouiller par un test)
+Tâches :
+- [ ] Ajouter `SkipDir(name)` et `SkipFile(name)` dans `sorter` (nom caché `.`, préfixe `@`, `._*`, `.DS_Store`, `Thumbs.db`).
+- [ ] Les utiliser dans `Plan` (`sorter.go:122`), `deduper.loadDestination` (`dedupe.go:44`), `PhotosToTag` (`tags.go:39`) et `scanMonth` (`scan.go:101`, qui garde sa règle actuelle plus la nouvelle).
+- [ ] Tests (`sorter_test.go`, `tags_test.go`, `scan_test.go`).
 
-## Phase 3 — Serveur `photosort-server` `[checkpoint]`
+## Phase 2 — Moteur : dédoublonnage à portée `[après 1 : mêmes fichiers]`
 
-**Sortie** : binaire `cmd/photosort-server` + paquet `internal/remote`.
-**Vérification** : `go test ./internal/remote/... ./cmd/photosort-server/...` (intégration sur `127.0.0.1:0`, dossiers temporaires, client TLS réel).
+**Sortie** : option `Engine.ScopedDestination` ; par défaut, comportement inchangé.
+**Vérification** : `go test ./sorter/...` ; test avec 24 mois de fichiers factices et 2 mois dans le plan : le parcours ne visite que ces 2 mois (compteur de fichiers visités, pas de chronomètre), et un doublon octet pour octet d'un de ces mois est toujours détecté. Sans l'option, tous les mois sont visités.
 
-- [ ] Contrat : `docs/nas-protocol.md` (`hello`, `status`, `ping`, `fetch`, codes d'erreur, version de protocole)
-- [ ] **Racines et chemins** : `Roots{Inbox, Library}`, `Resolve(path)` (refus de `..`, des chemins hors racines, du préfixe voisin `/inbox2`, des liens symboliques qui sortent), racines non imbriquées
-- [ ] **Politique par opération** : `plan` (sources sous `/inbox`, destination forcée à `/library`), `copy` (par `planId` du serveur : le client n'injecte aucun chemin), `thumbnail` (sous `/inbox` ou `/library`), `tag` et `weekDays/weekPhotos/scrapbook*` (sous `/library` seulement), `fetch` (dossier de travail seulement), `cancel`, `ping`, `status` ; toute autre opération est refusée
-- [ ] **Contrôle au démarrage (échec fermé)** : refus si uid 0 ; refus si `/inbox` est inscriptible (`syscall.Access(W_OK)`, qui tient compte de `EROFS` et des ACL) ; `/library` et le dossier d'état doivent accepter l'écriture (fichier témoin créé puis supprimé) ; sous-commande `selfcheck` pour le NAS
-- [ ] **TLS et jeton** : au premier démarrage, certificat ECDSA P-256 (SAN depuis `PHOTOSORT_HOSTS`), jeton aléatoire affiché une seule fois dans les journaux avec l'empreinte du certificat ; seul le hachage du jeton est écrit (`0600`)
-- [ ] **Connexion** : `hello` attendu en 5 s, ligne limitée à 4 Ko avant authentification, comparaison à temps constant, temporisation après échecs par adresse, **un seul client actif** (le second reçoit `busy`), `ping` toutes les 15 s et fermeture après 45 s de silence, opérations annulées à la fermeture
-- [ ] `status` : résultats du contrôle de démarrage, version, espace libre, IA disponible ; `fetch` : blocs de 256 Ko de fichiers du dossier de travail uniquement ; nettoyage des PDF après rapatriement ou au bout d'1 h
-- [ ] Journal d'audit sur la sortie standard (heure, adresse, opération, résultat ; jamais le jeton)
-- [ ] Mode IA : voir risque 1 (sonde dans un processus enfant)
-- [ ] Tests : mauvais jeton, pas de `hello`, ligne trop longue, second client, opération interdite, évasions de chemin, `plan` puis `copy` avec fichiers en 0644 et **entrée identique avant/après** (somme de l'arborescence), `fetch` octet pour octet, coupure en pleine copie sans fichier partiel
+Tâches :
+- [ ] `newDeduper(destination, scope)` : si `scope` est non vide, `loadDestination` ne parcourt que `<destination>/<AAAA>/<AAAA-MM>` pour les mois présents dans le plan ; la liste vient de l'étape 1 de `Plan` (le dossier de chaque photo est déjà calculé avant les empreintes).
+- [ ] Documenter l'hypothèse : un fichier identique a la même date EXIF, donc le même mois, **si la bibliothèque suit l'arborescence de Photosort**. Sinon, laisser l'option désactivée.
+- [ ] Exposer `scopedDestination` dans la requête `plan` du sidecar (booléen optionnel, défaut `false`).
 
-## Phase 4 — Image Docker et compose `[parallel avec 5]`
+## Phase 3 — Moteur : copie atomique et reprise sur coupure `[après 2]`
 
-**Sortie** : `Dockerfile`, `docker-compose.yml`, `scripts/build-nas-image.sh`, archive `dist/photosort-server-amd64.tar`.
-**Vérification** (Docker local) : conteneur durci démarré avec une entrée `:ro` ; `docker exec … touch /inbox/x` échoue (`Read-only file system`) ; `docker inspect` ne montre ni `Privileged` ni capacités ; test d'intégration de la phase 3 rejoué contre le conteneur ; taille de l'image notée.
+**Sortie** : `copyEntry` écrit dans `<cible>.part` puis renomme ; une coupure ne laisse jamais de fichier tronqué au nom final.
+**Vérification** : `go test ./sorter/...` ; test : source tronquée en cours de copie (lecteur qui échoue) → la cible finale n'existe pas, le `.part` est supprimé ; un `.part` orphelin d'une exécution précédente est écrasé ; une cible existante n'est jamais remplacée ; une copie réussie garde le contenu exact.
 
-- [ ] Dockerfile multi-étapes (Go avec CGO, `libonnxruntime.so` et modèles via `fetch-ai-assets` pour la plateforme visée, image d'exécution mince, `USER` numérique)
-- [ ] Compose : `user: "<uid>:<gid>"`, `/inbox:ro`, `/library`, dossier d'état, `read_only`, `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `mem_limit`, `cpus`, `pids_limit`, port publié sur l'adresse LAN du NAS (`IP:8443:8443`), jamais `privileged` ni réseau hôte
-- [ ] Script : construction `linux/amd64` (émulée sur le M2) et `linux/arm64` (tests locaux), export `docker save` compressé
-- [ ] Verrouiller par un test ce qui est déjà vrai dans le code : `tagger.New` n'initialise ONNX Runtime que pour les scènes et les personnes (`internal/tagger/tagger.go:117`), donc les tags de métadonnées et de moment fonctionnent sans `libonnxruntime.so`
+Tâches :
+- [ ] `copyEntry` (`sorter.go:415`) : ouverture de `<cible>.part` en `O_CREATE|O_TRUNC|O_WRONLY`, `Sync`, vérification que la cible n'existe pas (`root.Lstat`), `root.Rename`.
+- [ ] Nouvelle tentative (3 fois, attente croissante) sur les erreurs réseau transitoires de la copie (`EIO`, `ETIMEDOUT`, `ENOTCONN`, `ESTALE`, `EHOSTDOWN`) ; échec clair ensuite, la reprise consiste à relancer le plan (doublons déjà copiés ignorés).
+- [ ] **Conditionnel** : si la recette (phase 6) montre que le mode 0600 rend les copies illisibles pour QuMagie ou d'autres comptes, ajouter `CopyOptions{FileMode}` (0644 sur le NAS, 0600 en local).
 
-## Phase 5 — Electron, processus principal `[parallel avec 4]`
+## Phase 4 — Contrôle préalable `nasCheck` `[parallel avec 1 à 3 : autres fichiers]`
 
-**Sortie** : second backend réseau derrière la même interface que le sidecar.
-**Vérification** : `npm run typecheck` ; `node --test` (type stripping de Node 24, sans dépendance) contre un vrai `photosort-server` lancé en local.
+**Sortie** : opération `nasCheck` du sidecar (même enveloppe de requête que `plan`).
+**Vérification** : `go test ./cmd/photosort-sidecar/...` ; tests sur des dossiers temporaires : entrée en `0555` → `inputReadOnly: true` ; entrée inscriptible → `inputReadOnly: false` **et sonde supprimée** ; bibliothèque inscriptible → `libraryWritable: true` ; chemin absent ou non dossier → erreur claire.
 
-- [ ] `src/main/backend.ts` : interface `Backend` (`send`, événements) ; `LocalSidecar` (code actuel) et `RemoteServer` ; `ipcMain.on('sidecar:send')` bascule selon le mode
-- [ ] `src/main/remote.ts` : `probe(host, port)` (lit l'empreinte sans rien envoyer) ; `connect` avec vérification de `fingerprint256` à `secureConnect`, **avant** d'écrire le `hello` ; battement de cœur ; événement `error` synthétique à la perte de connexion ; reconnexion manuelle
-- [ ] Rapatriement du PDF : à l'événement `done` d'un `scrapbook`, téléchargement par `fetch` dans le dossier choisi en préférences, puis réécriture de `path` en chemin local : le renderer n'est pas modifié
-- [ ] `src/main/secrets.ts` : jeton chiffré par `safeStorage` dans `userData` ; si le chiffrement est indisponible, ne rien écrire et redemander le jeton à chaque session
-- [ ] IPC et `preload` : `nas.probe`, `nas.connect`, `nas.forget`, `nas.status`, `backend.use`
-- [ ] Tests : une empreinte différente est refusée **sans qu'un seul octet soit envoyé** (serveur TLS factice qui compte les octets reçus) ; `hello` ; miniature ; `fetch` avec somme de contrôle identique
+Tâches :
+- [ ] Paquet `internal/nascheck` : `Check(input, library string) (Result, error)` avec `{mounted, inputReadOnly, libraryWritable, problems[]}`. La sonde d'entrée est une création de fichier qui **doit** échouer (`EACCES`, `EPERM`, `EROFS`) ; toute autre erreur est un échec fermé ; si elle réussit, suppression immédiate et `inputReadOnly: false`. La sonde de bibliothèque est un fichier caché `.photosort-probe-<aléatoire>` créé puis supprimé.
+- [ ] Opération `nasCheck` dans `cmd/photosort-sidecar/main.go` et test dans `main_test.go`.
+- [ ] Note : sous Windows, `EACCES` se traduit par `ERROR_ACCESS_DENIED` ; le paquet normalise via `errors.Is(err, fs.ErrPermission)`.
 
-## Phase 6 — Electron, interface `[checkpoint : revue visuelle]`
+## Phase 5 — Electron : mode NAS `[après 2 et 4 ; checkpoint : revue visuelle]`
 
-**Sortie** : écran de connexion et mode NAS.
-**Vérification** : `npm run typecheck`, `npm run build`, parcours manuel contre le conteneur local, capture d'écran.
+**Sortie** : dans les préférences, un bloc « NAS » (dossier d'entrée, bibliothèque, case « bibliothèque rangée par Photosort » = dédoublonnage à portée, case « vérifier la lecture seule de l'entrée » cochée par défaut) ; avant chaque classement ou tag en mode NAS, un contrôle `nasCheck` avec message clair en cas d'échec ; entrée et bibliothèque mémorisées comme dossiers par défaut.
+**Vérification** : `npm run typecheck` ; capture d'écran de l'écran de préférences et du message d'échec ; test manuel : entrée inscriptible → classement refusé avec l'explication ; NAS démonté → message « dossier introuvable, montez le partage ».
 
-- [ ] Écran de connexion : adresse, port, jeton ; étape « Comparer l'empreinte avec celle des journaux du conteneur » avant validation
-- [ ] Carte de statut : liste de sécurité animée (entrée en lecture seule ✔, bibliothèque inscriptible ✔, non-root ✔, TLS épinglé ✔, espace libre, version) ; rouge et explicite si un contrôle échoue
-- [ ] Mode NAS : sélecteur « Ce Mac / NAS » ; entrée et bibliothèque affichées comme racines fixes, sans sélecteurs de dossiers ni dépôt par glisser-déposer ; case « tags IA » masquée tant que le serveur ne l'annonce pas
-- [ ] Bandeau de déconnexion avec « Se reconnecter » ; notification du PDF rapatrié
-- [ ] Chaînes i18n fr/en/da ; animations dans le style existant (`framer-motion`)
+Tâches :
+- [ ] Préférences et types (`photosort-electron/src/renderer/…`), traductions fr/en/da.
+- [ ] Appel de `nasCheck` avant `plan`, et propagation de `scopedDestination`.
+- [ ] Messages d'erreur : partage non monté, entrée inscriptible, bibliothèque en lecture seule.
+- [ ] Revue visuelle (thèmes clair/sombre).
 
-## Phase 7 — Recette sur le NAS `[checkpoint : intervention de l'utilisateur]`
+## Phase 6 — Recette sur le NAS `[checkpoint : intervention de l'utilisateur]`
 
-**Sortie** : `docs/nas/installation.md` (guide pas à pas en français) et `docs/nas/measurements.md` (mesures).
-**Vérification** : liste de recette signée par l'utilisateur.
+**Sortie** : un compte rendu chiffré.
+**Vérification** : exécuter sur les vraies photos et noter :
+- [ ] les 5 contrôles de la phase 0b ;
+- [ ] durée de `plan` avec et sans dédoublonnage à portée, sur la vraie bibliothèque ;
+- [ ] durée de la copie de quelques centaines de photos ;
+- [ ] une photo en double octet pour octet est bien ignorée ;
+- [ ] un lieu accentué (ex. `Orléans`) ne crée pas deux dossiers ;
+- [ ] QuMagie voit les copies après réindexation, les `.xmp` ne le perturbent pas ;
+- [ ] mode des fichiers créés (0600) : lisible par les autres comptes ? sinon, tâche conditionnelle de la phase 3 ;
+- [ ] tags de métadonnées puis IA sur un mois, lecture et écriture des `.xmp` par SMB ;
+- [ ] coupure volontaire du Wi-Fi pendant une copie : aucun fichier tronqué, reprise propre.
 
-- [ ] Guide : créer l'utilisateur QTS `photosort` (non administrateur, aucun accès aux applications), matrice de droits sur les deux dossiers partagés (entrée : lecture seule ; bibliothèque : lecture-écriture ; tous les autres : aucun accès), dossier d'état, import de l'archive dans Container Station, compose, lecture du jeton et de l'empreinte
-- [ ] Recette : `status` entièrement vert ; **preuve négative** : donner temporairement l'écriture sur l'entrée, le conteneur doit refuser de démarrer, puis rétablir ; relever `id photosort` et `fs.protected_hardlinks`
-- [ ] QuMagie lit les copies (droits 0644) ; n'indexer que la bibliothèque
-- [ ] Mesures sur un échantillon : durée du plan, tags de métadonnées, un tag IA, démarrage d'ONNX Runtime, pic mémoire (`docker stats`), CPU ; décision sur les tags IA et les bornes de workers
+## Phase 7 — Documentation `[parallel]`
 
-## Phase 8 — Documentation et CI `[parallel]`
-
-**Vérification** : YAML valide ; l'archive produite se charge avec `docker load`.
-
-- [ ] README (section NAS) et mise à jour de la spec (décisions D1 à D8)
-- [ ] Étape CI optionnelle de construction de l'image `linux/amd64` en artefact (`workflow_dispatch`)
+- [ ] `docs/nas-qnap.md` : procédure complète de la phase 0b avec captures (français), rappel de ne jamais exposer SMB sur internet.
+- [ ] `README.md` : section « NAS QNAP en réseau local », renvoi vers ce document ; notes Windows (lecteur réseau) et Linux (`mount.cifs`).
+- [ ] Spec : statut mis à jour.
 
 ## Risques
 
-1. **ONNX Runtime sans AVX sur le Celeron** : un `SIGILL` tuerait le serveur et ne se rattrape pas dans le processus → sonde d'initialisation dans un **processus enfant** au démarrage ; en cas d'échec, `status` annonce `ai:false` et les tags IA restent indisponibles, le reste fonctionne.
-2. **Droits QTS non appliqués aux montages Docker comme attendu** → les verrous sont indépendants (montage `:ro` et garde au démarrage échouent fermés) ; vérifié par la preuve négative de la phase 7.
-3. **Disque** : la copie double l'espace des photos classées → contrôle d'espace avant copie, estimation donnée à l'utilisateur.
-4. **Mac en veille en pleine copie** → annulation propre (sans fichier partiel), reprise par un nouveau plan.
-5. **Image malveillante dans l'entrée visant un décodeur** : atténué par le but même du plan (non-root, sans capacités, sans écriture sur l'entrée, rien d'autre de monté).
-6. **Jeton et empreinte à la première connexion** : l'utilisateur doit comparer l'empreinte aux journaux ; le jeton ne part jamais avant cette validation.
-7. **Container Station** : prise en charge de compose et rôle de `user:` non vérifiés → phase 7.
+- **Advanced Folder Permissions est global** → sauvegarde de la configuration avant, contrôle 5 de la phase 0b ; retour arrière possible en le désactivant (la doc QNAP signale des effets sur les ACL existantes).
+- **Seulement deux verrous sur l'entrée** (droits QTS, contrôle préalable) au lieu de trois avec Docker → contrôle exécuté à chaque lancement, échec fermé, compte sans autre droit, jamais d'ouverture en écriture hors de la destination dans le moteur.
+- **Performances SMB non mesurées** → dédoublonnage à portée, copie à 4 travailleurs, progression déjà affichée ; chiffres relevés à la phase 6.
+- **Mac en veille ou Wi-Fi coupé en cours de copie** → copie atomique, relance idempotente.
+- **Le compte `photosort` fuite** → il ne peut lire que l'entrée et écrire la bibliothèque ; pas d'application QTS, pas de SSH.
+- **Bibliothèque organisée autrement que par Photosort** → l'option de portée reste désactivée ; parcours complet avec progression.
 
 ## Hors périmètre
 
-Accès distant (second plan : Tailscale `tsnet` ou NetBird, ou myQNAPcloud Link avec MFA ; l'invariant ci-dessus s'y applique tel quel), case « classer automatiquement », lien physique, navigateur de dossiers distants, découverte automatique (mDNS), multi-utilisateurs, opérations détachées avec reprise par identifiant, déplacement ou suppression d'originaux.
+- Serveur Docker sur le NAS, classification automatique (case à cocher), accès à distance (Tailscale, NetBird, myQNAPcloud Link) : plans ultérieurs ; l'accès à distance ne devra jamais élargir les droits du compte.
+- Contrôle d'espace libre avant copie (quelques centaines de photos).
+- Déplacement ou suppression des originaux, navigateur de dossiers distants, montage automatique depuis l'app.
 
 ## Questions ouvertes
 
-1. Entrée et bibliothèque sont-elles **deux dossiers partagés distincts** (droits simples) ou deux sous-dossiers d'un même partage (ACL avancées de QTS) ?
-2. La bibliothèque classée existe-t-elle déjà, ou sera-t-elle créée vide ? Avec quel espace libre sur le disque ?
-3. Container Station est-il installé et l'accès SSH permis (pour relever `id photosort` ; sinon la phase 7 passe par l'interface) ?
-4. Ordre de grandeur du nombre de photos dans l'entrée ?
+1. Valides-tu la **voie sans installation sur le NAS** (Mac + SMB) pour la connexion locale, le serveur Docker étant gardé pour l'automatisation ?
+2. Acceptes-tu d'activer **Advanced Folder Permissions** (réglage global du NAS) ? À défaut, l'entrée ne serait protégée que par l'app (moins strict).
+3. La bibliothèque existante suit-elle déjà l'arborescence `AAAA/AAAA-MM` de Photosort ? (conditionne le dédoublonnage à portée)
+4. QuMagie indexe-t-il l'entrée, la bibliothèque, ou les deux ?

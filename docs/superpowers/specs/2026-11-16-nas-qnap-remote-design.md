@@ -1,9 +1,18 @@
 # Classement et tags sur un NAS QNAP : cadrage
 
-Date : 2026-11-16 · Branche : `feat/nas-qnap-remote` · Statut : **cadrage ; plan de la connexion locale proposé, en attente d'approbation** (aucun code écrit)
+Date : 2026-11-16 · Branche : `feat/nas-qnap-remote` · Statut : **cadrage ; plan de la connexion locale révisé (Mac + SMB), en attente d'approbation** (aucun code écrit)
 
 Plan de la connexion locale : `docs/superpowers/plans/2026-11-17-nas-local-connection-plan.md`.
-Il prime sur ce cadrage pour le transport, les droits et la copie (décisions D1 à D8).
+Plan du serveur Docker (différé) : `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`.
+
+> **Révision du 2026-11-17.** Container Station n'est pas installé, le SSH reste
+> désactivé, l'entrée ne contient que quelques centaines de photos et la
+> bibliothèque existante est massive. La v1 locale passe donc par l'approche **A'**
+> (l'app sur le Mac, le partage monté en SMB avec un compte dédié) : rien à
+> installer sur le NAS. L'approche **B** (serveur Docker) est différée ; elle
+> reste pertinente pour la classification automatique et l'accès à distance. Les
+> sections « Design (approche B) », « Docker et architecture » et « Performance »
+> ci-dessous décrivent B et restent valables pour ce plan différé.
 
 ## Objectif
 
@@ -18,30 +27,33 @@ Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
 
 | # | Sujet | Décision |
 | --- | --- | --- |
-| F1 | NAS ✔ | **QNAP TS-251D** : Celeron J4005/J4025, **2 cœurs / 2 threads**, x86_64, 2 ou 4 Go de RAM (8 Go maximum). Container Station (Docker) disponible |
-| F2 | Stockage ✔ | Les photos sont dans **un dossier d'un disque du NAS** : même fonctionnement qu'en local, mais sur le disque du NAS. Entrée et bibliothèque sur le **même volume** |
+| F1 | NAS ✔ | **QNAP TS-251D** : Celeron J4005/J4025, **2 cœurs / 2 threads**, x86_64, 2 ou 4 Go de RAM (8 Go maximum). Container Station (Docker) disponible mais **non installé** ✔ ; **SSH désactivé** ✔ (surface d'attaque) |
+| F2 | Stockage ✔ | Les photos sont sur un disque du NAS, dans **un seul partage à deux sous-dossiers** (entrée en vrac et bibliothèque classée) ✔. La bibliothèque **existe déjà et est massive** ✔ |
 | F3 | Déclenchement ✔ | **Manuel depuis l'app** d'abord ; une case « classer automatiquement » viendra ensuite |
 | F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite ; comparatif myQNAPcloud Link, Tailscale et NetBird plus bas, recommandation Tailscale intégré au serveur (à confirmer) |
 | F5 | Tags existants ✔ | L'utilisateur utilise le **tagging de QNAP** (QuMagie). Les tags Photosort sont un complément, pas un remplacement |
 | F6 | Classement (révisé) | **Copie** de l'entrée vers la bibliothèque. Le lien physique est abandonné : avec `fs.protected_hardlinks=1`, un utilisateur ne peut lier que des fichiers qu'il possède ou sur lesquels il a lecture et écriture, ce qui contredit F8. « Déplacer » n'est pas proposé en v1 ; l'espace disque des photos classées s'ajoute (contrôle avant copie) |
-| F7 | Volume (inconnu) | Non communiqué ; la mesure de l'étape 0 le donnera |
-| F8 | Droits ✔ | **Moindre privilège** : utilisateur QTS dédié, **lecture seule** sur le dossier iPhone en vrac, **écriture seulement** sur la destination, aucun autre droit. Un logiciel d'accès (réseau local, Tailscale, NetBird) peut avoir des failles : ce que le conteneur peut toucher ne dépend jamais du mode d'accès |
+| F7 | Volume ✔ | **Quelques centaines de photos** dans l'entrée ; bibliothèque massive. Le coût à surveiller est le parcours de la bibliothèque (dédoublonnage), pas la copie |
+| F8 | Droits ✔ | **Moindre privilège** : utilisateur QTS dédié, **lecture seule** sur le dossier iPhone en vrac, **écriture seulement** sur la destination, aucun autre droit. Un logiciel d'accès (réseau local, Tailscale, NetBird) peut avoir des failles : ce que le compte dédié (et le conteneur, en voie B) peut toucher ne dépend jamais du mode d'accès |
 
 ## Approches étudiées
 
 | | Principe | Avantages | Limites |
 | --- | --- | --- | --- |
-| A | Le Mac traite, NAS monté en SMB | Aucun code, marche déjà | Tout transite par le réseau : lent en local, inutilisable à distance |
-| **B** | **Serveur Go en Docker sur le NAS** ; l'app Electron s'y connecte | Traitement à côté des données ; seuls miniatures et progression circulent ; local et distant | Code serveur à écrire ; CPU du NAS décisif pour l'IA |
+| A | Le Mac traite, NAS monté en SMB avec un compte dédié | Rien à installer sur le NAS, ni SSH ni Docker ; l'app lit déjà un dossier et écrit dans un autre ; tags IA rapides sur le Mac ; aucun secret dans l'app | Les données transitent par le réseau (quelques centaines de photos : sans importance) ; parcours de la bibliothèque massive à contenir ; inutilisable à distance sans VPN ; pas d'automatisation sans le Mac |
+| **B** | **Serveur Go en Docker sur le NAS** ; l'app Electron s'y connecte | Traitement à côté des données ; seuls miniatures et progression circulent ; local et distant ; automatisable | Exige Container Station (démon root) ; code serveur à écrire ; CPU du NAS décisif pour l'IA |
 | B' | Variante de B : binaire Go statique (sans CGO, sans IA) lancé par QTS | Pas de Docker nécessaire | Pas de tags IA sur le NAS ; sans objet ici, le TS-251D gère Docker |
 | C | Tâche planifiée sur le NAS, sans UI | Entièrement automatique | Pas de prévisualisation ni de contrôle |
 
-**Recommandation : B**, puis C comme mode de fonctionnement complémentaire.
+**Recommandation révisée : A' pour la v1 en réseau local** (A durci : compte dédié aux
+droits minimaux, contrôle préalable de la lecture seule, dédoublonnage à portée,
+copie atomique, noms système ignorés). **B reste la cible** pour la classification
+automatique (case « classer automatiquement ») et l'accès à distance ; C en découle.
 
-Raisons : le protocole du sidecar (une requête JSON, des événements portant l'`id`
-de la requête) se transpose tel quel sur une connexion TLS ; le moteur Go est réutilisé
-sans changement de logique ; une image Docker multi-architecture se construit
-dans la CI existante.
+Raisons de la révision : B exige Container Station et un démon root que
+l'utilisateur n'a pas, pour quelques centaines de photos ; le protocole du
+sidecar (une requête JSON, des événements portant l'`id` de la requête) se
+transpose néanmoins tel quel sur une connexion TLS le jour où B sera construit.
 
 ## Design (approche B)
 
@@ -130,32 +142,28 @@ mémoire et en CPU pour ne pas gêner QuMagie.
 
 ## Plan par étapes
 
-0. **Mesure (peu de code ; reprise à la phase 7 du plan, avec le serveur)** : compiler `photosort` pour Linux amd64 (en
-   conteneur `golang` ou via la CI), le lancer dans un conteneur Docker de test
-   sur le NAS, sur un échantillon de quelques centaines de photos copiées
-   ailleurs, en simulation (sans `--apply`) : durée du plan, du tag de
-   métadonnées et d'un tag IA ; vérifier qu'ONNX Runtime démarre sur le
-   Celeron. Cette étape fixe les bornes de parallélisme et dit si les tags IA
-   sont réalistes sur le NAS.
-1. Serveur Go en réseau local : jeton, TLS épinglé, chemins confinés aux deux
-   racines, copie, écoute via une interface `net.Listener` ; image Docker
-   `linux/amd64` et `docker-compose.yml` durci pour Container Station.
-2. Second backend dans l'app Electron : écran de connexion et mode NAS
-   (racines fixes, sans navigateur de dossiers distants).
+1. **Connexion locale, voie A'** (plan `2026-11-17-nas-local-connection-plan.md`) :
+   compte QTS dédié et Advanced Folder Permissions (phase 0b), noms système
+   ignorés, dédoublonnage à portée, copie atomique, contrôle préalable
+   `nasCheck`, mode NAS dans les préférences, recette sur le NAS, documentation.
+   Les tags (métadonnées et IA) et le semainier fonctionnent sans changement :
+   la bibliothèque est lue en SMB, le PDF est écrit en local.
+2. **Serveur Docker (voie B, différé)** (plan `…-nas-docker-server-plan-deferred.md`) :
+   serveur Go, jeton, TLS épinglé, racines fixes, image `linux/amd64` et
+   `docker-compose.yml` durci ; mesure sur le Celeron (durée du plan, tag de
+   métadonnées, ONNX Runtime). À reprendre pour l'automatisation et l'accès à
+   distance, si Container Station est installé.
+3. Case « classer automatiquement » : surveillance de l'entrée, fichiers
+   stables seulement, reprenable (nécessite un traitement sans le Mac, donc B).
+4. Accès à distance : voir ci-dessous. En voie A', le NAS doit être joignable
+   par SMB depuis un VPN ; **SMB n'est jamais exposé sur internet**. Avec B, le
+   serveur est écrit autour d'une interface `net.Listener` et l'étape ajoute
+   l'implémentation « overlay » retenue. Un **test de relais** myQNAPcloud Link
+   (conteneur HTTP minimal joint par `qlink.to/<id>` depuis le partage de
+   connexion du téléphone) reste possible en parallèle : seul ce test dit si le
+   relais accepte un service autre que les applis QTS.
 
-Le détail, les phases et leurs vérifications sont dans le plan de la connexion
-locale (voir en tête de document).
-3. Semainier distant (PDF rapatrié) et tags sur le NAS.
-4. Case « classer automatiquement » : surveillance de l'entrée, fichiers
-   stables seulement, reprenable.
-5. Accès à distance : voir ci-dessous. Le serveur est écrit dès l'étape 1 autour
-   d'une interface `net.Listener` ; l'étape 5 ajoute l'implémentation
-   « overlay » retenue. Un **test de relais** myQNAPcloud Link (conteneur HTTP
-   minimal joint par `qlink.to/<id>` depuis le partage de connexion du
-   téléphone) reste possible en parallèle : seul ce test dit si le relais
-   accepte un service autre que les applis QTS.
-
-## Accès à distance (étape 5)
+## Accès à distance (plan ultérieur)
 
 Objectif de l'utilisateur : **le moins de configuration possible sur le NAS** et
 la plus grande simplicité d'usage. Aucun accès distant n'existe aujourd'hui.
@@ -207,7 +215,7 @@ d'appairage suffise.
 4. **myQNAPcloud Link : option secondaire**, seulement si le test de relais
    réussit ; son URL publique est son principal défaut.
 
-Décision à confirmer par l'utilisateur avant l'étape 5. Points à vérifier à ce
+Décision à confirmer par l'utilisateur avant d'aborder l'accès à distance. Points à vérifier à ce
 moment-là : limites du plan gratuit Tailscale, expiration des clés (désactiver
 l'expiration du nœud NAS dans la console), taille de l'image Docker avec la
 bibliothèque choisie.
@@ -231,13 +239,18 @@ reconnaissance de visages nominative.
 
 ## Questions ouvertes
 
-1. Volume de photos approximatif (pour dimensionner les durées).
-2. L'étape 0 peut-elle se faire sur le NAS (accès SSH ou Container Station) ?
+1. ~~Volume de photos~~ : quelques centaines dans l'entrée (F7).
+2. ~~Étape 0 sur le NAS~~ : sans objet en voie A' (ni SSH ni Container Station).
 3. ~~Lien physique ou copie~~ : copie, imposée par la lecture seule de l'entrée (F6).
-4. Accès à distance (second plan) : Tailscale intégré au serveur (recommandé),
-   NetBird (open source), ou myQNAPcloud Link (URL publique, renforcée par le MFA
-   du compte QNAP, si le test de relais réussit). Le choix n'affecte pas les
-   droits du conteneur (F8).
-5. Entrée et bibliothèque : deux dossiers partagés distincts, ou deux sous-dossiers
-   d'un même partage ? La bibliothèque existe-t-elle déjà ? Espace libre ?
-6. Container Station installé, accès SSH permis ?
+4. Accès à distance (second plan) : en voie A', un VPN donnant accès au NAS
+   (SMB jamais exposé sur internet) ; en voie B, Tailscale intégré au serveur
+   (recommandé), NetBird (open source), ou myQNAPcloud Link (URL publique,
+   renforcée par le MFA du compte QNAP, si le test de relais réussit). Le choix
+   n'affecte pas les droits du compte dédié (F8).
+5. ~~Un ou deux partages~~ : un partage, deux sous-dossiers ; bibliothèque
+   existante et massive (F2). Ouvert : suit-elle l'arborescence `AAAA/AAAA-MM`
+   de Photosort (conditionne le dédoublonnage à portée) ?
+6. ~~Container Station, SSH~~ : ni l'un ni l'autre (F1).
+7. Advanced Folder Permissions (réglage global du NAS) : accepté pour séparer
+   les droits des deux sous-dossiers ? Sinon, l'entrée n'est protégée que par l'app.
+8. QuMagie indexe-t-il l'entrée, la bibliothèque, ou les deux ?
