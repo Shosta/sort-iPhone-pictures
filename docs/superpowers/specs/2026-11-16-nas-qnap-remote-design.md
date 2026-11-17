@@ -18,7 +18,7 @@ Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
 | F1 | NAS ✔ | **QNAP TS-251D** : Celeron J4005/J4025, **2 cœurs / 2 threads**, x86_64, 2 ou 4 Go de RAM (8 Go maximum). Container Station (Docker) disponible |
 | F2 | Stockage ✔ | Les photos sont dans **un dossier d'un disque du NAS** : même fonctionnement qu'en local, mais sur le disque du NAS. Entrée et bibliothèque sur le **même volume** |
 | F3 | Déclenchement ✔ | **Manuel depuis l'app** d'abord ; une case « classer automatiquement » viendra ensuite |
-| F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite, par VPN (voir plus bas) |
+| F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite : myQNAPcloud Link (compte QNAP) à tester en premier, Tailscale en repli (voir plus bas) |
 | F5 | Tags existants ✔ | L'utilisateur utilise le **tagging de QNAP** (QuMagie). Les tags Photosort sont un complément, pas un remplacement |
 | F6 | Classement (hypothèse) | **Lien physique (hardlink)** de l'entrée vers la bibliothèque : aucun espace disque en plus, l'entrée reste intacte. Repli sur une **copie** si le lien est impossible (volumes différents). « Déplacer » n'est pas proposé en v1 |
 | F7 | Volume (inconnu) | Non communiqué ; la mesure de l'étape 0 le donnera |
@@ -50,7 +50,7 @@ dans la CI existante.
   change (processus local ou WebSocket).
 - **Authentification** : jeton long généré au premier lancement, stocké côté
   Electron dans le trousseau du système (`safeStorage`). TLS obligatoire hors
-  réseau local ; certificat fourni par le VPN, le reverse proxy ou un certificat
+  réseau local ; certificat fourni par le relais ou le VPN, le reverse proxy ou un certificat
   auto-signé épinglé.
 - **Chemins** : le serveur n'accepte que des chemins sous les racines
   déclarées (entrée, bibliothèque) ; toute tentative de sortie (`..`, liens)
@@ -140,12 +140,20 @@ mémoire et en CPU pour ne pas gêner QuMagie.
 
 ## Accès à distance (étape 5)
 
-Aucun accès distant n'existe aujourd'hui. Recommandation : **Tailscale**
-(disponible comme application pour QTS) : aucun port à ouvrir sur la box, pas
-de certificat à gérer côté serveur, gratuit pour un usage personnel. Alternative
-intégrée à QNAP : **QVPN** (WireGuard ou OpenVPN), qui demande d'ouvrir un port
-sur la box. Dans les deux cas, le serveur n'est jamais exposé directement sur
-internet. La v1 n'en dépend pas : tout fonctionne d'abord en réseau local.
+Aucun accès distant n'existe aujourd'hui. Le serveur Photosort parle HTTPS et
+WebSocket avec un jeton : il fonctionne tel quel derrière n'importe quel mode
+d'accès. Options, de la plus simple à la plus contrôlée :
+
+| Option | Installation | Réserves |
+| --- | --- | --- |
+| **myQNAPcloud Link** (relais `qlink.to/<id>`, compte QNAP) | Appli déjà proposée par QTS, aucun port à ouvrir, rien sur le Mac | Pensé pour les applis web du NAS (QTS, File Station...). Le relais de notre service n'est **pas vérifié** : à tester à l'étape 5. Le relais est public : le jeton et TLS restent obligatoires |
+| **Tailscale** | Appli sur le NAS et sur le Mac, compte gratuit, aucun port à ouvrir | Un logiciel de plus à installer sur chaque appareil |
+| **QVPN** | Appli sur le NAS, port à ouvrir sur la box, client VPN sur le Mac | Inutilisable derrière un CGNAT |
+| DDNS myQNAPcloud (`id.myqnapcloud.com`) | Port à ouvrir sur la box | Service exposé directement sur internet : écarté |
+
+Recommandation : essayer d'abord **myQNAPcloud Link**, car il évite toute
+installation côté Mac. S'il ne relaie pas le service Photosort, repli sur
+**Tailscale**. La v1 n'en dépend pas : tout fonctionne d'abord en réseau local.
 
 ## Hors périmètre (YAGNI)
 
