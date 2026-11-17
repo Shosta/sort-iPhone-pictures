@@ -1,6 +1,9 @@
 # Classement et tags sur un NAS QNAP : cadrage
 
-Date : 2026-11-16 · Branche : `feat/nas-qnap-remote` · Statut : **cadrage, en attente de validation** (aucun code écrit)
+Date : 2026-11-16 · Branche : `feat/nas-qnap-remote` · Statut : **cadrage ; plan de la connexion locale proposé, en attente d'approbation** (aucun code écrit)
+
+Plan de la connexion locale : `docs/superpowers/plans/2026-11-17-nas-local-connection-plan.md`.
+Il prime sur ce cadrage pour le transport, les droits et la copie (décisions D1 à D8).
 
 ## Objectif
 
@@ -20,8 +23,9 @@ Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
 | F3 | Déclenchement ✔ | **Manuel depuis l'app** d'abord ; une case « classer automatiquement » viendra ensuite |
 | F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite ; comparatif myQNAPcloud Link, Tailscale et NetBird plus bas, recommandation Tailscale intégré au serveur (à confirmer) |
 | F5 | Tags existants ✔ | L'utilisateur utilise le **tagging de QNAP** (QuMagie). Les tags Photosort sont un complément, pas un remplacement |
-| F6 | Classement (hypothèse) | **Lien physique (hardlink)** de l'entrée vers la bibliothèque : aucun espace disque en plus, l'entrée reste intacte. Repli sur une **copie** si le lien est impossible (volumes différents). « Déplacer » n'est pas proposé en v1 |
+| F6 | Classement (révisé) | **Copie** de l'entrée vers la bibliothèque. Le lien physique est abandonné : avec `fs.protected_hardlinks=1`, un utilisateur ne peut lier que des fichiers qu'il possède ou sur lesquels il a lecture et écriture, ce qui contredit F8. « Déplacer » n'est pas proposé en v1 ; l'espace disque des photos classées s'ajoute (contrôle avant copie) |
 | F7 | Volume (inconnu) | Non communiqué ; la mesure de l'étape 0 le donnera |
+| F8 | Droits ✔ | **Moindre privilège** : utilisateur QTS dédié, **lecture seule** sur le dossier iPhone en vrac, **écriture seulement** sur la destination, aucun autre droit. Un logiciel d'accès (réseau local, Tailscale, NetBird) peut avoir des failles : ce que le conteneur peut toucher ne dépend jamais du mode d'accès |
 
 ## Approches étudiées
 
@@ -35,7 +39,7 @@ Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
 **Recommandation : B**, puis C comme mode de fonctionnement complémentaire.
 
 Raisons : le protocole du sidecar (une requête JSON, des événements portant l'`id`
-de la requête) se transpose tel quel sur WebSocket ; le moteur Go est réutilisé
+de la requête) se transpose tel quel sur une connexion TLS ; le moteur Go est réutilisé
 sans changement de logique ; une image Docker multi-architecture se construit
 dans la CI existante.
 
@@ -44,48 +48,51 @@ dans la CI existante.
 ### Composants
 
 - **`cmd/photosort-server`** (nouveau) : même moteur que `photosort-sidecar`, exposé
-  en HTTPS/WebSocket. Un seul service Go, dans une image Docker `linux/amd64`.
-- **Transport** : l'app Electron reçoit un second « backend » à côté du sidecar
-  local (`sidecar.ts`) : mêmes requêtes, mêmes événements, seul le transport
-  change (processus local ou WebSocket).
-- **Authentification** : jeton long généré au premier lancement, stocké côté
-  Electron dans le trousseau du système (`safeStorage`). TLS obligatoire hors
-  réseau privé chiffré ; en réseau local, certificat auto-signé épinglé.
+  en TLS avec le protocole JSON ligne par ligne du sidecar. Un seul service Go,
+  dans une image Docker `linux/amd64`.
+- **Transport** : l'app Electron reçoit un second « backend » dans son processus
+  principal (`node:tls`) : mêmes requêtes, mêmes événements, seul le transport
+  change (processus local ou connexion TLS). Pas de WebSocket.
+- **Authentification** : jeton de 256 bits généré au premier lancement (le serveur
+  n'en garde que l'empreinte), stocké côté Electron dans le trousseau du système
+  (`safeStorage`). TLS obligatoire ; en réseau local, certificat auto-signé
+  **épinglé par empreinte**, vérifiée avant l'envoi du jeton.
   Le serveur écoute via une interface `net.Listener` interchangeable (réseau
   local, puis réseau privé Tailscale ou NetBird, voir « Accès à distance »).
-- **Chemins** : le serveur n'accepte que des chemins sous les racines
-  déclarées (entrée, bibliothèque) ; toute tentative de sortie (`..`, liens)
-  est refusée.
+- **Chemins** : deux racines fixes dans le conteneur, `/inbox` (lecture seule) et
+  `/library` (écriture) ; le serveur refuse tout chemin hors de ces racines
+  (`..`, liens). Cette validation double les droits du système, elle ne les
+  remplace pas.
 - **Fichiers volumineux** : seules les miniatures (JPEG réduits) et le PDF du
   semainier sont rapatriés ; les originaux ne quittent pas le NAS.
 
 ### Flux de données
 
-1. L'app se connecte (adresse, jeton), choisit un dossier d'entrée et une
-   bibliothèque, tous deux sur le NAS.
+1. L'app se connecte (adresse, jeton) ; l'entrée et la bibliothèque sont les deux
+   racines fixes du serveur.
 2. `plan` : le serveur lit les EXIF sur place et diffuse la progression et les
    brouillons (déjà le comportement actuel).
-3. `copy` : lien physique local au NAS (repli : copie), sans trafic réseau,
-   reprenable. Un lien physique échoue entre deux montages Docker, même d'un
-   même volume : le conteneur monte donc **un seul dossier parent** (par exemple
-   `/photos`) qui contient l'entrée et la bibliothèque.
+3. `copy` : copie locale au NAS, sans trafic réseau. Entrée (`:ro`) et
+   bibliothèque sont deux montages distincts. En cas de coupure, l'opération est
+   annulée sans fichier partiel ; relancer le plan reprend le travail.
 4. `tag` : tags `.xmp` écrits à côté des photos, comme aujourd'hui.
 5. Semainier : le PDF est généré sur le NAS puis téléchargé dans le dossier
    choisi en préférences.
 
 ### Gestion des erreurs et sécurité
 
-- Connexion perdue : les opérations longues continuent sur le serveur ; l'app
-  se reconnecte et reprend le suivi par identifiant d'opération.
+- Connexion perdue : les opérations en cours sont annulées (v1) ; l'app se
+  reconnecte et relance le plan. Opérations détachées et reprise par identifiant :
+  plan « accès distant ».
 - Fichiers en cours de synchro : ignorés tant que leur taille ou leur date de
   modification change, ou que leur âge est inférieur à un seuil (60 s).
 - Aucune suppression ni modification d'original. Écritures limitées à la
-  bibliothèque et aux sidecars `.xmp` ; l'entrée n'est jamais écrite, ce que le
-  serveur impose lui-même puisque le montage unique est en lecture-écriture.
-- Un lien physique partage le contenu de l'original : modifier une photo de la
-  bibliothèque sur place modifierait aussi l'entrée. Photosort n'écrit jamais
-  dans les photos ; la copie complète reste disponible en option.
-- Compte système du conteneur sans droits en dehors du dossier monté.
+  bibliothèque (copies, sidecars `.xmp`) et au dossier d'état du conteneur.
+- **L'entrée n'est jamais écrite**, par trois verrous indépendants : droits QTS de
+  l'utilisateur dédié (F8), montage Docker `:ro`, et contrôle au démarrage du
+  serveur, qui refuse de démarrer si l'entrée est inscriptible.
+- Conteneur non-root, sans capacités, racine en lecture seule, sans `privileged`
+  ni socket Docker, avec le seul accès aux deux dossiers et à son dossier d'état.
 
 ### Docker et architecture
 
@@ -101,7 +108,7 @@ mémoire et en CPU pour ne pas gêner QuMagie.
   2 cœurs sera nettement plus lent (ordre de grandeur : 10 à 30 fois, soit
   1 à 3 s par photo, à confirmer) : plusieurs heures pour des dizaines de
   milliers de photos.
-- Le classement (EXIF, doublons, liens physiques) et les tags de métadonnées
+- Le classement (EXIF, doublons, copies) et les tags de métadonnées
   restent légers : **activés par défaut sur le NAS**. Les tags IA
   (scènes, moment, personnes) sont **optionnels**, pensés pour tourner en
   tâche de fond. QuMagie fournit déjà sa propre reconnaissance.
@@ -112,8 +119,9 @@ mémoire et en CPU pour ne pas gêner QuMagie.
 
 ### Coexistence avec QuMagie
 
-- QuMagie ne doit indexer que la **bibliothèque classée**, pas l'entrée : avec
-  des liens physiques, indexer les deux créerait des doublons dans ses albums.
+- QuMagie ne doit indexer que la **bibliothèque classée**, pas l'entrée : les
+  photos y existeraient deux fois (l'original et sa copie), d'où des doublons
+  dans ses albums.
 - Les `.xmp` de Photosort sont écrits à côté des photos ; QuMagie les ignore,
   ses tags restent indépendants. Un affichage des tags Photosort dans l'app
   sert à la recherche et au semainier.
@@ -122,19 +130,21 @@ mémoire et en CPU pour ne pas gêner QuMagie.
 
 ## Plan par étapes
 
-0. **Mesure (peu de code)** : compiler `photosort` pour Linux amd64 (en
+0. **Mesure (peu de code ; reprise à la phase 7 du plan, avec le serveur)** : compiler `photosort` pour Linux amd64 (en
    conteneur `golang` ou via la CI), le lancer dans un conteneur Docker de test
    sur le NAS, sur un échantillon de quelques centaines de photos copiées
    ailleurs, en simulation (sans `--apply`) : durée du plan, du tag de
    métadonnées et d'un tag IA ; vérifier qu'ONNX Runtime démarre sur le
    Celeron. Cette étape fixe les bornes de parallélisme et dit si les tags IA
    sont réalistes sur le NAS.
-1. Serveur Go en réseau local : jeton, TLS, chemins confinés au dossier monté,
-   mode lien physique avec repli copie, écoute via une interface
-   `net.Listener` ; image Docker `linux/amd64` et `docker-compose.yml` prêt
-   pour Container Station.
-2. Second backend dans l'app Electron : écran de connexion, navigateur de
-   dossiers distants, choix entrée et bibliothèque.
+1. Serveur Go en réseau local : jeton, TLS épinglé, chemins confinés aux deux
+   racines, copie, écoute via une interface `net.Listener` ; image Docker
+   `linux/amd64` et `docker-compose.yml` durci pour Container Station.
+2. Second backend dans l'app Electron : écran de connexion et mode NAS
+   (racines fixes, sans navigateur de dossiers distants).
+
+Le détail, les phases et leurs vérifications sont dans le plan de la connexion
+locale (voir en tête de document).
 3. Semainier distant (PDF rapatrié) et tags sur le NAS.
 4. Case « classer automatiquement » : surveillance de l'entrée, fichiers
    stables seulement, reprenable.
@@ -202,6 +212,17 @@ moment-là : limites du plan gratuit Tailscale, expiration des clés (désactive
 l'expiration du nœud NAS dans la console), taille de l'image Docker avec la
 bibliothèque choisie.
 
+### Sécurité de l'accès distant (remarques de l'utilisateur)
+
+- **MFA** : l'URL publique de myQNAPcloud Link est un défaut, mais l'authentification
+  multifacteur du compte QNAP renforce l'accès ; à peser contre l'absence
+  d'exposition d'un réseau privé.
+- **Failles** : Tailscale, NetBird (comme tout logiciel d'accès) peuvent en avoir.
+  Invariant de conception : la sécurité du NAS **ne dépend pas** du mode d'accès.
+  Un compte QTS dédié (lecture seule sur l'entrée, écriture seulement sur la
+  bibliothèque, rien d'autre) et un conteneur durci (F8) limitent les dégâts si
+  le serveur ou l'overlay est compromis. L'overlay n'ajoute aucun droit.
+
 ## Hors périmètre (YAGNI)
 
 Exposition directe sur internet, multi-utilisateurs, synchronisation avec les
@@ -212,7 +233,11 @@ reconnaissance de visages nominative.
 
 1. Volume de photos approximatif (pour dimensionner les durées).
 2. L'étape 0 peut-elle se faire sur le NAS (accès SSH ou Container Station) ?
-3. Le lien physique convient-il, ou faut-il une copie complète (QuMagie et
-   sauvegardes de la bibliothèque peuvent mieux supporter une copie réelle) ?
-4. Accès à distance : valides-tu Tailscale intégré au serveur (recommandé),
-   ou préfères-tu NetBird (open source) ?
+3. ~~Lien physique ou copie~~ : copie, imposée par la lecture seule de l'entrée (F6).
+4. Accès à distance (second plan) : Tailscale intégré au serveur (recommandé),
+   NetBird (open source), ou myQNAPcloud Link (URL publique, renforcée par le MFA
+   du compte QNAP, si le test de relais réussit). Le choix n'affecte pas les
+   droits du conteneur (F8).
+5. Entrée et bibliothèque : deux dossiers partagés distincts, ou deux sous-dossiers
+   d'un même partage ? La bibliothèque existe-t-elle déjà ? Espace libre ?
+6. Container Station installé, accès SSH permis ?
