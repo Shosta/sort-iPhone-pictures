@@ -75,11 +75,17 @@ func CardSize(place Place, scale float64) (w, h float64) {
 // card next to each pin, without overlaps. When they do not all fit, the cards
 // shrink; the places that still do not fit stay bare pins.
 func Compose(places []Place, width, height float64) Layout {
+	return ComposeWith(places, nil, width, height)
+}
+
+// ComposeWith is Compose with extra positions that must stay on the page
+// without having a card.
+func ComposeWith(places []Place, extra []mapbase.LatLon, width, height float64) Layout {
 	points := make([]mapbase.LatLon, len(places))
 	for i, place := range places {
 		points[i] = place.Pos
 	}
-	view := mapbase.Fit(points, width, height, mapbase.FitOptions{Padding: pagePad})
+	view := mapbase.Fit(append(append([]mapbase.LatLon(nil), points...), extra...), width, height, mapbase.FitOptions{Padding: pagePad})
 	positions := make([]mapbase.XY, len(places))
 	for i, point := range points {
 		positions[i] = view.XY(point)
@@ -155,3 +161,11 @@ func free(card Rect, positions []mapbase.XY, obstacles []Rect) bool {
 	}
 	return true
 }
+
+// Card geometry at scale 1, for other pages drawing the cards of a Layout.
+const (
+	ThumbSize = thumbSize
+	CardPad   = cardPad
+	LabelH    = labelH
+	PinRadius = pinRadius
+)

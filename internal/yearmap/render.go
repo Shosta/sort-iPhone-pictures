@@ -47,10 +47,14 @@ type Result struct {
 	Fallback bool
 }
 
-type thumb struct {
+// Thumb is a reduced photo, or the error that prevented it.
+type Thumb struct {
 	data []byte
 	err  error
 }
+
+// JPEG returns the reduced photo, false when it could not be read.
+func (t Thumb) JPEG() ([]byte, bool) { return t.data, t.err == nil }
 
 // Render writes the one-page PDF of job.
 func Render(ctx context.Context, job Job) (Result, error) {
@@ -71,7 +75,7 @@ func Render(ctx context.Context, job Job) (Result, error) {
 
 func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error) {
 	layout := job.Layout
-	thumbs, failed, err := loadThumbs(ctx, layout, job.Progress)
+	thumbs, failed, err := LoadThumbs(ctx, layout, job.Progress)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,12 +99,12 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	pdf.SetLineWidth(0.15)
 	pdf.SetLineJoinStyle("round")
 	for _, polygon := range base.Land(layout.View) {
-		trace(pdf, polygon)
+		Trace(pdf, polygon)
 		pdf.DrawPath("FD*")
 	}
 	fill(pdf, waterColour)
 	for _, polygon := range base.Lakes(layout.View) {
-		trace(pdf, polygon)
+		Trace(pdf, polygon)
 		pdf.DrawPath("FD*")
 	}
 	pdf.ClipEnd()
@@ -111,7 +115,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	pdf.SetLineWidth(0.3)
 	for _, pin := range layout.Pins {
 		if pin.Card != nil {
-			to := nearest(pin.Pos, *pin.Card)
+			to := Nearest(pin.Pos, *pin.Card)
 			pdf.Line(pin.Pos.X, pin.Pos.Y, to.X, to.Y)
 		}
 	}
@@ -131,8 +135,8 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 
 func fill(pdf *fpdf.Fpdf, c colour) { pdf.SetFillColor(c.r, c.g, c.b) }
 
-// trace builds the path of the rings of a polygon; the caller paints it.
-func trace(pdf *fpdf.Fpdf, rings [][]mapbase.XY) {
+// Trace builds the path of the rings of a polygon; the caller paints it.
+func Trace(pdf *fpdf.Fpdf, rings [][]mapbase.XY) {
 	for _, ring := range rings {
 		for i, p := range ring {
 			if i == 0 {
@@ -153,10 +157,10 @@ func banner(pdf *fpdf.Fpdf, text func(string) string, title, subtitle string) {
 	pdf.SetAlpha(1, "Normal")
 	pdf.SetTextColor(inkColour.r, inkColour.g, inkColour.b)
 	pdf.SetFont("Helvetica", "B", 20)
-	pdf.Text(box.X+4, box.Y+9.5, fitText(pdf, text(latin(title)), box.W-8))
+	pdf.Text(box.X+4, box.Y+9.5, FitText(pdf, text(Latin(title)), box.W-8))
 	pdf.SetTextColor(mutedColour.r, mutedColour.g, mutedColour.b)
 	pdf.SetFont("Helvetica", "", 8.5)
-	pdf.Text(box.X+4, box.Y+15, fitText(pdf, text(latin(subtitle)), box.W-8))
+	pdf.Text(box.X+4, box.Y+15, FitText(pdf, text(Latin(subtitle)), box.W-8))
 }
 
 // marker draws a pin: a red disc with a white ring and centre.
@@ -170,7 +174,7 @@ func marker(pdf *fpdf.Fpdf, p mapbase.XY) {
 }
 
 // card draws the photos and the name of a place.
-func card(pdf *fpdf.Fpdf, text func(string) string, scale float64, pin Pin, thumbs map[string]thumb, index int) {
+func card(pdf *fpdf.Fpdf, text func(string) string, scale float64, pin Pin, thumbs map[string]Thumb, index int) {
 	box := *pin.Card
 	pdf.SetAlpha(0.2, "Normal")
 	pdf.SetFillColor(0, 0, 0)
@@ -198,7 +202,7 @@ func card(pdf *fpdf.Fpdf, text func(string) string, scale float64, pin Pin, thum
 	}
 	pdf.SetFont("Helvetica", "B", math.Max(4, 6.5*scale))
 	pdf.SetTextColor(inkColour.r, inkColour.g, inkColour.b)
-	name := fitText(pdf, text(latin(pin.Place.Name)), box.W-2*gap)
+	name := FitText(pdf, text(Latin(pin.Place.Name)), box.W-2*gap)
 	pdf.Text(box.X+(box.W-pdf.GetStringWidth(name))/2, box.Y+gap+side+labelH*scale*0.72, name)
 
 	if more := pin.Place.Count - len(shown); more > 0 {
@@ -215,14 +219,14 @@ func card(pdf *fpdf.Fpdf, text func(string) string, scale float64, pin Pin, thum
 	}
 }
 
-// nearest is the point of box closest to p.
-func nearest(p mapbase.XY, box Rect) mapbase.XY {
+// Nearest is the point of box closest to p.
+func Nearest(p mapbase.XY, box Rect) mapbase.XY {
 	return mapbase.XY{X: math.Max(box.X, math.Min(p.X, box.X+box.W)), Y: math.Max(box.Y, math.Min(p.Y, box.Y+box.H))}
 }
 
-// fitText shortens s with an ellipsis until it is at most width mm wide in the
+// FitText shortens s with an ellipsis until it is at most width mm wide in the
 // current font.
-func fitText(pdf *fpdf.Fpdf, s string, width float64) string {
+func FitText(pdf *fpdf.Fpdf, s string, width float64) string {
 	if pdf.GetStringWidth(s) <= width {
 		return s
 	}
@@ -247,10 +251,10 @@ var folded = strings.NewReplacer(
 	"ň", "n", "ů", "u", "ā", "a", "ē", "e", "ī", "i", "ō", "o", "ū", "u",
 )
 
-func latin(s string) string { return folded.Replace(s) }
+func Latin(s string) string { return folded.Replace(s) }
 
-// loadThumbs reduces the photos of the placed cards, in parallel.
-func loadThumbs(ctx context.Context, layout Layout, progress func(done, total int)) (map[string]thumb, []scrapbook.Failure, error) {
+// LoadThumbs reduces the photos of the placed cards, in parallel.
+func LoadThumbs(ctx context.Context, layout Layout, progress func(done, total int)) (map[string]Thumb, []scrapbook.Failure, error) {
 	var paths []string
 	seen := map[string]bool{}
 	for _, pin := range layout.Pins {
@@ -264,7 +268,7 @@ func loadThumbs(ctx context.Context, layout Layout, progress func(done, total in
 			}
 		}
 	}
-	results := make([]thumb, len(paths))
+	results := make([]Thumb, len(paths))
 	size := thumbSize * layout.Scale
 	var wg sync.WaitGroup
 	var lock sync.Mutex
@@ -282,7 +286,7 @@ func loadThumbs(ctx context.Context, layout Layout, progress func(done, total in
 					return
 				}
 				data, _, _, err := scrapbook.JPEG(paths[i], size, true)
-				results[i] = thumb{data: data, err: err}
+				results[i] = Thumb{data: data, err: err}
 				lock.Lock()
 				done++
 				if progress != nil {
@@ -296,7 +300,7 @@ func loadThumbs(ctx context.Context, layout Layout, progress func(done, total in
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	thumbs := make(map[string]thumb, len(paths))
+	thumbs := make(map[string]Thumb, len(paths))
 	var failed []scrapbook.Failure
 	for i, path := range paths {
 		thumbs[path] = results[i]

@@ -136,3 +136,44 @@ export interface YearScan {
   total: number
   located: number
 }
+
+export interface TravelStep {
+  name: string
+  lat: number
+  lon: number
+  count: number
+  first: string
+  last: string
+  photo: string
+  /** Key steps are pictured with a photo and their name. */
+  key: boolean
+}
+
+export interface TravelTrip {
+  from: string
+  to: string
+  photos: number
+  distanceKm: number
+  steps: TravelStep[]
+}
+
+export interface TravelStop {
+  x: number
+  y: number
+  n: number
+  name: string
+  dates: string
+  photo: string
+  card: { x: number; y: number; w: number; h: number } | null
+}
+
+/** The route drawn for a page, in millimetres. */
+export interface TravelLayout {
+  pageWidth: number
+  pageHeight: number
+  land: string
+  lakes: string
+  route: string
+  stops: TravelStop[]
+  distanceKm: number
+}

@@ -5,6 +5,7 @@ import { DropZone } from './components/DropZone'
 import { Flights, type Flight } from './components/Flights'
 import { Preferences } from './components/Preferences'
 import { ScrapbookPanel } from './components/ScrapbookPanel'
+import { TravelMapPanel } from './components/TravelMapPanel'
 import { YearMapPanel } from './components/YearMapPanel'
 import { TagsPanel } from './components/TagsPanel'
 import { Thumb } from './components/Thumb'
@@ -147,6 +148,7 @@ export function App(): JSX.Element {
   const [showTags, setShowTags] = useState(false)
   const [showScrapbook, setShowScrapbook] = useState(false)
   const [showYearMap, setShowYearMap] = useState(false)
+  const [showTravelMap, setShowTravelMap] = useState(false)
   const [tagScope, setTagScope] = useState<string[] | null>(null)
   const accent = themeById(prefs.theme).vars.accent
   useEffect(() => applyTheme(prefs.theme), [prefs.theme])
@@ -514,6 +516,9 @@ export function App(): JSX.Element {
           <button className="gear" title={t('ymap')} aria-label={t('ymap')} onClick={() => setShowYearMap(true)}>
             🗺️
           </button>
+          <button className="gear" title={t('travel')} aria-label={t('travel')} onClick={() => setShowTravelMap(true)}>
+            🧭
+          </button>
           <button
             className="gear"
             title={t('tags')}
@@ -740,6 +745,7 @@ export function App(): JSX.Element {
       </AnimatePresence>
 
       <AnimatePresence>
+        {showTravelMap && <TravelMapPanel prefs={prefs} onChange={updatePrefs} onClose={() => setShowTravelMap(false)} />}
         {showYearMap && <YearMapPanel prefs={prefs} onChange={updatePrefs} onClose={() => setShowYearMap(false)} />}
         {showScrapbook && <ScrapbookPanel prefs={prefs} onChange={updatePrefs} onClose={() => setShowScrapbook(false)} />}
       </AnimatePresence>

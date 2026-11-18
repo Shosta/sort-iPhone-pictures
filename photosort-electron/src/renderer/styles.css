@@ -244,3 +244,6 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 /* Big libraries: the permanent decoration rests while the engine works. */
 .heavy .aurora span, .heavy .shimmer { animation-play-state: paused; }
 .heavy .thumb img { animation: none; }
+.travel-trips { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.travel-trip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+.travel-trip.on { outline: 2px solid var(--accent); }

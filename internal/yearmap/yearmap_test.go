@@ -40,13 +40,13 @@ func TestGroupByPlace(t *testing.T) {
 	// Paris, Texas is named "Paris" too: the distance keeps it apart.
 	resolver := fakeResolver{{49, 2}: "Paris", {56, 12}: "Roskilde", {34, -96}: "Paris"}
 	photos := []Photo{
-		{"p3.jpg", day(3), mapbase.LatLon{Lat: 48.9, Lon: 2.3}},
-		{"p1.jpg", day(1), mapbase.LatLon{Lat: 48.8, Lon: 2.4}},
-		{"p2.jpg", day(2), mapbase.LatLon{Lat: 48.85, Lon: 2.35}},
-		{"r1.jpg", day(5), mapbase.LatLon{Lat: 55.64, Lon: 12.08}},
-		{"tx.jpg", day(6), mapbase.LatLon{Lat: 33.66, Lon: -95.55}},
-		{"sea1.jpg", day(7), mapbase.LatLon{Lat: 30.51, Lon: -40.52}},
-		{"sea2.jpg", day(8), mapbase.LatLon{Lat: 30.55, Lon: -40.55}},
+		{Path: "p3.jpg", Day: day(3), Pos: mapbase.LatLon{Lat: 48.9, Lon: 2.3}},
+		{Path: "p1.jpg", Day: day(1), Pos: mapbase.LatLon{Lat: 48.8, Lon: 2.4}},
+		{Path: "p2.jpg", Day: day(2), Pos: mapbase.LatLon{Lat: 48.85, Lon: 2.35}},
+		{Path: "r1.jpg", Day: day(5), Pos: mapbase.LatLon{Lat: 55.64, Lon: 12.08}},
+		{Path: "tx.jpg", Day: day(6), Pos: mapbase.LatLon{Lat: 33.66, Lon: -95.55}},
+		{Path: "sea1.jpg", Day: day(7), Pos: mapbase.LatLon{Lat: 30.51, Lon: -40.52}},
+		{Path: "sea2.jpg", Day: day(8), Pos: mapbase.LatLon{Lat: 30.55, Lon: -40.55}},
 	}
 	places := Group(photos, resolver)
 	if len(places) != 4 {

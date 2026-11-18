@@ -16,6 +16,10 @@
 //	{"id":"11","op":"yearMapScan","root":"...","year":2026}
 //	{"id":"12","op":"yearMapLayout","places":[...],"page":"a4-landscape"}
 //	{"id":"13","op":"yearMapPdf","places":[...],"page":"a4-landscape","name":"Carte 2026.pdf","title":"2026","subtitle":"...","outDir":"...","fallbackDir":"..."}
+//	{"id":"14","op":"travelTrips","root":"...","year":2026}
+//	{"id":"15","op":"travelScan","root":"...","from":"2026-07-01","to":"2026-07-14"}
+//	{"id":"16","op":"travelLayout","steps":[...],"page":"a4-portrait","lang":"fr"}
+//	{"id":"17","op":"travelPdf","steps":[...],"page":"a4-portrait","lang":"fr","name":"Voyage.pdf","title":"...","subtitle":"...","outDir":"...","fallbackDir":"..."}
 //
 // Events:
 //   - plan: status (stage exif|hash|similar with done/total), draft (batches of
@@ -40,6 +44,15 @@
 //     and pageHeight in mm, land and lakes (SVG paths in mm), pins (x, y, name,
 //     count, shown, card box in mm or null). yearMapPdf writes that page: progress
 //     per photo, then done (path, places, failed, fallback).
+//   - travelTrips: status while GPS positions are read (year 0 reads the whole
+//     library), then trips (from, to, photos, distanceKm, steps), most recent
+//     first: runs of days spent more than 100 km from the usual place. travelScan
+//     answers with trip, the route of the photos between from and to. A step is
+//     (name, lat, lon, count, first, last, photo, key). travelLayout takes steps
+//     back and answers with layout: pageWidth, pageHeight, land, lakes and route
+//     (SVG paths in mm), stops (x, y, n, name, dates, photo, card box or null)
+//     and distanceKm. travelPdf writes that page: progress per photo, then done
+//     (path, steps, failed, fallback). lang (fr, en, da) sets the date format.
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -67,45 +80,47 @@ import (
 )
 
 type request struct {
-	ID           string      `json:"id"`
-	Op           string      `json:"op"`
-	Sources      []string    `json:"sources"`
-	Destination  string      `json:"destination"`
-	ByLocation   bool        `json:"byLocation"`
-	Landmarks    bool        `json:"landmarks"`
-	Dedupe       bool        `json:"dedupe"`
-	Similar      bool        `json:"similar"`
-	DateFallback bool        `json:"dateFallback"`
-	Screenshots  bool        `json:"screenshots"`
-	Blurry       bool        `json:"blurry"`
-	TagScenes    bool        `json:"tagScenes"`
-	TagMoment    bool        `json:"tagMoment"`
-	TagPeople    bool        `json:"tagPeople"`
-	TagMeta      bool        `json:"tagMeta"`
-	AIDir        string      `json:"aiDir"`
-	Folder       string      `json:"folder"`
-	Files        []string    `json:"files"`
-	PlanID       string      `json:"planId"`
-	Path         string      `json:"path"`
-	Size         int         `json:"size"`
-	Target       string      `json:"target"`
-	Root         string      `json:"root"`
-	From         string      `json:"from"`
-	To           string      `json:"to"`
-	Page         string      `json:"page"`
-	LongSide     float64     `json:"longSide"`
-	Gutter       float64     `json:"gutter"`
-	Bleed        float64     `json:"bleed"`
-	Frame        string      `json:"frame"`
-	Layout       string      `json:"layout"`
-	Background   string      `json:"background"`
-	OutDir       string      `json:"outDir"`
-	FallbackDir  string      `json:"fallbackDir"`
-	Name         string      `json:"name"`
-	Year         int         `json:"year"`
-	Title        string      `json:"title"`
-	Subtitle     string      `json:"subtitle"`
-	Places       []yearPlace `json:"places"`
+	ID           string       `json:"id"`
+	Op           string       `json:"op"`
+	Sources      []string     `json:"sources"`
+	Destination  string       `json:"destination"`
+	ByLocation   bool         `json:"byLocation"`
+	Landmarks    bool         `json:"landmarks"`
+	Dedupe       bool         `json:"dedupe"`
+	Similar      bool         `json:"similar"`
+	DateFallback bool         `json:"dateFallback"`
+	Screenshots  bool         `json:"screenshots"`
+	Blurry       bool         `json:"blurry"`
+	TagScenes    bool         `json:"tagScenes"`
+	TagMoment    bool         `json:"tagMoment"`
+	TagPeople    bool         `json:"tagPeople"`
+	TagMeta      bool         `json:"tagMeta"`
+	AIDir        string       `json:"aiDir"`
+	Folder       string       `json:"folder"`
+	Files        []string     `json:"files"`
+	PlanID       string       `json:"planId"`
+	Path         string       `json:"path"`
+	Size         int          `json:"size"`
+	Target       string       `json:"target"`
+	Root         string       `json:"root"`
+	From         string       `json:"from"`
+	To           string       `json:"to"`
+	Page         string       `json:"page"`
+	LongSide     float64      `json:"longSide"`
+	Gutter       float64      `json:"gutter"`
+	Bleed        float64      `json:"bleed"`
+	Frame        string       `json:"frame"`
+	Layout       string       `json:"layout"`
+	Background   string       `json:"background"`
+	OutDir       string       `json:"outDir"`
+	FallbackDir  string       `json:"fallbackDir"`
+	Name         string       `json:"name"`
+	Year         int          `json:"year"`
+	Title        string       `json:"title"`
+	Subtitle     string       `json:"subtitle"`
+	Places       []yearPlace  `json:"places"`
+	Steps        []travelStep `json:"steps"`
+	Lang         string       `json:"lang"`
 }
 
 type event map[string]any
@@ -252,6 +267,14 @@ func (s *server) run(ctx context.Context, req request) error {
 		return s.yearMapLayout(req)
 	case "yearMapPdf":
 		return s.yearMapPdf(ctx, req)
+	case "travelTrips":
+		return s.travelTrips(ctx, req)
+	case "travelScan":
+		return s.travelScan(ctx, req)
+	case "travelLayout":
+		return s.travelLayout(req)
+	case "travelPdf":
+		return s.travelPdf(ctx, req)
 	default:
 		return fmt.Errorf("unknown op %q", req.Op)
 	}

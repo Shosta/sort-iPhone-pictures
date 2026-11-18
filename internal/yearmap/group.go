@@ -35,7 +35,9 @@ const (
 type Photo struct {
 	Path string
 	Day  time.Time
-	Pos  mapbase.LatLon
+	// At is the time the photo was taken; the zero time when unknown.
+	At  time.Time
+	Pos mapbase.LatLon
 }
 
 // Place is a group of photos taken at the same place.
@@ -86,10 +88,21 @@ type Summary struct {
 // place. progress (optional) is called after each photo read, from one
 // goroutine at a time.
 func Collect(ctx context.Context, root string, year int, progress func(done, total int)) (Summary, error) {
-	from := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
-	found, err := scrapbook.Scan(ctx, root, from, time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC))
+	photos, total, err := Locate(ctx, root, time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC), time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC), progress)
 	if err != nil {
 		return Summary{}, err
+	}
+	return Summary{Places: Group(photos, geo.Default()), Total: total, Located: len(photos)}, nil
+}
+
+// Locate reads the photos taken from one day to another (inclusive) under root
+// and returns those with a GPS position, in chronological order, and the number
+// of photos looked at. progress (optional) is called after each photo read,
+// from one goroutine at a time.
+func Locate(ctx context.Context, root string, from, to time.Time, progress func(done, total int)) ([]Photo, int, error) {
+	found, err := scrapbook.Scan(ctx, root, from, to)
+	if err != nil {
+		return nil, 0, err
 	}
 	located := make([]*Photo, len(found))
 	var next, done int
@@ -108,7 +121,7 @@ func Collect(ctx context.Context, root string, year int, progress func(done, tot
 					return
 				}
 				if metadata, err := sorter.ReadMetadata(ctx, found[i].Path); err == nil && metadata.HasGPS {
-					located[i] = &Photo{Path: found[i].Path, Day: found[i].Day, Pos: mapbase.LatLon{Lat: metadata.Lat, Lon: metadata.Lon}}
+					located[i] = &Photo{Path: found[i].Path, Day: found[i].Day, At: metadata.TakenAt, Pos: mapbase.LatLon{Lat: metadata.Lat, Lon: metadata.Lon}}
 				}
 				lock.Lock()
 				done++
@@ -121,7 +134,7 @@ func Collect(ctx context.Context, root string, year int, progress func(done, tot
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
-		return Summary{}, err
+		return nil, 0, err
 	}
 	var photos []Photo
 	for _, photo := range located {
@@ -129,7 +142,7 @@ func Collect(ctx context.Context, root string, year int, progress func(done, tot
 			photos = append(photos, *photo)
 		}
 	}
-	return Summary{Places: Group(photos, geo.Default()), Total: len(found), Located: len(photos)}, nil
+	return photos, len(found), nil
 }
 
 type group struct {
@@ -151,7 +164,7 @@ func Group(photos []Photo, resolver Resolver) []Place {
 		}
 		var target *group
 		for _, candidate := range byName[name] {
-			if !named || distanceKm(candidate.first, photo.Pos) <= sameNameKm {
+			if !named || DistanceKm(candidate.first, photo.Pos) <= sameNameKm {
 				target = candidate
 				break
 			}
@@ -180,7 +193,7 @@ func Group(photos []Photo, resolver Resolver) []Place {
 		pos := mapbase.LatLon{Lat: lat / n, Lon: lon / n}
 		name := g.name
 		if name[0] == 0 {
-			name = coordinates(pos)
+			name = Coordinates(pos)
 		}
 		places[i] = Place{Name: name, Pos: pos, Count: len(g.photos), Shown: pick(g.photos)}
 	}
@@ -202,7 +215,8 @@ func pick(photos []Photo) []string {
 	return []string{photos[0].Path, photos[len(photos)/2].Path}
 }
 
-func coordinates(p mapbase.LatLon) string {
+// Coordinates writes a position as 48.85°N 2.35°E.
+func Coordinates(p mapbase.LatLon) string {
 	ns, ew := "N", "E"
 	if p.Lat < 0 {
 		ns = "S"
@@ -213,7 +227,8 @@ func coordinates(p mapbase.LatLon) string {
 	return fmt.Sprintf("%.2f°%s %.2f°%s", math.Abs(p.Lat), ns, math.Abs(p.Lon), ew)
 }
 
-func distanceKm(a, b mapbase.LatLon) float64 {
+// DistanceKm is the great-circle distance between two positions.
+func DistanceKm(a, b mapbase.LatLon) float64 {
 	const radius = 6371.0
 	rad := math.Pi / 180
 	dLat, dLon := (b.Lat-a.Lat)*rad, (b.Lon-a.Lon)*rad

@@ -21,7 +21,7 @@ const CARD_H = PAD + THUMB + 6 + PAD / 2
 
 const dirName = (path: string): string => path.replace(/[\\/][^\\/]*$/, '')
 
-function PinThumb({ path, x, y, size }: { path: string; x: number; y: number; size: number }): JSX.Element {
+export function PinThumb({ path, x, y, size }: { path: string; x: number; y: number; size: number }): JSX.Element {
   const [url, setUrl] = useState(() => cachedThumbnail(path))
   useEffect(() => {
     const known = cachedThumbnail(path)
