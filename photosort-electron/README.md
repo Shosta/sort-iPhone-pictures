@@ -17,7 +17,7 @@ npm install
 npm run dev        # compile le sidecar Go puis lance l'application avec rechargement à chaud
 npm run typecheck
 npm run build      # compile le sidecar et l'interface dans out/
-npm run dist       # installeurs dans release/ (dmg/zip, nsis, AppImage/deb selon l'OS)
+npm run dist       # installeurs dans release/ (dmg, exe portable, AppImage/deb selon l'OS)
 ```
 
 `dist:mac`, `dist:win` et `dist:linux` ciblent un OS précis. Le sidecar est
@@ -32,20 +32,22 @@ les installeurs sur des runners GitHub, un par cible :
 
 | Cible | Runner | Fichier produit |
 | --- | --- | --- |
-| macOS Apple Silicon | `macos-15` | `Photosort-<version>-mac-arm64.dmg` et `.zip` |
-| macOS Intel | `macos-15-intel` | `Photosort-<version>-mac-x64.dmg` et `.zip` |
+| macOS Apple Silicon | `macos-15` | `Photosort-<version>-mac-arm64.dmg` |
+| macOS Intel | `macos-15-intel` | `Photosort-<version>-mac-x64.dmg` |
 | Linux x64 | `ubuntu-22.04` | `Photosort-<version>-linux-x86_64.AppImage` |
-| Windows x64 | `windows-latest` | `Photosort-Setup-<version>-win-x64.exe` (NSIS) |
+| Windows x64 | `windows-latest` | `Photosort-<version>-win-x64.exe` (portable : un seul .exe, sans installation) |
 
 Déclenchement (le fichier doit être présent sur la branche par défaut du dépôt GitHub pour apparaître dans l'onglet *Actions*) :
 
-- **Manuel** : onglet *Actions* > *Package Photosort* > *Run workflow*. Les
-  installeurs sont téléchargeables dans les *Artifacts* du run (30 jours). Le
-  champ optionnel `release_tag` (ex. `v0.1.0`) crée en plus une release
-  brouillon contenant les installeurs.
-- **Tag** : `git tag v0.1.0 && git push origin v0.1.0` construit et crée la
-  release brouillon `v0.1.0`.
-- En ligne de commande : `gh workflow run package.yml --ref <branche> [-f release_tag=v0.1.0]`.
+- **Merge sur `main`** : construit les paquets, téléchargeables dans les
+  *Artifacts* du run (30 jours). Les modifications limitées à `docs/` ou aux
+  fichiers `.md` ne déclenchent rien.
+- **Tag `v<version>` sur un commit de `main`** : construit les paquets puis
+  publie une release GitHub (notes générées) contenant les quatre fichiers.
+  `git tag v0.1.0 && git push origin v0.1.0`. Le tag doit être égal à `v` +
+  la version de `package.json`, sinon la release échoue.
+- **Manuel** : onglet *Actions* > *Package Photosort* > *Run workflow*
+  (artefacts uniquement), ou `gh workflow run package.yml --ref <branche>`.
 
 Le numéro de version des fichiers vient de `package.json`. Les installeurs ne
 sont pas signés : macOS demande une validation (clic droit > Ouvrir, ou

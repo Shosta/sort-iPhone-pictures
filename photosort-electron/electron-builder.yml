@@ -18,11 +18,9 @@ icon: resources/icon.png
 afterPack: scripts/after-pack.cjs
 mac:
   category: public.app-category.photography
-  target: [dmg, zip]
+  target: [dmg]
 win:
-  target: [nsis]
-nsis:
-  artifactName: ${productName}-Setup-${version}-${os}-${arch}.${ext}
+  target: [portable]
 linux:
   target: [AppImage, deb]
   category: Graphics
