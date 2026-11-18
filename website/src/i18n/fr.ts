@@ -5,28 +5,28 @@ export const fr: Copy = {
   ogLocale: 'fr_FR',
   languageName: 'Français',
   meta: {
-    title: 'Photosort — Triez vos photos d’iPhone, imprimez votre semainier',
+    title: 'Photosort — Classez vos photos d’iPhone par date et retrouvez-les grâce aux tags',
     description:
-      'Photosort classe vos photos d’iPhone par date et par lieu, sans cloud, puis génère un PDF de scrapbook à imprimer et découper pour votre semainier. Open source, pour macOS, Linux et Windows.',
+      'Photosort classe des milliers de photos d’iPhone en vrac par date de prise de vue, ajoute des tags pour les retrouver facilement, sans cloud. En bonus, un PDF de scrapbook pour votre semainier. Open source, pour macOS, Linux et Windows.',
   },
   skip: 'Aller au contenu',
-  nav: { label: 'Navigation principale', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', languages: 'Langue' },
+  nav: { label: 'Navigation principale', how: 'Classement', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', languages: 'Langue' },
   hero: {
     eyebrow: 'Open source · local · sans compte',
-    titleA: 'Vos photos d’iPhone, triées.',
-    titleB: 'Et la semaine prête à coller dans votre semainier.',
-    lead: 'Photosort range vos photos par date et par lieu, sur votre ordinateur, sans rien envoyer dans le cloud. Puis il compose un PDF à imprimer et à découper : les photos de la semaine, prêtes à coller.',
-    ctaScrapbook: 'Voir le scrapbook',
+    titleA: 'Des milliers de photos d’iPhone en vrac,',
+    titleB: 'classées par date et faciles à retrouver.',
+    lead: 'Photosort range vos photos par date de prise de vue, ajoute des tags pour les retrouver en un clin d’œil, et repère les doublons. Tout se passe sur votre ordinateur, sans rien envoyer dans le cloud.',
+    ctaHow: 'Voir le classement',
     ctaDownload: 'Télécharger',
     note: 'macOS · Linux · Windows — vos originaux ne sont jamais modifiés',
     sheetAlt: 'Illustration d’une planche A4 de scrapbook : des photos de formats variés, séparées par des filets de coupe.',
-    sheetCaption: 'Semaine 2026-S20 · A4 paysage',
+    sheetCaption: 'Bonus · le semainier en PDF',
   },
   stamp: { top: 'PHOTOSORT', main: 'SANS CLOUD', bottom: '100 % LOCAL' },
   scrapbook: {
-    eyebrow: 'Le scrapbook de la semaine',
+    eyebrow: 'Et ensuite : le scrapbook',
     title: 'Du dossier classé à la page du semainier.',
-    lead: 'Vous avez un semainier papier ? Choisissez une semaine dans un calendrier, cochez les photos à garder, et Photosort génère un PDF prêt à imprimer. Il ne reste qu’à découper et coller.',
+    lead: 'Une fois vos photos classées, le scrapbook est un petit bonus. Vous avez un semainier papier ? Choisissez une semaine dans un calendrier, cochez les photos à garder, et Photosort génère un PDF prêt à imprimer. Il ne reste qu’à découper et coller.',
     steps: [
       { title: 'Choisissez la semaine', text: 'Un calendrier du lundi au dimanche. Les jours qui contiennent des photos sont marqués.' },
       { title: 'Cochez vos photos', text: 'Aucune n’est cochée au départ : vous gardez uniquement celles qui comptent.' },
@@ -41,8 +41,8 @@ export const fr: Copy = {
     note: 'Raccourci Cmd/Ctrl + P dans l’application.',
   },
   how: {
-    eyebrow: 'Le classement',
-    title: 'Trois étapes, une bibliothèque lisible.',
+    eyebrow: 'L’essentiel : le classement',
+    title: 'Du vrac à une bibliothèque lisible.',
     items: [
       { title: 'Récupérez vos photos', text: 'Transférez les originaux de votre iPhone vers un dossier de votre ordinateur avec votre outil habituel.' },
       { title: 'Choisissez vos dossiers', text: 'Un ou plusieurs dossiers sources, et une destination distincte pour la bibliothèque classée.' },
@@ -57,11 +57,11 @@ export const fr: Copy = {
     specimen: 'Spécimen',
     items: [
       { name: 'La vraie date', latin: 'Tempus exif', text: 'Classement par date de prise de vue (EXIF) : un souvenir de juillet reste en juillet, même copié en décembre.' },
+      { name: 'Les tags', latin: 'Nota localis', text: 'Pour retrouver une photo facilement : plage, montagne, ville, selfie… Une IA locale écrit des mots-clés dans des fichiers .xmp, plus vos propres tags.' },
       { name: 'Le lieu', latin: 'Locus urbis', text: 'Un dossier par ville, et par monument ou musée proche, grâce aux coordonnées GPS. Sans connexion.' },
       { name: 'Les doublons', latin: 'Gemini imago', text: 'Doublons et quasi-doublons repérés, les quasi-doublons étant rangés à part.' },
-      { name: 'Les tags', latin: 'Nota localis', text: 'Plage, montagne, ville, selfie… Une IA locale écrit des mots-clés dans des fichiers .xmp, plus vos propres tags.' },
-      { name: 'Le scrapbook', latin: 'Charta hebdomada', text: 'Un PDF hebdomadaire à imprimer, découper et coller dans le semainier.' },
       { name: 'Les préférences', latin: 'Optio', text: 'Interface en français, anglais ou danois, plusieurs thèmes, dossier de sortie au choix.' },
+      { name: 'Le scrapbook', latin: 'Charta hebdomada', text: 'Un PDF hebdomadaire à imprimer, découper et coller dans le semainier.' },
     ],
   },
   shots: {

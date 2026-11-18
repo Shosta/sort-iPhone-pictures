@@ -18,25 +18,28 @@ Exclus : analytics, formulaire, cookies, JavaScript applicatif, annonce du NAS
 
 ## Contenu (même structure dans les 3 langues)
 
-1. **Accroche** : trier les photos d'iPhone par date et par lieu, sans cloud,
-   puis générer un PDF de scrapbook à imprimer et découper pour coller la
-   semaine dans son semainier. Visuel : une planche A4 en perspective avec ses
-   tirages et ses filets de coupe, et le tampon « sans cloud ». Boutons
-   Télécharger et Découvrir le scrapbook.
-2. **Scrapbook / semainier** (section dédiée juste après l'accroche) : choisir
-   une semaine (lundi à dimanche) dans un calendrier, cocher les photos, obtenir
-   un PDF A4 paysage (A4 portrait ou Letter en option), photos de 6,5 cm sur le
-   grand côté, au moins 5 mm entre les photos pour la découpe, ouverture
-   automatique du PDF. Les originaux ne sont jamais modifiés.
-3. **3 étapes** : choisir le dossier source, vérifier l'aperçu, copier (les
-   originaux ne sont jamais modifiés).
-4. **Fonctionnalités** (présentées comme des étiquettes d'herbier numérotées) :
+Priorité du message : **classer en masse des photos d'iPhone en vrac par date de
+prise de vue, puis les retrouver grâce aux tags**. Le scrapbook en découle : c'est
+un bonus, présenté après le classement.
+
+1. **Accroche** : « Des milliers de photos d'iPhone en vrac, classées par date et
+   faciles à retrouver », sans cloud. Visuel : planche A4 scotchée avec le tampon
+   « sans cloud », dont les cases contiennent de petites illustrations discrètes
+   (portrait, paysages, animaux, ville, amis) pour évoquer des photos, légendée
+   « Bonus · le semainier en PDF ». Boutons Voir le classement et Télécharger.
+2. **Classement** (« L'essentiel ») : 3 étapes, choisir le dossier source,
+   vérifier l'aperçu, copier (les originaux ne sont jamais modifiés).
+3. **Fonctionnalités** (étiquettes d'herbier numérotées), dans l'ordre :
    - classement par date EXIF (`AAAA/AAAA-MM`) ;
+   - tags IA locaux (ONNX Runtime) et tags libres, pour retrouver ses photos ;
    - classement par lieu, villes et monuments, hors ligne ;
    - doublons et quasi-doublons ;
-   - tags IA locaux (ONNX Runtime) et tags libres ;
-   - scrapbook PDF hebdomadaire ;
-   - préférences : langues fr / en-GB / da, thèmes, ⌘,.
+   - préférences : langues fr / en-GB / da, thèmes, ⌘, ;
+   - scrapbook PDF hebdomadaire (en dernier).
+4. **Scrapbook / semainier** (« Et ensuite ») : choisir une semaine (lundi à
+   dimanche), cocher les photos, obtenir un PDF A4 paysage (A4 portrait ou Letter
+   en option), photos de 6,5 cm sur le grand côté, au moins 5 mm entre les photos
+   pour la découpe, ouverture automatique du PDF.
 5. **Captures** : 3 à 4 tirages (emplacements, voir plus bas).
 6. **Téléchargements** : macOS (dmg arm64 et Intel), Linux (AppImage x86_64),
    Windows (exe portable), tous vers `…/releases/latest`.

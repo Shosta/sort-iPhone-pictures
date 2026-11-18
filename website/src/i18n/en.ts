@@ -5,28 +5,28 @@ export const en: Copy = {
   ogLocale: 'en_GB',
   languageName: 'English',
   meta: {
-    title: 'Photosort — Sort your iPhone photos, print your weekly planner',
+    title: 'Photosort — Sort your iPhone photos by date and find them again with tags',
     description:
-      'Photosort sorts your iPhone photos by date and place, with no cloud, then builds a scrapbook PDF to print and cut out for your weekly planner. Open source, for macOS, Linux and Windows.',
+      'Photosort sorts thousands of loose iPhone photos by the date they were taken and adds tags so you can find them again, with no cloud. As a bonus, a scrapbook PDF for your weekly planner. Open source, for macOS, Linux and Windows.',
   },
   skip: 'Skip to content',
-  nav: { label: 'Main navigation', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', languages: 'Language' },
+  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', languages: 'Language' },
   hero: {
     eyebrow: 'Open source · local · no account',
-    titleA: 'Your iPhone photos, sorted.',
-    titleB: 'And the week ready to paste into your planner.',
-    lead: 'Photosort files your photos by date and place, on your own computer, with nothing sent to the cloud. Then it lays out a PDF to print and cut: the week’s photos, ready to stick in.',
-    ctaScrapbook: 'See the scrapbook',
+    titleA: 'Thousands of loose iPhone photos,',
+    titleB: 'sorted by date and easy to find.',
+    lead: 'Photosort files your photos by the date they were taken, adds tags so you can find them in a blink, and spots duplicates. It all happens on your own computer, with nothing sent to the cloud.',
+    ctaHow: 'See the sorting',
     ctaDownload: 'Download',
     note: 'macOS · Linux · Windows — your originals are never modified',
     sheetAlt: 'Illustration of an A4 scrapbook sheet: photos in different formats, separated by cutting lines.',
-    sheetCaption: 'Week 2026-W20 · A4 landscape',
+    sheetCaption: 'Bonus · the planner PDF',
   },
   stamp: { top: 'PHOTOSORT', main: 'NO CLOUD', bottom: '100% LOCAL' },
   scrapbook: {
-    eyebrow: 'The weekly scrapbook',
+    eyebrow: 'Then: the scrapbook',
     title: 'From a sorted folder to a planner page.',
-    lead: 'Keep a paper weekly planner? Pick a week in a calendar, tick the photos you want, and Photosort produces a print-ready PDF. All that is left is to cut and paste.',
+    lead: 'Once your photos are sorted, the scrapbook is a small bonus. Keep a paper weekly planner? Pick a week in a calendar, tick the photos you want, and Photosort produces a print-ready PDF. All that is left is to cut and paste.',
     steps: [
       { title: 'Pick the week', text: 'A Monday-to-Sunday calendar. Days that contain photos are marked.' },
       { title: 'Tick your photos', text: 'None are ticked at first: you keep only the ones that matter.' },
@@ -41,8 +41,8 @@ export const en: Copy = {
     note: 'Shortcut: Cmd/Ctrl + P in the app.',
   },
   how: {
-    eyebrow: 'The sorting',
-    title: 'Three steps, a readable library.',
+    eyebrow: 'The essential: sorting',
+    title: 'From a heap to a readable library.',
     items: [
       { title: 'Get your photos', text: 'Transfer the originals from your iPhone to a folder on your computer with your usual tool.' },
       { title: 'Choose your folders', text: 'One or more source folders, and a separate destination for the sorted library.' },
@@ -57,11 +57,11 @@ export const en: Copy = {
     specimen: 'Specimen',
     items: [
       { name: 'The real date', latin: 'Tempus exif', text: 'Sorted by the date the photo was taken (EXIF): a July memory stays in July, even if you copy it in December.' },
+      { name: 'Tags', latin: 'Nota localis', text: 'To find a photo easily: beach, mountain, city, selfie… A local AI writes keywords to .xmp files, plus your own tags.' },
       { name: 'The place', latin: 'Locus urbis', text: 'A folder per city, and per nearby landmark or museum, from GPS coordinates. No connection needed.' },
       { name: 'Duplicates', latin: 'Gemini imago', text: 'Duplicates and near-duplicates are spotted, with near-duplicates filed separately.' },
-      { name: 'Tags', latin: 'Nota localis', text: 'Beach, mountain, city, selfie… A local AI writes keywords to .xmp files, plus your own tags.' },
-      { name: 'The scrapbook', latin: 'Charta hebdomada', text: 'A weekly PDF to print, cut out and paste into your planner.' },
       { name: 'Preferences', latin: 'Optio', text: 'Interface in French, English or Danish, several themes, an output folder of your choice.' },
+      { name: 'The scrapbook', latin: 'Charta hebdomada', text: 'A weekly PDF to print, cut out and paste into your planner.' },
     ],
   },
   shots: {

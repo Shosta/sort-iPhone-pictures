@@ -7,13 +7,13 @@ export interface Copy {
   languageName: string;
   meta: { title: string; description: string };
   skip: string;
-  nav: { label: string; scrapbook: string; features: string; download: string; faq: string; languages: string };
+  nav: { label: string; how: string; scrapbook: string; features: string; download: string; faq: string; languages: string };
   hero: {
     eyebrow: string;
     titleA: string;
     titleB: string;
     lead: string;
-    ctaScrapbook: string;
+    ctaHow: string;
     ctaDownload: string;
     note: string;
     sheetAlt: string;

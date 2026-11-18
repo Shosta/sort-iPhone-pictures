@@ -5,28 +5,28 @@ export const da: Copy = {
   ogLocale: 'da_DK',
   languageName: 'Dansk',
   meta: {
-    title: 'Photosort — Sortér dine iPhone-billeder, print din ugekalender',
+    title: 'Photosort — Sortér dine iPhone-billeder efter dato og find dem igen med tags',
     description:
-      'Photosort sorterer dine iPhone-billeder efter dato og sted, uden cloud, og laver derefter en scrapbook-PDF, du kan printe og klippe ud til din ugekalender. Open source til macOS, Linux og Windows.',
+      'Photosort sorterer tusindvis af rodede iPhone-billeder efter optagelsesdato og tilføjer tags, så du let kan finde dem igen, uden cloud. Som bonus en scrapbook-PDF til din ugekalender. Open source til macOS, Linux og Windows.',
   },
   skip: 'Gå til indholdet',
-  nav: { label: 'Hovednavigation', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', languages: 'Sprog' },
+  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', languages: 'Sprog' },
   hero: {
     eyebrow: 'Open source · lokalt · ingen konto',
-    titleA: 'Dine iPhone-billeder, sorteret.',
-    titleB: 'Og ugen klar til at blive klistret ind i din ugekalender.',
-    lead: 'Photosort lægger dine billeder i orden efter dato og sted, på din egen computer, uden at sende noget til skyen. Derefter laver det en PDF til at printe og klippe ud: ugens billeder, klar til at klistre.',
-    ctaScrapbook: 'Se scrapbogen',
+    titleA: 'Tusindvis af rodede iPhone-billeder,',
+    titleB: 'sorteret efter dato og lette at finde.',
+    lead: 'Photosort lægger dine billeder i orden efter optagelsesdato, tilføjer tags, så du hurtigt finder dem, og opdager dubletter. Alt foregår på din egen computer, uden at sende noget til skyen.',
+    ctaHow: 'Se sorteringen',
     ctaDownload: 'Download',
     note: 'macOS · Linux · Windows — dine originaler ændres aldrig',
     sheetAlt: 'Illustration af et A4-scrapbogsark: billeder i forskellige formater, adskilt af klippelinjer.',
-    sheetCaption: 'Uge 2026-U20 · A4 liggende',
+    sheetCaption: 'Bonus · ugekalender-PDF',
   },
   stamp: { top: 'PHOTOSORT', main: 'INGEN CLOUD', bottom: '100 % LOKALT' },
   scrapbook: {
-    eyebrow: 'Ugens scrapbog',
+    eyebrow: 'Bagefter: scrapbogen',
     title: 'Fra en sorteret mappe til en side i ugekalenderen.',
-    lead: 'Har du en ugekalender på papir? Vælg en uge i en kalender, sæt kryds ved de billeder, du vil beholde, og Photosort laver en PDF klar til print. Så skal du bare klippe og klistre.',
+    lead: 'Når dine billeder er sorteret, er scrapbogen en lille bonus. Har du en ugekalender på papir? Vælg en uge i en kalender, sæt kryds ved de billeder, du vil beholde, og Photosort laver en PDF klar til print. Så skal du bare klippe og klistre.',
     steps: [
       { title: 'Vælg ugen', text: 'En kalender fra mandag til søndag. Dage med billeder er markeret.' },
       { title: 'Sæt kryds ved billederne', text: 'Ingen er afkrydset fra start: du beholder kun dem, der betyder noget.' },
@@ -41,8 +41,8 @@ export const da: Copy = {
     note: 'Genvej: Cmd/Ctrl + P i appen.',
   },
   how: {
-    eyebrow: 'Sorteringen',
-    title: 'Tre trin, et overskueligt bibliotek.',
+    eyebrow: 'Det vigtigste: sorteringen',
+    title: 'Fra rod til et overskueligt bibliotek.',
     items: [
       { title: 'Hent dine billeder', text: 'Overfør originalerne fra din iPhone til en mappe på din computer med dit sædvanlige værktøj.' },
       { title: 'Vælg dine mapper', text: 'En eller flere kildemapper og en særskilt destination til det sorterede bibliotek.' },
@@ -57,11 +57,11 @@ export const da: Copy = {
     specimen: 'Eksemplar',
     items: [
       { name: 'Den rigtige dato', latin: 'Tempus exif', text: 'Sorteret efter optagelsesdatoen (EXIF): et minde fra juli bliver i juli, selv hvis du kopierer det i december.' },
+      { name: 'Tags', latin: 'Nota localis', text: 'Så du let kan finde et billede: strand, bjerg, by, selfie… En lokal AI skriver nøgleord i .xmp-filer, plus dine egne tags.' },
       { name: 'Stedet', latin: 'Locus urbis', text: 'En mappe pr. by og pr. nærliggende seværdighed eller museum, ud fra GPS-koordinater. Uden forbindelse.' },
       { name: 'Dubletter', latin: 'Gemini imago', text: 'Dubletter og næsten-dubletter opdages, og næsten-dubletter lægges for sig.' },
-      { name: 'Tags', latin: 'Nota localis', text: 'Strand, bjerg, by, selfie… En lokal AI skriver nøgleord i .xmp-filer, plus dine egne tags.' },
-      { name: 'Scrapbogen', latin: 'Charta hebdomada', text: 'En ugentlig PDF til at printe, klippe ud og klistre ind i ugekalenderen.' },
       { name: 'Indstillinger', latin: 'Optio', text: 'Grænseflade på fransk, engelsk eller dansk, flere temaer og en udmappe efter eget valg.' },
+      { name: 'Scrapbogen', latin: 'Charta hebdomada', text: 'En ugentlig PDF til at printe, klippe ud og klistre ind i ugekalenderen.' },
     ],
   },
   shots: {
