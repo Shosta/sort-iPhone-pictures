@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -71,7 +72,9 @@ func fingerprintOf(path string, options fingerprintOptions) (result fingerprint)
 	}
 	var data []byte
 	if info.Size() <= maxInMemory {
-		if data, err = io.ReadAll(file); err != nil {
+		// The size is known: one exact allocation instead of ReadAll's growth.
+		data = make([]byte, info.Size())
+		if _, err = io.ReadFull(file, data); err != nil {
 			return result
 		}
 		if options.bytes {
@@ -201,4 +204,30 @@ func parallel(ctx context.Context, n int, work func(int)) <-chan int {
 		}
 	}()
 	return finished
+}
+
+// costliestFirst returns the indexes of paths ordered by decreasing expected
+// processing cost: formats decoded by a slow codec first, then larger files.
+func costliestFirst(paths []string) []int {
+	cost := make([]int64, len(paths))
+	for i, path := range paths {
+		var size int64
+		if info, err := os.Stat(path); err == nil {
+			size = info.Size()
+		}
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".heic", ".heif", ".avif":
+			size += 1 << 40
+		case ".jpg", ".jpeg":
+		default:
+			size += 1 << 30
+		}
+		cost[i] = size
+	}
+	order := make([]int, len(paths))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return cost[order[a]] > cost[order[b]] })
+	return order
 }

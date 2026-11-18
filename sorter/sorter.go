@@ -243,12 +243,20 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 			}
 			nearby = closeInTime(times, folders)
 		}
+		// Costliest photos first, so a slow decode never runs alone at the end.
+		paths := make([]string, len(dated))
+		for k, i := range dated {
+			paths[k] = ordered[i]
+		}
+		schedule := costliestFirst(paths)
 		next, done := 0, 0
-		for k := range parallel(ctx, len(dated), func(k int) {
+		for j := range parallel(ctx, len(dated), func(j int) {
+			k := schedule[j]
 			own := options
 			own.perceptual = options.perceptual && nearby[k]
-			prints[k] = fingerprintOf(ordered[dated[k]], own)
+			prints[k] = fingerprintOf(paths[k], own)
 		}) {
+			k := schedule[j]
 			ready[k] = true
 			for ; next < len(dated) && ready[next]; next++ {
 				path, item := ordered[dated[next]], photos[dated[next]]
