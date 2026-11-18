@@ -159,28 +159,67 @@ p {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-.lang-switch {
-  display: flex;
-  gap: 0.25rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.lang-menu {
+  position: relative;
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
 }
-.lang-switch a {
-  display: block;
-  padding: 0.3rem 0.55rem;
+.lang-menu summary,
+.lang-menu a {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.7rem;
   text-decoration: none;
-  border: 1px solid transparent;
 }
-.lang-switch a[aria-current='true'] {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--paper);
+.lang-menu summary {
+  justify-content: flex-start;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  border: 1px solid var(--rule);
 }
-.lang-switch a:not([aria-current]):hover {
-  border-color: var(--rule);
+.lang-menu summary::-webkit-details-marker {
+  display: none;
+}
+.lang-menu summary::after,
+.lang-menu[open] summary::after {
+  content: '';
+  color: inherit;
+  font-family: inherit;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.15rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.lang-menu[open] summary::after {
+  color: inherit;
+  transform: translateY(1px) rotate(-135deg);
+}
+.lang-menu ul {
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  min-width: 100%;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 4px 4px 0 rgb(29 26 22 / 0.12);
+}
+.lang-menu a:hover {
+  background: rgb(29 26 22 / 0.06);
+}
+.lang-menu a[aria-current='true'] {
+  font-weight: 600;
+  background: rgb(29 26 22 / 0.08);
+}
+.flag {
+  flex: none;
+  display: block;
+  outline: 1px solid rgb(29 26 22 / 0.25);
 }
 
 /* Buttons */
@@ -768,7 +807,7 @@ details p {
     margin-left: 0;
     flex-wrap: wrap;
   }
-  .lang-switch {
+  .lang-menu {
     margin-left: auto;
   }
   .stamp-small {
