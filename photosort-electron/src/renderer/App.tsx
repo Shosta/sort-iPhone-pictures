@@ -464,6 +464,10 @@ export function App(): JSX.Element {
   const folders = planFolders ?? draftFolders
   const busy = phase === 'analyzing' || phase === 'copying'
   const tagging = tagJob?.state === 'loading' || tagJob?.state === 'running'
+  const busyEnded = useRef(0)
+  const wasBusy = useRef(false)
+  if (wasBusy.current && !busy) busyEnded.current = performance.now()
+  wasBusy.current = busy
   const cleanable = !!plan || !!error || sources.length > 0
   const canAnalyze = !busy && sources.length > 0 && !!destination.trim()
   const canSort = !busy && !tagging && phase === 'ready' && entries.length > 0
@@ -666,11 +670,6 @@ export function App(): JSX.Element {
           )}
         </div>
         <div className="actions">
-          {busy && (
-            <motion.button className="btn danger" whileTap={{ scale: 0.95 }} onClick={() => running.current?.cancel()}>
-              {t('cancel')}
-            </motion.button>
-          )}
           <motion.button
             className={`btn ${cleanable && phase === 'ready' ? 'hot' : 'ghost'}`}
             whileHover={{ scale: 1.05 }}
@@ -678,6 +677,8 @@ export function App(): JSX.Element {
             disabled={busy || !cleanable}
             title={t('clean.hint')}
             onClick={() => {
+              // A click aimed at a button that moved right when the work ended must not wipe the results.
+              if (performance.now() - busyEnded.current < 800) return
               setSources([])
               resetResults()
             }}
@@ -703,6 +704,11 @@ export function App(): JSX.Element {
           >
             {t('sort')}
           </motion.button>
+          {busy && (
+            <motion.button className="btn danger" whileTap={{ scale: 0.95 }} onClick={() => running.current?.cancel()}>
+              {t('cancel')}
+            </motion.button>
+          )}
         </div>
       </footer>
 
