@@ -159,3 +159,38 @@ func TestParsePaper(t *testing.T) {
 		t.Errorf("A4-Portrait = %+v", paper)
 	}
 }
+
+func TestAlbumFormats(t *testing.T) {
+	sizes := map[string][2]float64{
+		"a5-portrait": {148, 210}, "10x15-landscape": {150, 100}, "13x18-portrait": {130, 180},
+		"square-20": {200, 200}, "square-21": {210, 210},
+	}
+	for name, size := range sizes {
+		paper, ok := ParsePaper(name)
+		if !ok || paper.Width != size[0] || paper.Height != size[1] {
+			t.Errorf("%s = %+v, %v", name, paper, ok)
+			continue
+		}
+		ratios := repeat(3.0/4.0, 6)
+		checkSheets(t, paper, 40, ratios, Layout(paper, 40, MinGutter, ratios))
+	}
+}
+
+func TestBleedKeepsSafetyZone(t *testing.T) {
+	paper, _ := ParsePaper("square-20")
+	paper = paper.WithBleed(DefaultBleed)
+	if paper.SheetWidth() != 206 || paper.SheetHeight() != 206 {
+		t.Fatalf("sheet = %v x %v", paper.SheetWidth(), paper.SheetHeight())
+	}
+	if clamped := paper.WithBleed(99); clamped.Bleed != MaxBleed {
+		t.Errorf("bleed not clamped: %v", clamped.Bleed)
+	}
+	for _, sheet := range Layout(paper, 80, MinGutter, repeat(1, 8)) {
+		for _, a := range sheet.Placements {
+			low := paper.Bleed + Margin
+			if a.X < low-epsilon || a.Y < low-epsilon || a.X+a.W > paper.Bleed+paper.Width-Margin+0.001 || a.Y+a.H > paper.Bleed+paper.Height-Margin+0.001 {
+				t.Errorf("photo %d leaves the safety zone: %+v", a.Index, a)
+			}
+		}
+	}
+}

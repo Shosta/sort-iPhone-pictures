@@ -123,7 +123,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 	if job.Paper.Landscape() {
 		orientation = "L"
 	}
-	pdf := fpdf.New(orientation, "mm", job.Paper.Name, "")
+	pdf := fpdf.NewCustom(&fpdf.InitType{OrientationStr: orientation, UnitStr: "mm", Size: fpdf.SizeType{Wd: job.Paper.SheetWidth(), Ht: job.Paper.SheetHeight()}})
 	pdf.SetMargins(0, 0, 0)
 	pdf.SetAutoPageBreak(false, 0)
 	pdf.SetCreator("Photosort", true)
@@ -170,6 +170,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 	var failed []Failure
 	for sheet := range job.Sheets {
 		pdf.AddPage()
+		trimMarks(pdf, job.Paper)
 		for i, current := range slots {
 			if current.sheet != sheet {
 				continue
@@ -195,6 +196,27 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 		return nil, nil, err
 	}
 	return pdf, failed, nil
+}
+
+// trimMarks draws short corner marks in the bleed band showing where to cut.
+func trimMarks(pdf *fpdf.Fpdf, paper Paper) {
+	if paper.Bleed <= 0 {
+		return
+	}
+	b, length := paper.Bleed, math.Min(paper.Bleed, 3)
+	for _, x := range []float64{b, b + paper.Width} {
+		for _, y := range []float64{b, b + paper.Height} {
+			dx, dy := -length, -length
+			if x > b {
+				dx = length
+			}
+			if y > b {
+				dy = length
+			}
+			pdf.Line(x, y, x+dx, y)
+			pdf.Line(x, y, x, y+dy)
+		}
+	}
 }
 
 // place draws a reduced photo, as large as its box allows (the layout gives

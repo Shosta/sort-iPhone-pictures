@@ -12,7 +12,8 @@ const (
 	MinGutter = 5.0
 	// MaxGutter is the largest space a caller can ask for.
 	MaxGutter = 30.0
-	// Margin is kept free around the sheet: printers cannot reach the edges.
+	// Margin is the safety zone kept free inside the trimmed page: printers
+	// cannot reach the edges and cutting is never exact.
 	Margin = 10.0
 	// DefaultLongSide is the usual size of a photo in the planner (6.5 cm).
 	DefaultLongSide = 65.0
@@ -20,17 +21,45 @@ const (
 	epsilon = 1e-6
 )
 
-// Paper is a sheet size.
+// MaxBleed is the largest bleed a caller can ask for.
+const MaxBleed = 10.0
+
+// DefaultBleed is the usual print bleed.
+const DefaultBleed = 3.0
+
+// Paper is a page size. Width and Height are the trimmed page; Bleed is the
+// extra band printed beyond each edge, to be cut off.
 type Paper struct {
 	Name          string
 	Width, Height float64
+	Bleed         float64
 }
 
+// WithBleed returns the paper with a bleed of mm (clamped to 0..MaxBleed).
+func (p Paper) WithBleed(mm float64) Paper {
+	p.Bleed = clamp(mm, 0, MaxBleed)
+	return p
+}
+
+// SheetWidth is the width of the printed sheet, bleed included.
+func (p Paper) SheetWidth() float64 { return p.Width + 2*p.Bleed }
+
+// SheetHeight is the height of the printed sheet, bleed included.
+func (p Paper) SheetHeight() float64 { return p.Height + 2*p.Bleed }
+
 var papers = map[string]Paper{
-	"a4-landscape":     {"A4", 297, 210},
-	"a4-portrait":      {"A4", 210, 297},
-	"letter-landscape": {"Letter", 279.4, 215.9},
-	"letter-portrait":  {"Letter", 215.9, 279.4},
+	"a4-landscape":     {Name: "A4", Width: 297, Height: 210},
+	"a4-portrait":      {Name: "A4", Width: 210, Height: 297},
+	"letter-landscape": {Name: "Letter", Width: 279.4, Height: 215.9},
+	"letter-portrait":  {Name: "Letter", Width: 215.9, Height: 279.4},
+	"a5-landscape":     {Name: "A5", Width: 210, Height: 148},
+	"a5-portrait":      {Name: "A5", Width: 148, Height: 210},
+	"10x15-landscape":  {Name: "10x15", Width: 150, Height: 100},
+	"10x15-portrait":   {Name: "10x15", Width: 100, Height: 150},
+	"13x18-landscape":  {Name: "13x18", Width: 180, Height: 130},
+	"13x18-portrait":   {Name: "13x18", Width: 130, Height: 180},
+	"square-20":        {Name: "20x20", Width: 200, Height: 200},
+	"square-21":        {Name: "21x21", Width: 210, Height: 210},
 }
 
 // DefaultPaper is the page used when none is given.
@@ -148,9 +177,9 @@ func Layout(paper Paper, longSide, gutter float64, ratios []float64) []Sheet {
 
 	sheets := make([]Sheet, len(pages))
 	for i, page := range pages {
-		y := Margin
+		y := Margin + paper.Bleed
 		for _, r := range page.rows {
-			x := Margin
+			x := Margin + paper.Bleed
 			for _, it := range r.items {
 				sheets[i].Placements = append(sheets[i].Placements, Placement{Index: it.index, X: round(x), Y: round(y), W: round(it.w), H: round(it.h)})
 				x += it.w + gutter

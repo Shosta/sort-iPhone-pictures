@@ -17,7 +17,11 @@ interface Props {
   onClose: () => void
 }
 
-const PAGES: ScrapPage[] = ['a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait']
+const PAGES: ScrapPage[] = [
+  'a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait',
+  'a5-landscape', 'a5-portrait', '10x15-landscape', '10x15-portrait',
+  '13x18-landscape', '13x18-portrait', 'square-20', 'square-21'
+]
 /** Thumbnails that take off when the PDF is created. */
 const MAX_FLIGHTS = 14
 
@@ -150,7 +154,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     let live = true
     let handle: { cancel: () => void } | null = null
     const timer = setTimeout(() => {
-      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter }, (event) => {
+      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0 }, (event) => {
         if (!live) return
         if (event.type === 'layout') {
           setLayout(event)
@@ -168,7 +172,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
       handle?.cancel()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter])
+  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter, prefs.scrapBleed])
 
   const range = useMemo(() => {
     const format = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' })
@@ -219,7 +223,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     const name = squash(t('scrap.file', { year: week.year, week: String(week.week).padStart(2, '0'), range }))
     setJob({ state: 'running', done: 0, total: files.length })
     run.current = request(
-      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, outDir, fallbackDir: downloads, name },
+      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, outDir, fallbackDir: downloads, name },
       (event) => {
         if (event.type === 'progress') {
           setJob((previous) => previous && { ...previous, done: event.done, total: event.total })
@@ -313,6 +317,9 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
                 </label>
                 <input type="range" min={5} max={10} step={1} value={prefs.scrapGutter} onChange={(event) => onChange({ scrapGutter: Number(event.target.value) })} />
               </div>
+              <label className="check">
+                <input type="checkbox" checked={prefs.scrapBleed} onChange={(event) => onChange({ scrapBleed: event.target.checked })} /> {t('scrap.bleed')}
+              </label>
             </details>
           </aside>
 

@@ -100,6 +100,7 @@ func (s *server) arrange(ctx context.Context, req request) (arrangement, error) 
 	if !ok {
 		return arrangement{}, fmt.Errorf("unknown page format %q", req.Page)
 	}
+	paper = paper.WithBleed(req.Bleed)
 	longSide := req.LongSide
 	if longSide <= 0 {
 		longSide = scrapbook.DefaultLongSide
@@ -135,7 +136,7 @@ func (s *server) scrapbookLayout(ctx context.Context, req request) error {
 			sheets[i].Placements[j] = scrapPlacement{Path: arranged.photos[placement.Index], X: placement.X, Y: placement.Y, W: placement.W, H: placement.H}
 		}
 	}
-	s.send(event{"id": req.ID, "type": "layout", "pageWidth": arranged.paper.Width, "pageHeight": arranged.paper.Height, "sheets": sheets, "failed": nonNil(arranged.failed)})
+	s.send(event{"id": req.ID, "type": "layout", "pageWidth": arranged.paper.SheetWidth(), "pageHeight": arranged.paper.SheetHeight(), "bleed": arranged.paper.Bleed, "sheets": sheets, "failed": nonNil(arranged.failed)})
 	return nil
 }
 
