@@ -31,15 +31,21 @@ function Counter({ value }: { value: number }): JSX.Element {
 }
 
 /** "2026/2026-10/Paris/IMG.jpg" → "2026-10 · Paris". */
+const PACED_BELOW = 500
+const MAX_PACED_SECONDS = 6
+
 /**
  * Animations are decoration: on big libraries only a sample is played (about
  * one tile in `every`, and a few flights per tick), so the screen stays lively
  * without flooding the renderer. The data is never sampled.
  */
-function animationBudget(count: number): { flights: number; every: number; heavy: boolean } {
+function animationBudget(count: number): { flights: number; every: number; heavy: boolean; pace: number } {
+  // Small libraries are copied in a blink: the display is paced (about 3 photos
+  // per second, never more than MAX_PACED_SECONDS in total) so the move can be seen.
+  if (count > 0 && count < PACED_BELOW) return { flights: 3, every: 1, heavy: false, pace: Math.max(3, count / MAX_PACED_SECONDS) }
   const flights = 1
-  if (count <= 5000) return { flights, every: 1, heavy: false }
-  return { flights, every: Math.ceil(count / 5000), heavy: count > 20000 }
+  if (count <= 5000) return { flights, every: 1, heavy: false, pace: 0 }
+  return { flights, every: Math.ceil(count / 5000), heavy: count > 20000, pace: 0 }
 }
 
 function sampled(path: string, every: number): boolean {
@@ -176,6 +182,9 @@ export function App(): JSX.Element {
   const arrived = useRef(new Map<string, number>())
   const planId = useRef('')
   const budget = useRef(animationBudget(0))
+  const finishing = useRef<'done' | 'error' | null>(null)
+  const credit = useRef(0)
+  const lastTick = useRef(performance.now())
   const pendingDraft = useRef({ entries: [] as Entry[], duplicates: [] as Duplicate[], shown: 0, timer: 0 })
   const [flights, setFlights] = useState<Flight[]>([])
   const removeFlight = useCallback((id: string) => setFlights((previous) => previous.filter((flight) => flight.id !== id)), [])
@@ -190,8 +199,33 @@ export function App(): JSX.Element {
         const results = tagBuffer.current.splice(0)
         setTagJob((job) => (job ? applyTagResults(job, results) : job))
       }
-      if (buffer.current.length === 0) return
-      const batch = buffer.current.splice(0)
+      const now = performance.now()
+      const elapsed = now - lastTick.current
+      lastTick.current = now
+      const pace = budget.current.pace
+      let batch: Entry[]
+      if (pace > 0 && finishing.current !== 'error') {
+        // Photos are already copied; only their display is spread out.
+        credit.current = Math.min(credit.current + (pace * elapsed) / 1000, 10)
+        const count = Math.min(Math.floor(credit.current), buffer.current.length)
+        credit.current -= count
+        batch = buffer.current.splice(0, count)
+      } else {
+        batch = buffer.current.splice(0)
+      }
+      if (finishing.current && buffer.current.length === 0 && batch.length === 0) {
+        const outcome = finishing.current
+        finishing.current = null
+        credit.current = 0
+        if (outcome === 'done') {
+          setTimeout(() => {
+            setPhase('done')
+            confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } })
+          }, 250)
+        }
+        return
+      }
+      if (batch.length === 0) return
       const panels = document.querySelectorAll('.column .panel')
       const left = panels[0]?.getBoundingClientRect()
       const right = panels[1]?.getBoundingClientRect()
@@ -370,16 +404,17 @@ export function App(): JSX.Element {
     setCopiedCount(0)
     setDoneByFolder(new Map())
     copiedTargets.current = []
+    finishing.current = null
+    credit.current = 0
     running.current = request({ op: 'copy', planId: planId.current }, (event) => {
       if (event.type === 'progress') {
         buffer.current.push(event.entry)
         copiedTargets.current.push(`${plan.destination}/${event.entry.target}`)
       } else if (event.type === 'done') {
-        setTimeout(() => {
-          setPhase('done')
-          confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } })
-        }, 250)
+        // The tick finishes once every copied photo has been displayed.
+        finishing.current = 'done'
       } else if (event.type === 'error') {
+        finishing.current = 'error'
         setPhase('ready')
         if (!event.cancelled) setError(event.message)
       }
