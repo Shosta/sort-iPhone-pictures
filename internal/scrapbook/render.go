@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	"math"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -275,10 +276,10 @@ const (
 var tapeColours = [][3]int{{236, 213, 170}, {244, 190, 200}, {180, 224, 200}, {178, 208, 236}}
 
 // tapes sticks a translucent washi strip with notched ends across each corner
-// of the photo, in a colour that changes from photo to photo.
+// of the photo. Colours are drawn at random from a generator seeded by the
+// photo, so a page looks the same each time it is printed.
 func tapes(pdf *fpdf.Fpdf, seed int, x, y, w, h float64) {
-	colour := tapeColours[seed%len(tapeColours)]
-	pdf.SetFillColor(colour[0], colour[1], colour[2])
+	random := rand.New(rand.NewPCG(uint64(seed), 0x7a5b1))
 	pdf.SetAlpha(0.75, "Normal")
 	defer pdf.SetAlpha(1, "Normal")
 	jitter := [4]float64{1.5, -1.0, 1.0, -1.5}
@@ -289,6 +290,8 @@ func tapes(pdf *fpdf.Fpdf, seed int, x, y, w, h float64) {
 		{x + tapeShift, y + h - tapeShift, -45},
 	}
 	for i, c := range corners {
+		colour := tapeColours[random.IntN(len(tapeColours))]
+		pdf.SetFillColor(colour[0], colour[1], colour[2])
 		pdf.TransformBegin()
 		pdf.TransformRotate(c.angle+jitter[(i+seed)%4], c.cx, c.cy)
 		pdf.Polygon(tapeShape(tapeLength, tapeWidth, c.cx, c.cy), "F")
