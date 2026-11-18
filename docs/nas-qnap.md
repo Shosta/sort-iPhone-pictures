@@ -1,6 +1,6 @@
-# Préparer le NAS QNAP pour Photosort (réseau local)
+# Préparer le NAS QNAP pour Photosort (réseau local et Tailscale)
 
-Procédure de la **phase 0b** du plan [`2026-11-17-nas-local-connection-plan.md`](superpowers/plans/2026-11-17-nas-local-connection-plan.md). Aucun logiciel n'est installé sur le NAS : on crée un compte aux droits minimaux, puis on monte le partage sur le Mac.
+Procédure de la **phase 0b** du plan [`2026-11-17-nas-local-connection-plan.md`](superpowers/plans/2026-11-17-nas-local-connection-plan.md). Seul Tailscale est installé sur le NAS : on crée un compte aux droits minimaux, on limite l'accès par les ACL Tailscale, puis on monte le partage. Les étapes 1 à 6 et 9 à 10 ne changent pas ; l'étape 7bis remplace le montage par le Finder quand on passe par Tailscale.
 
 **Durée** : 30 à 45 minutes. **Prérequis** : accès administrateur à QTS (navigateur), Mac sur le même réseau que le NAS.
 
@@ -119,6 +119,17 @@ Pièges connus :
 - Photosort ne monte rien lui-même et ne voit jamais le mot de passe : si le partage n'est pas monté, il s'arrête avec un message.
 - Facultatif, pour ne pas laisser de fichiers `.DS_Store` sur le NAS : dans le Terminal, `defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true`, puis redémarrez le Finder.
 
+## Étape 7bis — Monter le partage par Tailscale (Linux)
+
+Prérequis : le plan [phase 0c](superpowers/plans/2026-11-17-nas-local-connection-plan.md) est faite (NAS et Linux dans le tailnet, clé du NAS sans expiration, ACL limitées au port 445).
+
+1. Vérifiez la connexion : `tailscale ping <NAS-MAGICDNS>` doit répondre en **direct**. Un relais DERP marche mais ralentit fortement SMB.
+2. Option **GVFS** (sans droits administrateur) : Dolphin > `smb://<NAS-MAGICDNS>/<PARTAGE>`, compte `photosort`. Le chemin est sous `/run/user/<uid>/gvfs/`.
+3. Option **cifs** (droits administrateur) : `sudo mount -t cifs //<NAS-MAGICDNS>/<PARTAGE> /mnt/photos -o username=photosort,vers=3.0,uid=$(id -u),gid=$(id -g),file_mode=0644,dir_mode=0755` (le mot de passe est demandé ; ne l'écrivez pas dans l'historique).
+4. Faites ensuite l'**étape 9** depuis ce point de montage (remplacez `/Volumes/<PARTAGE>` par le chemin réel). **(à confirmer)** : GVFS et la création exclusive de fichiers.
+
+Règles Tailscale : pas de routes de sous-réseau ni de nœud de sortie depuis le NAS, ni Serve ni Funnel ; seul l'appareil qui lance Photosort atteint le NAS, et seulement sur le port 445.
+
 ## Étape 8 — Monter automatiquement au démarrage (facultatif)
 
 Réglages Système > Général > **Ouverture** : faites glisser le volume monté dans la liste **Éléments d'ouverture**.
@@ -170,7 +181,7 @@ Si elles sont illisibles, c'est que les fichiers sont créés avec le mode `0600
 
 ## Règles à retenir
 
-- **Ne jamais exposer SMB (port 445) sur internet** ni le rediriger depuis la box. L'accès à distance viendra plus tard par un VPN (Tailscale, NetBird ou QVPN), jamais par une redirection de port.
+- **Ne jamais exposer SMB (port 445) sur internet** ni le rediriger depuis la box. L'accès à distance passe par Tailscale uniquement (ACL limitées au port 445), jamais par une redirection de port ; ni Funnel, ni Serve, ni routes de sous-réseau.
 - Le compte `photosort` ne sert qu'à Photosort. Ne le réutilisez pas ailleurs.
 - Changez son mot de passe en cas de doute, puis mettez à jour le trousseau.
 

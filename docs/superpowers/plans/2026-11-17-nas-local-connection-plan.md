@@ -1,6 +1,6 @@
 # Plan : classement et tags sur le NAS, connexion en réseau local (Mac + SMB)
 
-Date : 2026-11-17 · Branche : `feat/nas-qnap-remote` · Statut : **plan révisé, en attente d'approbation** (aucun code écrit)
+Date : 2026-11-17, révisé le 2026-11-18 (Tailscale) · Branche : `feat/nas-qnap-remote` · Statut : **plan révisé, en attente d'approbation** (aucun code écrit)
 Spec parente : `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
 Plan différé (serveur Docker) : `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`
 
@@ -19,19 +19,32 @@ destination : un partage SMB monté sur le Mac suffit. **Rien à installer sur l
 NAS, aucun port nouveau.** Le Mac (Apple M2) rend en plus les tags IA
 réalistes, ce que le Celeron du NAS ne garantissait pas.
 
+## Révision du 2026-11-18 : Tailscale
+
+Fait nouveau : SMB direct sur le réseau local « ne fonctionne pas de façon optimale » (délais dépassés depuis le Mac, montage correct depuis Kubuntu). L'utilisateur installe **Tailscale** (VPN maillé WireGuard) sur son Linux, son iPhone et le NAS QNAP.
+
+Ce que cela change :
+- **Le transport devient le tailnet.** Le partage SMB reste la voie retenue, mais il est atteint par le nom MagicDNS ou l'adresse `100.x` du NAS : plus de découverte Bonjour ni de dépendance au réseau local, et le trafic est chiffré de bout en bout.
+- **L'accès à distance, sorti du périmètre, entre dans ce plan** (via le même montage SMB). Il ne doit jamais élargir les droits du compte `photosort`.
+- **La contrainte « rien d'installé sur le NAS » est levée pour un seul logiciel : Tailscale.** Le moteur, lui, ne change pas.
+- **La latence devient le risque principal.** SMB enchaîne beaucoup de petites requêtes ; à distance ou via un relais, le parcours d'une bibliothèque massive peut devenir très lent. Le dédoublonnage à portée (phase 2) passe de confort à nécessité.
+- **Le client de référence devient le Linux** (Tailscale y est installé). Le Mac professionnel n'est pas dans le tailnet : on ne suppose pas qu'on peut y installer Tailscale (pas de droits administrateur). Il reste sur le réseau local, à diagnostiquer séparément.
+
 ## Objectif
 
-Depuis l'app Electron du Mac, sur le même réseau local : classer l'entrée en
+Depuis l'app Electron d'un poste du tailnet (Linux en premier, le Mac en réseau local) : classer l'entrée en
 vrac dans la bibliothèque du NAS, taguer la bibliothèque et produire le PDF du
-semainier, avec un compte QTS dédié aux droits minimaux. L'accès à distance et
-le traitement sans le Mac viendront dans des plans ultérieurs.
+semainier, avec un compte QTS dédié aux droits minimaux, au bureau comme à distance par
+Tailscale. Le traitement sans poste client (serveur sur le NAS) viendra dans un
+plan ultérieur.
 
 ## Contraintes
 
 - Logique métier en Go ; moteur existant réutilisé (`sorter`, `internal/tagger`, `internal/scrapbook`).
 - **Entrée jamais écrite**, bibliothèque seul dossier inscriptible.
 - Compte QTS dédié `photosort` : lecture seule sur l'entrée, lecture-écriture sur la bibliothèque, **aucun droit ailleurs**, SMB seulement.
-- **Rien d'installé sur le NAS**, ni SSH, ni Container Station, ni QPKG tiers.
+- **Seul ajout sur le NAS : Tailscale.** Ni SSH, ni Container Station, ni autre QPKG tiers.
+- **Jamais de port 445 sur internet.** Tailscale Funnel, Tailscale Serve, routes de sous-réseau et nœud de sortie : interdits sur le NAS.
 - Le comportement local actuel ne change pas par défaut (toute nouveauté est une option ou un durcissement neutre).
 - Aucun secret dans l'app : le montage est fait par l'OS (trousseau macOS).
 - Branche `feat/nas-qnap-remote`, aucun merge dans `main` sans demande, trailer `Co-authored-by` sur chaque commit.
@@ -40,16 +53,22 @@ le traitement sans le Mac viendront dans des plans ultérieurs.
 
 | # | Décision | Raison |
 | --- | --- | --- |
-| N1 | **Voie A' : l'app sur le Mac, le partage monté en SMB** avec le compte dédié. Le serveur Docker est différé | Aucune installation ni SSH ; quelques centaines de photos transitent en secondes sur le LAN |
+| N1 | **Voie A' : l'app sur un poste client, le partage monté en SMB** avec le compte dédié, **à travers Tailscale**. Le serveur Docker reste différé | Pas de SSH ni de Container Station ; le moteur ne change pas ; Tailscale règle l'accès et le chiffrement |
 | N2 | Droits : **Advanced Folder Permissions** de QTS (droits par sous-dossier : lecture, lecture-écriture, refus) | Documenté par QNAP ; seul moyen de séparer deux sous-dossiers d'un même partage sans Docker. Réglage global du NAS : voir risques |
-| N3 | Montage par l'**OS** (Finder `smb://`, lecteur réseau Windows, `mount.cifs`) ; l'app ne monte rien et ne voit jamais le mot de passe | Le trousseau gère le secret ; aucune dépendance |
+| N3 | Montage par l'**OS** (Finder `smb://`, lecteur réseau Windows, `mount.cifs`, GVFS sous KDE) sur le nom MagicDNS du NAS ; l'app ne monte rien et ne voit jamais le mot de passe | Le trousseau gère le secret ; aucune dépendance |
 | N4 | **Contrôle préalable** `nasCheck` (Go) : l'entrée doit refuser l'écriture, la bibliothèque doit l'accepter | Seconde barrière : si l'ACL QTS est mal réglée, l'app refuse de lancer l'opération (échoue fermé) |
 | N5 | **Copie** (pas de lien physique) vers la bibliothèque | Un lien physique ne passe pas sur un montage SMB et contredit la lecture seule de l'entrée |
 | N6 | Dédoublonnage **à portée** (option) : ne parcourir dans la bibliothèque que les mois concernés par le plan | `loadDestination` (`sorter/dedupe.go:44`) parcourt toute la destination avec un `lstat` par fichier : coûteux sur SMB avec une bibliothèque massive |
 | N7 | Ignorer les dossiers et fichiers **système** (`.@__thumb`, `@Recycle`, `@Recently-Snapshot`, `@eaDir`, `._*`, `.DS_Store`) | `Plan` (`sorter.go:122`) et `deduper` ne sautent aucun dossier caché alors que `tags.go:39` et `scrapbook/scan.go:101` le font déjà ; QTS crée des `.@__thumb` partout |
 | N8 | Copie **atomique** : écriture dans `<cible>.part` puis renommage | Une coupure réseau laisserait sinon un fichier tronqué au nom final (`copyEntry`, `sorter.go:415`), pris ensuite pour une photo valide |
 | N9 | Semainier et tags inchangés : lecture de la bibliothèque en SMB, **PDF écrit localement** (Téléchargements) | Rien à rapatrier |
-| N10 | Tags IA **autorisés** (calculés sur le Mac) | Le blocage du Celeron disparaît |
+| N10 | Tags IA **autorisés** (calculés sur le poste client) | Le blocage du Celeron disparaît |
+| N11 | **ACL Tailscale minimales** : seul l'appareil qui lance Photosort (étiquette dédiée) atteint le NAS, et seulement sur le port **445** ; l'iPhone n'y accède pas ; aucune route de sous-réseau, aucun nœud de sortie, ni Serve ni Funnel sur le NAS | Le tailnet ne doit pas rouvrir ce que les droits QTS ferment : un appareil volé du tailnet ne doit pas atteindre l'interface d'administration QTS |
+| N12 | **Expiration de clé désactivée pour le NAS** (console d'administration Tailscale) | Sinon le NAS quitte le tailnet à l'expiration de sa clé et l'accès à distance tombe sans prévenir |
+| N13 | Les droits QTS (compte `photosort`, permissions avancées) restent **la barrière principale** ; Tailscale ne les remplace pas | Même si un appareil du tailnet est compromis, il ne trouve qu'un compte à droits minimaux |
+| N14 | **Dédoublonnage à portée activé par défaut en mode NAS** quand la bibliothèque suit `AAAA/AAAA-MM`, et **relais détecté** : avertissement dans la recette si `tailscale ping` passe par un relais DERP | Un `lstat` par fichier sur un lien à latence est le pire cas ; un relais multiplie la latence |
+| N15 | Nombre de copies en parallèle **réglable** (4 par défaut), à ajuster d'après la recette | Sur un lien à latence, plus de travailleurs masquent la latence ; à mesurer, pas à deviner |
+| N16 | Le serveur Docker (TLS, jeton, certificat épinglé) reste **différé** ; Tailscale fournirait déjà authentification et chiffrement du transport, ce qui simplifierait D2 et D4 | À reprendre seulement si un traitement sans poste client devient nécessaire |
 
 ## Phase 0 — Documentation (inventaire des API)
 
@@ -85,6 +104,26 @@ Procédure pas à pas : [`docs/nas-qnap.md`](../../nas-qnap.md). Résumé :
 - [ ] Options SMB (à confirmer dans QTS) : version minimale SMB 3, signature activée.
 - [ ] Monter `smb://<nas>/<partage>` depuis le Finder avec ce compte, enregistrer le mot de passe dans le trousseau.
 
+## Phase 0c — Préparer Tailscale `[utilisateur, aucune ligne de code]`
+
+**Sortie** : le Linux atteint le NAS par son nom MagicDNS, en connexion directe, et seul ce Linux peut joindre le port 445.
+**Vérification** (manuelle) :
+- [ ] `tailscale status` sur le Linux liste le NAS et l'iPhone ; le NAS apparaît comme connecté.
+- [ ] `tailscale ping <nas>` finit par répondre **« via … direct »** (pas « via DERP » en continu). Un relais est utilisable mais plus lent : noter lequel.
+- [ ] `tailscale ip -4 <nas>` renvoie une adresse `100.x`.
+- [ ] Depuis le Linux, `smbclient -L //<nas> -U photosort` (ou le montage de l'étape 7) réussit par le nom MagicDNS.
+- [ ] Depuis l'iPhone **sans** autorisation ACL, le NAS reste inaccessible sur 445 (une fois les ACL posées).
+
+Tâches :
+- [ ] **Origine du paquet sur le NAS** : installer Tailscale depuis le catalogue officiel QNAP ou le paquet publié par Tailscale, pas depuis une source tierce ; noter la version. **(à confirmer dans votre App Center)**
+- [ ] Console d'administration : **désactiver l'expiration de clé** du NAS (N12) et lui attribuer une étiquette (par exemple `tag:nas`).
+- [ ] ACL (N11) : règle explicite `Linux de travail -> tag:nas:445` ; refus implicite pour le reste. Ne pas annoncer de routes de sous-réseau ni de nœud de sortie depuis le NAS.
+- [ ] Vérifier que ni Funnel ni Serve ne sont actifs sur le NAS.
+- [ ] Linux : monter le partage. Deux options, à comparer à la recette : `mount.cifs` (droits administrateur nécessaires, ou entrée `fstab` avec `user`) ou GVFS/Dolphin (`smb://<nas>/<PARTAGE>`, sans droits administrateur, chemin sous `/run/user/<uid>/gvfs/`). GVFS passe par FUSE : tester que la création `O_EXCL` et le renommage de la copie atomique (phase 3) y fonctionnent.
+- [ ] L'ouverture d'un accès `smb://` par le nom MagicDNS peut exiger de n'autoriser que l'adresse du tailnet dans *Accès à l'hôte Réseaux Microsoft* : **à confirmer** (l'adresse source vue par QTS dépend du mode réseau de Tailscale sur le NAS).
+
+**Non vérifié** : si le paquet QNAP de Tailscale utilise un périphérique TUN ou le mode « userspace networking », et ce que QTS voit alors comme adresse source ; le débit réel d'un montage SMB à travers le tunnel.
+
 ## Phase 1 — Moteur : ignorer les noms système
 
 **Sortie** : un point unique décide quels dossiers et fichiers sont ignorés, utilisé par les quatre parcours.
@@ -97,7 +136,7 @@ Tâches :
 
 ## Phase 2 — Moteur : dédoublonnage à portée `[après 1 : mêmes fichiers]`
 
-**Sortie** : option `Engine.ScopedDestination` ; par défaut, comportement inchangé.
+**Sortie** : option `Engine.ScopedDestination` ; par défaut dans le moteur, comportement inchangé ; **activée par défaut par le mode NAS d'Electron** (N14).
 **Vérification** : `go test ./sorter/...` ; test avec 24 mois de fichiers factices et 2 mois dans le plan : le parcours ne visite que ces 2 mois (compteur de fichiers visités, pas de chronomètre), et un doublon octet pour octet d'un de ces mois est toujours détecté. Sans l'option, tous les mois sont visités.
 
 Tâches :
@@ -160,20 +199,28 @@ Tâches :
 
 - **Advanced Folder Permissions est global** → sauvegarde de la configuration avant, contrôle 5 de la phase 0b ; retour arrière possible en le désactivant (la doc QNAP signale des effets sur les ACL existantes).
 - **Seulement deux verrous sur l'entrée** (droits QTS, contrôle préalable) au lieu de trois avec Docker → contrôle exécuté à chaque lancement, échec fermé, compte sans autre droit, jamais d'ouverture en écriture hors de la destination dans le moteur.
-- **Performances SMB non mesurées** → dédoublonnage à portée, copie à 4 travailleurs, progression déjà affichée ; chiffres relevés à la phase 6.
+- **Performances SMB non mesurées** (et **latence accrue par le tunnel**, surtout via un relais DERP) → dédoublonnage à portée, copie parallèle réglable, progression déjà affichée ; `tailscale ping` direct/relais et chiffres relevés à la phase 6. Si SMB reste trop lent même en connexion directe, la voie de repli est le serveur sur le NAS (plan différé), dont Tailscale simplifierait la sécurité.
+- **Tailscale sur le NAS est du code tiers installé avec des privilèges élevés** → paquet officiel seulement, mises à jour suivies, ACL minimales (N11), ni Serve ni Funnel ni routes ; un appareil du tailnet compromis ne doit atteindre que le port 445, derrière le compte `photosort`.
+- **Clé du NAS expirée** → expiration désactivée (N12) ; sinon l'accès tombe sans message clair.
+- **Le Mac professionnel hors du tailnet** → il reste sur le LAN ; le diagnostic SMB local (`~/photosort-smb-diag.sh`) reste à traiter séparément, sans bloquer le Linux.
+- **Photos de l'iPhone** : l'iPhone, déjà dans le tailnet, pourrait envoyer ses photos vers l'entrée à distance ; hors de ce plan, et à ne pas ouvrir au-delà du port 445 limité par l'ACL.
 - **Mac en veille ou Wi-Fi coupé en cours de copie** → copie atomique, relance idempotente.
 - **Le compte `photosort` fuite** → il ne peut lire que l'entrée et écrire la bibliothèque ; pas d'application QTS, pas de SSH.
 - **Bibliothèque organisée autrement que par Photosort** → l'option de portée reste désactivée ; parcours complet avec progression.
 
 ## Hors périmètre
 
-- Serveur Docker sur le NAS, classification automatique (case à cocher), accès à distance (Tailscale, NetBird, myQNAPcloud Link) : plans ultérieurs ; l'accès à distance ne devra jamais élargir les droits du compte.
+- Serveur Docker sur le NAS et classification automatique sans poste client : plan ultérieur (voir N16).
+- NetBird, myQNAPcloud Link et QVPN : écartés, Tailscale est installé.
+- Détection de Tailscale par l'app : l'app ne monte rien et ne parle pas à Tailscale ; elle affiche seulement un message générique « NAS injoignable : Tailscale est-il connecté ? ».
 - Contrôle d'espace libre avant copie (quelques centaines de photos).
 - Déplacement ou suppression des originaux, navigateur de dossiers distants, montage automatique depuis l'app.
 
 ## Questions ouvertes
 
-1. Valides-tu la **voie sans installation sur le NAS** (Mac + SMB) pour la connexion locale, le serveur Docker étant gardé pour l'automatisation ?
+1. Valides-tu la voie **SMB à travers Tailscale** (Linux en premier, Mac en LAN), le serveur Docker restant différé ?
 2. Acceptes-tu d'activer **Advanced Folder Permissions** (réglage global du NAS) ? À défaut, l'entrée ne serait protégée que par l'app (moins strict).
 3. La bibliothèque existante suit-elle déjà l'arborescence `AAAA/AAAA-MM` de Photosort ? (conditionne le dédoublonnage à portée)
 4. QuMagie indexe-t-il l'entrée, la bibliothèque, ou les deux ?
+5. Le NAS est-il en mode TUN ou « userspace networking » avec le paquet Tailscale installé, et `tailscale ping` est-il direct ?
+6. Veux-tu que l'iPhone puisse déposer ses photos dans l'entrée à distance (plan séparé) ?
