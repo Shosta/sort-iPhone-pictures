@@ -22,6 +22,9 @@ type Metadata struct {
 	// UTCOffset is the capture time zone offset in seconds, valid if HasOffset.
 	UTCOffset int
 	HasOffset bool
+	// DateSource is empty when TakenAt comes from EXIF, else DateFromFilename
+	// or DateFromModTime.
+	DateSource string `json:",omitempty"`
 	// Shot is the camera information, free to read alongside the date.
 	Shot tagger.Shot
 }

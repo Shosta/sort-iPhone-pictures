@@ -8,6 +8,9 @@ export interface Prefs {
   landmarks: boolean
   skipDuplicates: boolean
   groupSimilar: boolean
+  dateFallback: boolean
+  screenshotFolder: boolean
+  groupBlurry: boolean
   tagScenes: boolean
   tagMoment: boolean
   tagPeople: boolean
@@ -33,6 +36,9 @@ function load(): Prefs {
     landmarks: localStorage.getItem('landmarks') !== '0',
     skipDuplicates: true,
     groupSimilar: true,
+    dateFallback: true,
+    screenshotFolder: true,
+    groupBlurry: false,
     // Tagging is an explicit action from its own panel, so every kind starts on.
     tagScenes: true,
     tagMoment: true,

@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"sort-iphone-pictures/internal/geo"
+	"sort-iphone-pictures/internal/tagger"
 )
 
 // UndatedFolder receives photos without a usable capture date.
@@ -82,7 +83,27 @@ type Engine struct {
 	Preview func(path string, img image.Image)
 	// Locate overrides the embedded offline city database.
 	Locate Locator
+	// DateFallback dates photos lacking an EXIF capture date from the date in
+	// their file name, then from their modification time, instead of leaving
+	// them in UndatedFolder.
+	DateFallback bool
+	// ScreenshotFolder files screenshots under ScreenshotsFolder instead of
+	// the regular year/month tree.
+	ScreenshotFolder bool
+	// GroupBlurry files clearly blurry photos under BlurryFolder (inside the
+	// year/month tree) so they can be reviewed; nothing is ever deleted.
+	GroupBlurry bool
+	// BlurThreshold is the sharpness below which a photo is blurry; zero
+	// means DefaultBlurThreshold.
+	BlurThreshold float64
+	// Sharpness overrides the sharpness measure (tests).
+	Sharpness func(path string) (float64, bool)
+	// Now overrides the clock used to reject future fallback dates (tests).
+	Now func() time.Time
 }
+
+// ScreenshotsFolder receives screenshots when Engine.ScreenshotFolder is set.
+const ScreenshotsFolder = "Screenshots"
 
 func (engine Engine) Plan(ctx context.Context, sources []string, destination string) (Plan, error) {
 	plan := Plan{Entries: []Entry{}, Skipped: []Issue{}, Duplicates: []Duplicate{}}
@@ -160,8 +181,15 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if engine.ByLocation && engine.Landmarks && landmark == nil {
 		landmark = geo.DefaultPlaces().Near
 	}
-	folderOf := func(metadata Metadata) string {
+	now := time.Now()
+	if engine.Now != nil {
+		now = engine.Now()
+	}
+	folderOf := func(path string, metadata Metadata) string {
 		month := filepath.Join(metadata.TakenAt.Format("2006"), metadata.TakenAt.Format("2006-01"))
+		if engine.ScreenshotFolder && tagger.IsScreenshot(path, metadata.Shot.Comment) {
+			return filepath.Join(ScreenshotsFolder, month)
+		}
 		if !engine.ByLocation || !metadata.HasGPS {
 			return month
 		}
@@ -191,8 +219,15 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	for i := range parallel(ctx, len(ordered), func(i int) {
 		item := &photos[i]
 		item.metadata, item.err = reader(ctx, ordered[i])
+		readable := item.err == nil || errors.Is(item.err, errNoEXIF)
+		if readable && engine.DateFallback && !validDate(item.metadata) {
+			if date, source, ok := fallbackDate(ordered[i], filepath.Base(ordered[i]), now); ok {
+				item.metadata.TakenAt, item.metadata.DateSource = date, source
+				item.err = nil
+			}
+		}
 		if item.err == nil && validDate(item.metadata) {
-			item.folder = folderOf(item.metadata)
+			item.folder = folderOf(ordered[i], item.metadata)
 		}
 	}) {
 		done++
@@ -291,6 +326,38 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	} else {
 		for _, i := range dated {
 			pending = append(pending, candidate{path: ordered[i], metadata: photos[i].metadata, month: photos[i].folder})
+		}
+	}
+	if engine.GroupBlurry {
+		threshold, measure := engine.BlurThreshold, engine.Sharpness
+		if threshold == 0 {
+			threshold = DefaultBlurThreshold
+		}
+		if measure == nil {
+			measure = sharpnessOf
+		}
+		blurry := make([]bool, len(pending))
+		done := 0
+		for range parallel(ctx, len(pending), func(i int) {
+			item := pending[i]
+			if tagger.IsScreenshot(item.path, item.metadata.Shot.Comment) {
+				return
+			}
+			value, ok := measure(item.path)
+			blurry[i] = ok && value < threshold
+		}) {
+			done++
+			if engine.Progress != nil {
+				engine.Progress("blur", done, len(pending))
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return plan, err
+		}
+		for i, isBlurry := range blurry {
+			if isBlurry {
+				pending[i].month = filepath.Join(BlurryFolder, pending[i].month)
+			}
 		}
 	}
 	if engine.GroupSimilar {

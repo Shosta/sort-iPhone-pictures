@@ -75,6 +75,9 @@ func metaTags(photo Photo) []string {
 	return append(tags, calendarTags(photo.TakenAt, photo.Lat, photo.HasGPS)...)
 }
 
+// IsScreenshot reports whether the file name or EXIF comment marks a screenshot.
+func IsScreenshot(path, comment string) bool { return isScreenshot(path, comment) }
+
 func isScreenshot(path, comment string) bool {
 	if strings.Contains(strings.ToLower(comment), "screenshot") {
 		return true

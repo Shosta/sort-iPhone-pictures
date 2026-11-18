@@ -45,6 +45,9 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	byLocation := flags.Bool("by-location", false, "Add a city folder inside each month when GPS data is available")
 	skipDuplicates := flags.Bool("skip-duplicates", false, "Leave out true duplicates (identical bytes or pixels), also compared to files already in the destination")
 	groupSimilar := flags.Bool("group-similar", false, "Put near-identical shots taken close in time into an \"Almost Duplicates\" folder")
+	dateFallback := flags.Bool("date-fallback", false, "Date photos without EXIF date from their file name, then their modification time, instead of Photos_Undated")
+	screenshots := flags.Bool("screenshots-folder", false, "Put screenshots in a \"Screenshots\" folder")
+	blurry := flags.Bool("group-blurry", false, "Put clearly blurry photos in a \"Blurry\" folder for review (nothing is deleted)")
 	tagScenes := flags.Bool("tag-scenes", false, "Write XMP keyword sidecars for places (plage, montagne, ville, forêt, intérieur, restaurant, gare...) using local AI models")
 	tagMoment := flags.Bool("tag-moment", false, "Write XMP keywords for sunrise, sunset, night, sun and clouds")
 	tagPeople := flags.Bool("tag-people", false, "Write XMP keywords People, Portrait and Groupe using local face detection")
@@ -60,7 +63,7 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments; use --source and --destination")
 	}
-	plan, err := (sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates, GroupSimilar: *groupSimilar}).Plan(ctx, sources, *destination)
+	plan, err := (sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates, GroupSimilar: *groupSimilar, DateFallback: *dateFallback, ScreenshotFolder: *screenshots, GroupBlurry: *blurry}).Plan(ctx, sources, *destination)
 	if err != nil {
 		return err
 	}

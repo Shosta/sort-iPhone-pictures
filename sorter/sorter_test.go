@@ -335,3 +335,109 @@ func TestGroupSimilar(t *testing.T) {
 		t.Fatalf("only photos close in time should be hashed: %v", hashed)
 	}
 }
+
+func TestDateFromFilename(t *testing.T) {
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.Local)
+	for name, want := range map[string]string{
+		"IMG_20230714_153022.jpg": "2023-07-14",
+		"2021-03-05 holiday.png":  "2021-03-05",
+		"PXL_2022.01.09.jpg":      "2022-01-09",
+		"IMG_20231345.jpg":        "",
+		"IMG_1234.jpg":            "",
+		"IMG_20991231.jpg":        "",
+		"12320230714456.jpg":      "",
+	} {
+		got, ok := dateFromFilename(name, now)
+		if gotText := got.Format("2006-01-02"); (ok && gotText != want) || (!ok && want != "") {
+			t.Errorf("%s: got %q %v, want %q", name, gotText, ok, want)
+		}
+	}
+}
+
+func TestPlanDateFallbackAndScreenshots(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "source")
+	writePhoto(t, filepath.Join(source, "IMG_20230714_153022.tiff"))
+	writePhoto(t, filepath.Join(source, "plain.tiff"))
+	writePhoto(t, filepath.Join(source, "Screenshot 2024-02-03.tiff"))
+	modified := time.Date(2020, 5, 6, 10, 0, 0, 0, time.Local)
+	if err := os.Chtimes(filepath.Join(source, "plain.tiff"), modified, modified); err != nil {
+		t.Fatal(err)
+	}
+	read := func(context.Context, string) (Metadata, error) { return Metadata{}, nil }
+	targets := func(engine Engine) map[string]string {
+		engine.ReadMetadata = read
+		plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, entry := range plan.Entries {
+			out[filepath.Base(entry.Source)] = entry.Target
+		}
+		return out
+	}
+	if got := targets(Engine{})["plain.tiff"]; !strings.HasPrefix(got, UndatedFolder) {
+		t.Fatalf("fallback applied while disabled: %s", got)
+	}
+	got := targets(Engine{DateFallback: true, ScreenshotFolder: true})
+	want := map[string]string{
+		"IMG_20230714_153022.tiff":   "2023/2023-07/2023-07-14 - Unknown camera - 1.tiff",
+		"plain.tiff":                 "2020/2020-05/2020-05-06 - Unknown camera - 1.tiff",
+		"Screenshot 2024-02-03.tiff": "Screenshots/2024/2024-02/2024-02-03 - Unknown camera - 1.tiff",
+	}
+	for name, target := range want {
+		if got[name] != target {
+			t.Errorf("%s: got %q, want %q", name, got[name], target)
+		}
+	}
+}
+
+func TestGroupBlurry(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "source")
+	writePhoto(t, filepath.Join(source, "sharp.tiff"))
+	writePhoto(t, filepath.Join(source, "soft.tiff"))
+	writePhoto(t, filepath.Join(source, "Screenshot 1.tiff"))
+	engine := Engine{
+		GroupBlurry: true,
+		ReadMetadata: func(context.Context, string) (Metadata, error) {
+			return Metadata{TakenAt: time.Date(2024, 2, 3, 10, 0, 0, 0, time.UTC)}, nil
+		},
+		Sharpness: func(path string) (float64, bool) {
+			if strings.Contains(path, "sharp") {
+				return 300, true
+			}
+			return 2, true
+		},
+	}
+	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, entry := range plan.Entries {
+		got[filepath.Base(entry.Source)] = filepath.Dir(entry.Target)
+	}
+	want := map[string]string{"sharp.tiff": "2024/2024-02", "soft.tiff": "Blurry/2024/2024-02", "Screenshot 1.tiff": "2024/2024-02"}
+	for name, dir := range want {
+		if got[name] != dir {
+			t.Errorf("%s: got %q, want %q", name, got[name], dir)
+		}
+	}
+}
+
+func TestSharpness(t *testing.T) {
+	flat := image.NewGray(image.Rect(0, 0, 32, 32))
+	checker := image.NewGray(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			checker.Pix[y*checker.Stride+x] = uint8(255 * ((x + y) % 2))
+		}
+	}
+	low, _ := sharpness(flat)
+	high, _ := sharpness(checker)
+	if low >= DefaultBlurThreshold || high <= DefaultBlurThreshold {
+		t.Fatalf("flat=%v checker=%v", low, high)
+	}
+}

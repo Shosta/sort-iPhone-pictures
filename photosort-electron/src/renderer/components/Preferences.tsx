@@ -114,6 +114,17 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
         </div>
 
         <div className="field">
+          <label>{t('prefs.organize')}</label>
+          {(['dateFallback', 'screenshotFolder', 'groupBlurry'] as const).map((key) => (
+            <label key={key} className={`toggle ${busy ? 'disabled' : ''}`}>
+              <input type="checkbox" checked={prefs[key]} disabled={busy} onChange={(event) => onChange({ [key]: event.target.checked } as Pick<Prefs, typeof key>)} />
+              <Switch on={prefs[key]} accent={accent} />
+              <span>{t(key)}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="field">
           <label>{t('prefs.scrap')}</label>
           <label className="hint">{t('prefs.scrapDir')}</label>
           <div className="row">

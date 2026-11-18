@@ -56,34 +56,37 @@ import (
 )
 
 type request struct {
-	ID          string   `json:"id"`
-	Op          string   `json:"op"`
-	Sources     []string `json:"sources"`
-	Destination string   `json:"destination"`
-	ByLocation  bool     `json:"byLocation"`
-	Landmarks   bool     `json:"landmarks"`
-	Dedupe      bool     `json:"dedupe"`
-	Similar     bool     `json:"similar"`
-	TagScenes   bool     `json:"tagScenes"`
-	TagMoment   bool     `json:"tagMoment"`
-	TagPeople   bool     `json:"tagPeople"`
-	TagMeta     bool     `json:"tagMeta"`
-	AIDir       string   `json:"aiDir"`
-	Folder      string   `json:"folder"`
-	Files       []string `json:"files"`
-	PlanID      string   `json:"planId"`
-	Path        string   `json:"path"`
-	Size        int      `json:"size"`
-	Target      string   `json:"target"`
-	Root        string   `json:"root"`
-	From        string   `json:"from"`
-	To          string   `json:"to"`
-	Page        string   `json:"page"`
-	LongSide    float64  `json:"longSide"`
-	Gutter      float64  `json:"gutter"`
-	OutDir      string   `json:"outDir"`
-	FallbackDir string   `json:"fallbackDir"`
-	Name        string   `json:"name"`
+	ID           string   `json:"id"`
+	Op           string   `json:"op"`
+	Sources      []string `json:"sources"`
+	Destination  string   `json:"destination"`
+	ByLocation   bool     `json:"byLocation"`
+	Landmarks    bool     `json:"landmarks"`
+	Dedupe       bool     `json:"dedupe"`
+	Similar      bool     `json:"similar"`
+	DateFallback bool     `json:"dateFallback"`
+	Screenshots  bool     `json:"screenshots"`
+	Blurry       bool     `json:"blurry"`
+	TagScenes    bool     `json:"tagScenes"`
+	TagMoment    bool     `json:"tagMoment"`
+	TagPeople    bool     `json:"tagPeople"`
+	TagMeta      bool     `json:"tagMeta"`
+	AIDir        string   `json:"aiDir"`
+	Folder       string   `json:"folder"`
+	Files        []string `json:"files"`
+	PlanID       string   `json:"planId"`
+	Path         string   `json:"path"`
+	Size         int      `json:"size"`
+	Target       string   `json:"target"`
+	Root         string   `json:"root"`
+	From         string   `json:"from"`
+	To           string   `json:"to"`
+	Page         string   `json:"page"`
+	LongSide     float64  `json:"longSide"`
+	Gutter       float64  `json:"gutter"`
+	OutDir       string   `json:"outDir"`
+	FallbackDir  string   `json:"fallbackDir"`
+	Name         string   `json:"name"`
 }
 
 type event map[string]any
@@ -282,6 +285,7 @@ func (s *server) plan(ctx context.Context, req request) error {
 	}()
 	engine := sorter.Engine{
 		ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe, GroupSimilar: req.Similar,
+		DateFallback: req.DateFallback, ScreenshotFolder: req.Screenshots, GroupBlurry: req.Blurry,
 		Progress: func(stage string, done, total int) {
 			if throttle.allow(stage, done, total) {
 				s.send(event{"id": req.ID, "type": "status", "stage": stage, "done": done, "total": total})

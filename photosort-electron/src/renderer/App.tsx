@@ -108,7 +108,7 @@ const Folder = memo(function Folder({ name, items, done }: { name: string; items
 
 function analysisStatus(t: Translate, stage: { name: string; done: number; total: number } | null): string {
   if (!stage) return t('status.analyzing')
-  const key = stage.name === 'hash' ? 'status.hash' : stage.name === 'similar' ? 'status.similar' : 'status.exif'
+  const key = stage.name === 'hash' ? 'status.hash' : stage.name === 'similar' ? 'status.similar' : stage.name === 'blur' ? 'status.blur' : 'status.exif'
   return t(key, { done: stage.done, total: stage.total })
 }
 
@@ -118,7 +118,7 @@ function analysisProgress(stage: { name: string; done: number; total: number } |
   const ratio = stage.total > 0 ? stage.done / stage.total : 1
   if (!deep) return ratio
   if (stage.name === 'exif') return 0.4 * ratio
-  if (stage.name === 'hash') return 0.4 + 0.55 * ratio
+  if (stage.name === 'hash' || stage.name === 'blur') return 0.4 + 0.55 * ratio
   return 0.97
 }
 
@@ -140,7 +140,7 @@ function applyTagResults(job: TagJob, results: TagResult[]): TagJob {
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
-  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar, tagScenes, tagMoment, tagPeople, tagMeta } = prefs
+  const { destination, byLocation, landmarks, skipDuplicates, groupSimilar, dateFallback, screenshotFolder, groupBlurry, tagScenes, tagMoment, tagPeople, tagMeta } = prefs
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const [showTags, setShowTags] = useState(false)
@@ -372,7 +372,7 @@ export function App(): JSX.Element {
     resetResults()
     setPhase('analyzing')
     setStage(null)
-    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar }, (event) => {
+    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
       if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
       else if (event.type === 'draft') {
         const entries: Entry[] = event.entries ?? []
@@ -473,7 +473,7 @@ export function App(): JSX.Element {
   const cleanable = !!plan || !!error || sources.length > 0
   const canAnalyze = !busy && sources.length > 0 && !!destination.trim()
   const canSort = !busy && !tagging && phase === 'ready' && entries.length > 0
-  const deep = skipDuplicates || groupSimilar
+  const deep = skipDuplicates || groupSimilar || groupBlurry
   const progress =
     phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copiedCount / entries.length : 0) : 0
 
