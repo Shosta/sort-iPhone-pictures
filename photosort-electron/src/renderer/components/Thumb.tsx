@@ -10,9 +10,11 @@ interface Props {
   appearDelay?: number
   /** Load only while on screen (for tiles that are not virtualized). */
   lazy?: boolean
+  /** Shown when the image cannot be decoded. */
+  fallback?: string
 }
 
-export const Thumb = memo(function Thumb({ path, label, size, pending = false, appearDelay, lazy = false }: Props): JSX.Element {
+export const Thumb = memo(function Thumb({ path, label, size, pending = false, appearDelay, lazy = false, fallback }: Props): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   const [url, setUrl] = useState<string | null | undefined>(() => cachedThumbnail(path))
 
@@ -51,7 +53,7 @@ export const Thumb = memo(function Thumb({ path, label, size, pending = false, a
       title={label ?? path}
     >
       {url === undefined && <div className="shimmer" />}
-      {url === null && <span className="thumb-missing">🖼</span>}
+      {url === null && <span className="thumb-missing">{fallback ?? '🖼'}</span>}
       {url && <img src={url} alt="" draggable={false} decoding="async" />}
     </div>
   )

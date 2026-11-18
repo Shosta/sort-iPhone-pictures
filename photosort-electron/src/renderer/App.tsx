@@ -8,6 +8,7 @@ import { ScrapbookPanel } from './components/ScrapbookPanel'
 import { TagsPanel } from './components/TagsPanel'
 import { Thumb } from './components/Thumb'
 import { VirtualGrid } from './components/VirtualGrid'
+import { IssueList } from './components/IssueList'
 import { I18nContext, makeTranslate, type Translate } from './i18n'
 import { usePrefs } from './prefs'
 import { applyTheme, themeById } from './themes'
@@ -747,22 +748,7 @@ export function App(): JSX.Element {
               onClick={(event) => event.stopPropagation()}
             >
               <h2>{t('issues.title')}</h2>
-              <ul>
-                {(plan?.skipped ?? []).map((issue) => (
-                  <li key={issue.path}>
-                    <code>{issue.path}</code>
-                    <span>{issue.reason}</span>
-                  </li>
-                ))}
-                {duplicates.map((duplicate) => (
-                  <li key={duplicate.path}>
-                    <code>{duplicate.path}</code>
-                    <span>
-                      {duplicate.inDestination ? t('duplicateInDest') : t('duplicateOf')} {duplicate.of}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <IssueList failures={plan?.skipped ?? []} duplicates={duplicates} />
               <button className="btn" onClick={() => setShowSkipped(false)}>
                 {t('close')}
               </button>
