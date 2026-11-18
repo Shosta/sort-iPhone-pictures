@@ -227,9 +227,12 @@ func place(pdf *fpdf.Fpdf, frame Frame, seed int, photo rendered, box Placement)
 	scale := math.Min(box.PW/float64(photo.width), box.PH/float64(photo.height))
 	w, h := float64(photo.width)*scale, float64(photo.height)*scale
 	x, y := box.PX+(box.PW-w)/2, box.PY+(box.PH-h)/2
-	if frame == FrameStamp {
+	switch frame {
+	case FrameStamp:
 		stampOutline(pdf, box)
-	} else {
+	case FramePolaroid:
+		polaroidCard(pdf, box)
+	default:
 		pdf.Rect(box.X, box.Y, box.W, box.H, "D")
 	}
 	name := fmt.Sprintf("photo%d", seed)
@@ -239,9 +242,26 @@ func place(pdf *fpdf.Fpdf, frame Frame, seed int, photo rendered, box Placement)
 	case FrameNone:
 	case FrameTape:
 		tapes(pdf, seed, x, y, w, h)
+	case FramePolaroid:
+		pdf.SetDrawColor(205, 200, 190)
+		pdf.Rect(x, y, w, h, "D")
+		pdf.SetDrawColor(170, 170, 170)
 	default:
 		pdf.Rect(x, y, w, h, "D")
 	}
+}
+
+// polaroidCard draws the instant-film card, in vector: a soft shadow, a
+// cream card with a hairline edge and slightly rounded corners.
+func polaroidCard(pdf *fpdf.Fpdf, box Placement) {
+	pdf.SetFillColor(0, 0, 0)
+	pdf.SetAlpha(0.12, "Normal")
+	pdf.RoundedRect(box.X+0.5, box.Y+0.7, box.W, box.H, 0.8, "1234", "F")
+	pdf.SetAlpha(1, "Normal")
+	pdf.SetFillColor(252, 250, 244)
+	pdf.SetDrawColor(215, 210, 200)
+	pdf.RoundedRect(box.X, box.Y, box.W, box.H, 0.8, "1234", "DF")
+	pdf.SetDrawColor(170, 170, 170)
 }
 
 // tapeInset is the room left around a photo for its tape: the strips stick
