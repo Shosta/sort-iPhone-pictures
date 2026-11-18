@@ -132,7 +132,7 @@ code { word-break: break-all; }
 .modal ul.select-list li span { color: var(--text); }
 .modal ul.select-list li:hover, .modal ul.select-list li.selected { background: rgba(var(--accent-rgb),0.22); }
 .flights { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
-.flight { position: fixed; object-fit: cover; border-radius: 10px; box-shadow: 0 0 24px rgba(var(--accent-rgb),0.55), 0 6px 20px rgba(0,0,0,0.4); will-change: transform; }
+.flight { position: fixed; object-fit: cover; border-radius: 10px; will-change: transform; }
 .swatches { display: inline-flex; flex-shrink: 0; }
 .swatches i { width: 14px; height: 14px; border-radius: 50%; margin-left: -4px; box-shadow: 0 0 0 1.5px var(--surface-raised); }
 .swatches i:first-child { margin-left: 0; }
@@ -224,3 +224,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 }
 /* A strip of washi tape stuck over the picked week. */
 .cal-tape { position: absolute; z-index: 0; left: 22px; right: 0; top: 1px; bottom: 1px; border-radius: 3px; transform-origin: left center; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(var(--accent-rgb), 0.36) 0 7px, rgba(var(--accent-rgb), 0.22) 7px 14px); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45); clip-path: polygon(0 0, 100% 0, 99% 25%, 100% 50%, 99% 75%, 100% 100%, 0 100%, 1% 75%, 0 50%, 1% 25%); }
+
+/* Big libraries: the permanent decoration rests while the engine works. */
+.heavy .aurora span, .heavy .shimmer { animation-play-state: paused; }
+.heavy .thumb img { animation: none; }

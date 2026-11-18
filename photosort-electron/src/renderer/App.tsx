@@ -31,6 +31,44 @@ function Counter({ value }: { value: number }): JSX.Element {
 }
 
 /** "2026/2026-10/Paris/IMG.jpg" → "2026-10 · Paris". */
+/**
+ * Animations are decoration: on big libraries only a sample is played (about
+ * one tile in `every`, and a few flights per tick), so the screen stays lively
+ * without flooding the renderer. The data is never sampled.
+ */
+function animationBudget(count: number): { flights: number; every: number; heavy: boolean } {
+  const flights = 1
+  if (count <= 5000) return { flights, every: 1, heavy: false }
+  return { flights, every: Math.ceil(count / 5000), heavy: count > 20000 }
+}
+
+function sampled(path: string, every: number): boolean {
+  if (every === 1) return true
+  let hash = 0
+  for (let i = path.length - 1; i >= Math.max(0, path.length - 12); i--) hash = (hash * 31 + path.charCodeAt(i)) | 0
+  return Math.abs(hash) % every === 0
+}
+
+/** Pause between two draft renders: none for small lists, up to 1 s for 200 000 photos. */
+function draftDelay(count: number): number {
+  return Math.min(1000, Math.max(0, (count - 2000) / 200))
+}
+
+function groupByFolder(entries: Entry[]): Map<string, Entry[]> {
+  const map = new Map<string, Entry[]>()
+  for (const entry of entries) {
+    const name = folderOf(entry.target)
+    const items = map.get(name)
+    if (items) items.push(entry)
+    else map.set(name, [entry])
+  }
+  return map
+}
+
+function sortedFolders(groups: Map<string, Entry[]>): [string, Entry[]][] {
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
+}
+
 function folderOf(target: string): string {
   const parts = target.split(/[\\/]/)
   return parts.length > 3 ? `${parts[1]} · ${parts[2]}` : (parts[1] ?? '')
@@ -121,7 +159,11 @@ export function App(): JSX.Element {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [draft, setDraft] = useState<Entry[]>([])
   const [draftDuplicates, setDraftDuplicates] = useState<Duplicate[]>([])
-  const [copied, setCopied] = useState<Set<string>>(new Set())
+  // The copied set grows in place (cloning it each tick is O(n)); the count is what triggers renders.
+  const copiedRef = useRef(new Set<string>())
+  const [copiedCount, setCopiedCount] = useState(0)
+  const draftRef = useRef({ entries: [] as Entry[], groups: new Map<string, Entry[]>() })
+  const [draftFolders, setDraftFolders] = useState<[string, Entry[]][]>([])
   const [doneByFolder, setDoneByFolder] = useState<Map<string, Entry[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [showSkipped, setShowSkipped] = useState(false)
@@ -133,6 +175,8 @@ export function App(): JSX.Element {
   const copiedTargets = useRef<string[]>([])
   const arrived = useRef(new Map<string, number>())
   const planId = useRef('')
+  const budget = useRef(animationBudget(0))
+  const pendingDraft = useRef({ entries: [] as Entry[], duplicates: [] as Duplicate[], shown: 0, timer: 0 })
   const [flights, setFlights] = useState<Flight[]>([])
   const removeFlight = useCallback((id: string) => setFlights((previous) => previous.filter((flight) => flight.id !== id)), [])
 
@@ -152,58 +196,128 @@ export function App(): JSX.Element {
       const left = panels[0]?.getBoundingClientRect()
       const right = panels[1]?.getBoundingClientRect()
       const view = document.querySelector('.panel.list .vgrid')?.getBoundingClientRect()
-      const clamp = (value: number, low: number, high: number): number => Math.min(Math.max(value, low), high)
       // Overscan cells are rendered but clipped: they take off from the panel instead.
       const visible = (rect: DOMRect | undefined): rect is DOMRect =>
         !!rect && !!view && rect.top >= view.top - 1 && rect.bottom <= view.bottom + 1
-      // Only photos whose thumbnail is already loaded take off: decoding others
-      // just for the animation would compete with the copy.
+      // Flights only go to folders that are on screen, and leave from the real
+      // tile when it is visible. Other copies borrow the picture of a visible
+      // tile, so something always flies while the engine works (decoding a
+      // thumbnail just for the animation would compete with the copy).
+      const inside = (rect: DOMRect | undefined, box: DOMRect | undefined): rect is DOMRect =>
+        !!rect && !!box && rect.top >= box.top && rect.bottom <= box.bottom
+      const tiles = new Map<string, { rect: DOMRect; url: string }>()
+      document.querySelectorAll<HTMLElement>('[data-pending]').forEach((tile) => {
+        const image = tile.querySelector('img')
+        const rect = tile.getBoundingClientRect()
+        if (image?.src && visible(rect)) tiles.set(tile.dataset.pending as string, { rect, url: image.src })
+      })
+      const decoys = [...tiles.values()]
+      const folderRects = new Map<string, DOMRect | null>()
       const launched: Flight[] = []
-      for (const entry of batch) {
-        const url = cachedThumbnail(entry.source)
+      const limit = budget.current.flights
+      for (let i = 0; i < batch.length && launched.length < limit; i++) {
+        const entry = batch[i]
+        const name = folderOf(entry.target)
+        if (!folderRects.has(name)) {
+          const rect = document.querySelector(`[data-month="${CSS.escape(name)}"] .month-bar`)?.getBoundingClientRect()
+          folderRects.set(name, inside(rect, right) ? rect : null)
+        }
+        const folder = folderRects.get(name)
+        if (!folder) continue
+        const real = tiles.get(entry.source)
+        const source = real ?? (decoys.length > 0 ? decoys[launched.length % decoys.length] : undefined)
+        const url = source?.url ?? cachedThumbnail(entry.source)
         if (!url) continue
-        if (launched.length === 30) break
+        const rect = source?.rect
         const index = launched.length
-        const origin = document.querySelector(`[data-pending="${CSS.escape(entry.source)}"]`)?.getBoundingClientRect()
-        const folder = document.querySelector(`[data-month="${CSS.escape(folderOf(entry.target))}"] .month-bar`)?.getBoundingClientRect()
         launched.push({
           id: `${entry.source}-${performance.now()}-${index}`,
           url,
-          from: visible(origin)
-            ? { x: origin.x + origin.width / 2, y: origin.y + origin.height / 2, size: origin.width }
+          from: rect
+            ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, size: rect.width }
             : { x: (left?.x ?? 0) + (left?.width ?? 0) / 2, y: (left?.y ?? 0) + (left?.height ?? 0) / 2, size: 96 },
-          to: folder && right
-            ? { x: folder.x + folder.width / 2, y: clamp(folder.y, right.y + 20, right.bottom - 20) }
-            : { x: (right?.x ?? 0) + (right?.width ?? 0) / 2, y: (right?.y ?? 0) + 40 },
+          to: { x: folder.x + folder.width / 2, y: folder.y },
           delay: index * 0.07
         })
       }
       if (launched.length > 0) setFlights((previous) => [...previous, ...launched])
-      setCopied((previous) => {
-        const next = new Set(previous)
-        for (const entry of batch) next.add(entry.source)
-        return next
-      })
+      for (const entry of batch) copiedRef.current.add(entry.source)
+      setCopiedCount(copiedRef.current.size)
+      const added = new Map<string, Entry[]>()
+      for (const entry of batch) {
+        const name = folderOf(entry.target)
+        const list = added.get(name)
+        if (list) list.push(entry)
+        else added.set(name, [entry])
+      }
       setDoneByFolder((previous) => {
         const next = new Map(previous)
-        for (const entry of batch) {
-          const name = folderOf(entry.target)
-          next.set(name, [...(next.get(name) ?? []), entry])
-        }
+        for (const [name, list] of added) next.set(name, (next.get(name) ?? NO_ENTRY).concat(list))
         return next
       })
     }, 120)
     return () => clearInterval(timer)
   }, [])
 
+  // Draft batches are accumulated and applied at a pace that follows the list
+  // size: the grouping below is O(n), so applying every 80 ms batch makes big
+  // libraries quadratic. Nothing is dropped; the final plan replaces the draft.
+  const flushDraft = useCallback((): void => {
+    const state = pendingDraft.current
+    window.clearTimeout(state.timer)
+    state.timer = 0
+    const entries = state.entries
+    const duplicates = state.duplicates
+    if (entries.length === 0 && duplicates.length === 0) return
+    state.entries = []
+    state.duplicates = []
+    const mirror = draftRef.current
+    if (duplicates.length > 0) {
+      const gone = new Set(duplicates.map((duplicate) => duplicate.path))
+      mirror.entries = mirror.entries.concat(entries).filter((entry) => !gone.has(entry.source))
+      mirror.groups = groupByFolder(mirror.entries)
+    } else {
+      mirror.entries = mirror.entries.concat(entries)
+      const touched = new Set<string>()
+      for (const entry of entries) {
+        const name = folderOf(entry.target)
+        const list = mirror.groups.get(name)
+        if (!list) mirror.groups.set(name, [entry])
+        else {
+          // Mutated until it is published below, then replaced so memoised folders see the change.
+          list.push(entry)
+        }
+        touched.add(name)
+      }
+      for (const name of touched) mirror.groups.set(name, mirror.groups.get(name)!.slice())
+    }
+    state.shown = mirror.entries.length
+    setDraft(mirror.entries)
+    setDraftFolders(sortedFolders(mirror.groups))
+    if (duplicates.length > 0) setDraftDuplicates((previous) => previous.concat(duplicates))
+  }, [])
+
+  const clearDraftBuffer = (): void => {
+    draftRef.current = { entries: [], groups: new Map() }
+    const state = pendingDraft.current
+    window.clearTimeout(state.timer)
+    state.timer = 0
+    state.entries = []
+    state.duplicates = []
+    state.shown = 0
+  }
+
   const resetResults = (): void => {
+    clearDraftBuffer()
     buffer.current = []
     copiedTargets.current = []
     arrived.current = new Map()
     setPlan(null)
     setDraft([])
+    setDraftFolders([])
     setDraftDuplicates([])
-    setCopied(new Set())
+    copiedRef.current = new Set()
+    setCopiedCount(0)
     setDoneByFolder(new Map())
     setPhase('idle')
     setError(null)
@@ -229,20 +343,17 @@ export function App(): JSX.Element {
         const duplicates: Duplicate[] = event.duplicates ?? []
         const now = performance.now()
         for (const entry of entries) arrived.current.set(entry.source, now)
-        setDraft((previous) => {
-          let next = entries.length > 0 ? previous.concat(entries) : previous
-          if (duplicates.length > 0) {
-            const gone = new Set(duplicates.map((duplicate) => duplicate.path))
-            next = next.filter((entry) => !gone.has(entry.source))
-          }
-          return next
-        })
-        if (duplicates.length > 0) setDraftDuplicates((previous) => previous.concat(duplicates))
+        const state = pendingDraft.current
+        for (const entry of entries) state.entries.push(entry)
+        for (const duplicate of duplicates) state.duplicates.push(duplicate)
+        if (!state.timer) state.timer = window.setTimeout(flushDraft, draftDelay(state.shown + state.entries.length))
       } else if (event.type === 'plan') {
+        clearDraftBuffer()
         setStage(null)
         setPlan(event.plan)
         setPhase('ready')
       } else if (event.type === 'error') {
+        flushDraft()
         setStage(null)
         setPhase('idle')
         if (!event.cancelled) setError(event.message)
@@ -255,7 +366,8 @@ export function App(): JSX.Element {
   const sort = (): void => {
     if (!plan) return
     setPhase('copying')
-    setCopied(new Set())
+    copiedRef.current = new Set()
+    setCopiedCount(0)
     setDoneByFolder(new Map())
     copiedTargets.current = []
     running.current = request({ op: 'copy', planId: planId.current }, (event) => {
@@ -309,32 +421,29 @@ export function App(): JSX.Element {
 
   const entries = plan?.entries ?? draft
   const duplicates = plan?.duplicates ?? draftDuplicates
-  const pending = useMemo(() => (copied.size === 0 ? entries : entries.filter((entry) => !copied.has(entry.source))), [entries, copied])
-  const folders = useMemo(() => {
-    const map = new Map<string, Entry[]>()
-    for (const entry of entries) {
-      const name = folderOf(entry.target)
-      const items = map.get(name)
-      if (items) items.push(entry)
-      else map.set(name, [entry])
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [entries])
+  const pending = useMemo(
+    () => (copiedCount === 0 ? entries : entries.filter((entry) => !copiedRef.current.has(entry.source))),
+    [entries, copiedCount]
+  )
+  const planFolders = useMemo(() => (plan ? sortedFolders(groupByFolder(plan.entries)) : null), [plan])
+  const folders = planFolders ?? draftFolders
   const busy = phase === 'analyzing' || phase === 'copying'
   const tagging = tagJob?.state === 'loading' || tagJob?.state === 'running'
   const deep = skipDuplicates || groupSimilar
   const progress =
-    phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copied.size / entries.length : 0) : 0
+    phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copiedCount / entries.length : 0) : 0
 
+  const animation = animationBudget(entries.length)
+  budget.current = animation
   const renderPending = useCallback((entry: Entry, size: number) => {
     const since = arrived.current.get(entry.source)
-    const fresh = since !== undefined && performance.now() - since < FRESH
+    const fresh = since !== undefined && performance.now() - since < FRESH && sampled(entry.source, animation.every)
     return <Thumb path={entry.source} size={size} label={entry.source} pending appearDelay={fresh ? 0 : undefined} />
-  }, [])
+  }, [animation.every])
 
   return (
     <I18nContext.Provider value={t}>
-    <div className="app">
+    <div className={`app${animation.heavy && busy ? ' heavy' : ''}`}>
       <div className="aurora">
         <span /> <span /> <span />
       </div>
@@ -459,7 +568,7 @@ export function App(): JSX.Element {
           </div>
           <div className="glass panel grow">
             <h2>
-              {t('sorted')} <em><Counter value={copied.size} /></em>
+              {t('sorted')} <em><Counter value={copiedCount} /></em>
             </h2>
             {folders.map(([name, items]) => (
               <Folder key={name} name={name} items={items} done={doneByFolder.get(name) ?? NO_ENTRY} />
@@ -483,9 +592,9 @@ export function App(): JSX.Element {
                 : phase === 'analyzing'
                   ? analysisStatus(t, stage)
                   : phase === 'copying'
-                    ? t('status.copying', { done: copied.size, total: entries.length })
+                    ? t('status.copying', { done: copiedCount, total: entries.length })
                     : phase === 'done'
-                      ? t('status.done', { n: copied.size })
+                      ? t('status.done', { n: copiedCount })
                       : plan
                         ? t('status.ready', { n: entries.length })
                         : t('status.idle')}
