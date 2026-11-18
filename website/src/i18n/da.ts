@@ -15,7 +15,7 @@ export const da: Copy = {
     eyebrow: 'Open source · lokalt · ingen konto',
     titleA: 'Tusindvis af rodede iPhone-billeder,',
     titleB: 'sorteret efter dato og lette at finde.',
-    lead: 'Photosort lægger dine billeder i orden efter optagelsesdato, tilføjer tags, så du hurtigt finder dem, og opdager dubletter. Alt foregår på din egen computer, uden at sende noget til skyen.',
+    lead: 'Photosort lægger dine billeder i orden efter optagelsesdato, tilføjer tags, så du hurtigt finder dem, og opdager dubletter. Alt foregår på din egen computer, uden at sende noget til skyen. Som bonus kan du med ét klik lave en side med dine billeder, som du kan printe, klippe ud og klistre ind i din scrapbog.',
     ctaHow: 'Se sorteringen',
     ctaDownload: 'Download',
     note: 'macOS · Linux · Windows — dine originaler ændres aldrig',

@@ -15,7 +15,7 @@ export const fr: Copy = {
     eyebrow: 'Open source · local · sans compte',
     titleA: 'Des milliers de photos d’iPhone en vrac,',
     titleB: 'classées par date et faciles à retrouver.',
-    lead: 'Photosort range vos photos par date de prise de vue, ajoute des tags pour les retrouver en un clin d’œil, et repère les doublons. Tout se passe sur votre ordinateur, sans rien envoyer dans le cloud.',
+    lead: 'Photosort range vos photos par date de prise de vue, ajoute des tags pour les retrouver en un clin d’œil, et repère les doublons. Tout se passe sur votre ordinateur, sans rien envoyer dans le cloud. En bonus, générez en un clic une page de vos photos à imprimer, à découper et à coller dans votre carnet de scrapbooking.',
     ctaHow: 'Voir le classement',
     ctaDownload: 'Télécharger',
     note: 'macOS · Linux · Windows — vos originaux ne sont jamais modifiés',

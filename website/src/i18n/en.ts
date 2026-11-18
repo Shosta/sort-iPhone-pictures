@@ -15,7 +15,7 @@ export const en: Copy = {
     eyebrow: 'Open source · local · no account',
     titleA: 'Thousands of loose iPhone photos,',
     titleB: 'sorted by date and easy to find.',
-    lead: 'Photosort files your photos by the date they were taken, adds tags so you can find them in a blink, and spots duplicates. It all happens on your own computer, with nothing sent to the cloud.',
+    lead: 'Photosort files your photos by the date they were taken, adds tags so you can find them in a blink, and spots duplicates. It all happens on your own computer, with nothing sent to the cloud. As a bonus, generate in one click a page of your photos to print, cut out and paste into your scrapbooking notebook.',
     ctaHow: 'See the sorting',
     ctaDownload: 'Download',
     note: 'macOS · Linux · Windows — your originals are never modified',
