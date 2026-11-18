@@ -162,8 +162,10 @@ func TestParsePaper(t *testing.T) {
 
 func TestAlbumFormats(t *testing.T) {
 	sizes := map[string][2]float64{
-		"a5-portrait": {148, 210}, "10x15-landscape": {150, 100}, "13x18-portrait": {130, 180},
-		"square-20": {200, 200}, "square-21": {210, 210},
+		"10x15-landscape": {150, 100}, "10x15-portrait": {100, 150}, "square-20": {200, 200},
+	}
+	if _, ok := ParsePaper("a5-portrait"); ok {
+		t.Error("a5 should not be offered")
 	}
 	for name, size := range sizes {
 		paper, ok := ParsePaper(name)
@@ -192,5 +194,42 @@ func TestBleedKeepsSafetyZone(t *testing.T) {
 				t.Errorf("photo %d leaves the safety zone: %+v", a.Index, a)
 			}
 		}
+	}
+}
+
+func TestFramedLayoutKeepsCuttingSpace(t *testing.T) {
+	paper := a4Landscape(t)
+	ratios := append(repeat(3.0/4.0, 7), repeat(4.0/3.0, 6)...)
+	for _, frame := range []Frame{FramePolaroid, FrameStamp} {
+		top, side, bottom := frame.insets()
+		sheets := LayoutFramed(paper, frame, DefaultLongSide, MinGutter, ratios)
+		placed := 0
+		for _, sheet := range sheets {
+			for i, a := range sheet.Placements {
+				placed++
+				if math.Abs(math.Max(a.PW, a.PH)-DefaultLongSide) > 0.1 || math.Abs(a.PW/a.PH-ratios[a.Index]) > 0.01 {
+					t.Errorf("%s: photo %d resized: %+v", frame, a.Index, a)
+				}
+				if math.Abs(a.PX-a.X-side) > 0.01 || math.Abs(a.PY-a.Y-top) > 0.01 || math.Abs(a.H-a.PH-top-bottom) > 0.01 {
+					t.Errorf("%s: wrong frame around photo %d: %+v", frame, a.Index, a)
+				}
+				if a.X < Margin-epsilon || a.Y < Margin-epsilon || a.X+a.W > paper.Width-Margin+0.001 || a.Y+a.H > paper.Height-Margin+0.001 {
+					t.Errorf("%s: piece %d outside the margins: %+v", frame, a.Index, a)
+				}
+				for _, b := range sheet.Placements[i+1:] {
+					gapX := math.Max(b.X-(a.X+a.W), a.X-(b.X+b.W))
+					gapY := math.Max(b.Y-(a.Y+a.H), a.Y-(b.Y+b.H))
+					if math.Max(gapX, gapY) < MinGutter-0.001 {
+						t.Errorf("%s: pieces %d and %d too close", frame, a.Index, b.Index)
+					}
+				}
+			}
+		}
+		if placed != len(ratios) {
+			t.Errorf("%s: %d placed, want %d", frame, placed, len(ratios))
+		}
+	}
+	if _, ok := ParseFrame("wooden"); ok {
+		t.Error("unknown frame accepted")
 	}
 }

@@ -52,14 +52,9 @@ var papers = map[string]Paper{
 	"a4-portrait":      {Name: "A4", Width: 210, Height: 297},
 	"letter-landscape": {Name: "Letter", Width: 279.4, Height: 215.9},
 	"letter-portrait":  {Name: "Letter", Width: 215.9, Height: 279.4},
-	"a5-landscape":     {Name: "A5", Width: 210, Height: 148},
-	"a5-portrait":      {Name: "A5", Width: 148, Height: 210},
 	"10x15-landscape":  {Name: "10x15", Width: 150, Height: 100},
 	"10x15-portrait":   {Name: "10x15", Width: 100, Height: 150},
-	"13x18-landscape":  {Name: "13x18", Width: 180, Height: 130},
-	"13x18-portrait":   {Name: "13x18", Width: 130, Height: 180},
 	"square-20":        {Name: "20x20", Width: 200, Height: 200},
-	"square-21":        {Name: "21x21", Width: 210, Height: 210},
 }
 
 // DefaultPaper is the page used when none is given.
@@ -78,11 +73,44 @@ func ParsePaper(name string) (Paper, bool) {
 // Landscape reports whether the sheet is wider than tall.
 func (p Paper) Landscape() bool { return p.Width > p.Height }
 
+// Frame is the look of a printed photo.
+type Frame string
+
+const (
+	FrameNone     Frame = "none"
+	FramePolaroid Frame = "polaroid"
+	FrameStamp    Frame = "stamp"
+)
+
+// ParseFrame resolves a frame name; an empty name selects FrameNone.
+func ParseFrame(name string) (Frame, bool) {
+	switch f := Frame(strings.ToLower(name)); f {
+	case "":
+		return FrameNone, true
+	case FrameNone, FramePolaroid, FrameStamp:
+		return f, true
+	}
+	return "", false
+}
+
+// insets are the widths, in millimetres, of the border around the photo.
+func (f Frame) insets() (top, side, bottom float64) {
+	switch f {
+	case FramePolaroid:
+		return 4, 4, 14
+	case FrameStamp:
+		return 3.5, 3.5, 3.5
+	}
+	return 0, 0, 0
+}
+
 // Placement is a photo on a sheet. Index is the position of the photo in the
-// list given to Layout.
+// list given to Layout. X, Y, W, H is the whole printed piece, frame
+// included, which is what gets cut out; PX, PY, PW, PH is the photo inside it.
 type Placement struct {
-	Index      int
-	X, Y, W, H float64
+	Index          int
+	X, Y, W, H     float64
+	PX, PY, PW, PH float64
 }
 
 // Sheet is one printed page.
@@ -93,6 +121,8 @@ type Sheet struct {
 type item struct {
 	index int
 	w, h  float64
+	// photo size, inside the frame
+	pw, ph float64
 }
 
 type row struct {
@@ -121,23 +151,35 @@ func (r *row) add(it item, gutter float64) {
 // merged into one when they fit side by side. Rows are then put on the first
 // sheet with room for them.
 func Layout(paper Paper, longSide, gutter float64, ratios []float64) []Sheet {
+	return LayoutFramed(paper, FrameNone, longSide, gutter, ratios)
+}
+
+// LayoutFramed is Layout with a frame around every photo: longSide is the
+// size of the photo itself, the frame comes on top, and gutter is kept
+// between frames.
+func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []float64) []Sheet {
+	top, side, bottom := frame.insets()
 	gutter = clamp(gutter, MinGutter, MaxGutter)
 	usableW, usableH := paper.Width-2*Margin, paper.Height-2*Margin
-	longSide = clamp(longSide, 10, math.Min(usableW, usableH))
+	longSide = clamp(longSide, 10, math.Min(usableW-2*side, usableH-top-bottom))
 
 	var portraits, landscapes []item
 	for index, ratio := range ratios {
 		if !(ratio > 0) || math.IsInf(ratio, 0) {
 			ratio = 1
 		}
-		it := item{index: index, w: longSide, h: longSide}
+		it := item{index: index, pw: longSide, ph: longSide}
 		if ratio > 1 {
-			it.h = longSide / ratio
-			landscapes = append(landscapes, it)
-			continue
+			it.ph = longSide / ratio
+		} else {
+			it.pw = longSide * ratio
 		}
-		it.w = longSide * ratio
-		portraits = append(portraits, it)
+		it.w, it.h = it.pw+2*side, it.ph+top+bottom
+		if ratio > 1 {
+			landscapes = append(landscapes, it)
+		} else {
+			portraits = append(portraits, it)
+		}
 	}
 	portraitRows, landscapeRows := fill(portraits, usableW, gutter), fill(landscapes, usableW, gutter)
 
@@ -181,7 +223,10 @@ func Layout(paper Paper, longSide, gutter float64, ratios []float64) []Sheet {
 		for _, r := range page.rows {
 			x := Margin + paper.Bleed
 			for _, it := range r.items {
-				sheets[i].Placements = append(sheets[i].Placements, Placement{Index: it.index, X: round(x), Y: round(y), W: round(it.w), H: round(it.h)})
+				sheets[i].Placements = append(sheets[i].Placements, Placement{
+					Index: it.index, X: round(x), Y: round(y), W: round(it.w), H: round(it.h),
+					PX: round(x + side), PY: round(y + top), PW: round(it.pw), PH: round(it.ph),
+				})
 				x += it.w + gutter
 			}
 			y += r.height + gutter

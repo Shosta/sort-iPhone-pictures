@@ -31,6 +31,7 @@ const (
 // Job describes a PDF to write.
 type Job struct {
 	Paper Paper
+	Frame Frame
 	// Photos are the file paths, indexed by Placement.Index.
 	Photos []string
 	Sheets []Sheet
@@ -162,7 +163,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 					return
 				}
 				placement := slots[i].placement
-				results[i] <- reduce(job.Photos[placement.Index], math.Max(placement.W, placement.H))
+				results[i] <- reduce(job.Photos[placement.Index], math.Max(placement.PW, placement.PH))
 			}
 		}()
 	}
@@ -185,7 +186,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 			if result.err != nil {
 				failed = append(failed, Failure{Path: job.Photos[placement.Index], Error: result.err.Error()})
 			} else {
-				place(pdf, fmt.Sprintf("photo%d", i), result, placement)
+				place(pdf, job.Frame, fmt.Sprintf("photo%d", i), result, placement)
 			}
 			if job.Progress != nil {
 				job.Progress(i+1, len(slots))
@@ -219,16 +220,51 @@ func trimMarks(pdf *fpdf.Fpdf, paper Paper) {
 	}
 }
 
-// place draws a reduced photo, as large as its box allows (the layout gives
-// the box the photo's own proportions), with a thin cutting guide around it.
-func place(pdf *fpdf.Fpdf, name string, photo rendered, box Placement) {
-	scale := math.Min(box.W/float64(photo.width), box.H/float64(photo.height))
+// place draws a reduced photo in the photo area of its box (the layout gives
+// that area the photo's own proportions), inside its frame, with a thin
+// cutting guide around the whole piece.
+func place(pdf *fpdf.Fpdf, frame Frame, name string, photo rendered, box Placement) {
+	scale := math.Min(box.PW/float64(photo.width), box.PH/float64(photo.height))
 	w, h := float64(photo.width)*scale, float64(photo.height)*scale
-	x, y := box.X+(box.W-w)/2, box.Y+(box.H-h)/2
+	x, y := box.PX+(box.PW-w)/2, box.PY+(box.PH-h)/2
+	if frame == FrameStamp {
+		stampOutline(pdf, box)
+	} else {
+		pdf.Rect(box.X, box.Y, box.W, box.H, "D")
+	}
 	pdf.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "JPG"}, bytes.NewReader(photo.data))
 	pdf.ImageOptions(name, x, y, w, h, false, fpdf.ImageOptions{ImageType: "JPG"}, 0, "")
-	const guide = 0.3
-	pdf.Rect(x-guide, y-guide, w+2*guide, h+2*guide, "D")
+	if frame == FrameNone {
+		return
+	}
+	pdf.Rect(x, y, w, h, "D")
+}
+
+// stampOutline draws the box with perforated edges, like a postage stamp.
+func stampOutline(pdf *fpdf.Fpdf, box Placement) {
+	corners := [][2]float64{{box.X, box.Y}, {box.X + box.W, box.Y}, {box.X + box.W, box.Y + box.H}, {box.X, box.Y + box.H}}
+	var points []fpdf.PointType
+	for i, from := range corners {
+		to := corners[(i+1)%4]
+		dx, dy := to[0]-from[0], to[1]-from[1]
+		length := math.Hypot(dx, dy)
+		ux, uy := dx/length, dy/length
+		// The inward normal: the corners run clockwise on the page.
+		nx, ny := -uy, ux
+		holes := max(1, int(math.Round(length/2.5)))
+		pitch := length / float64(holes)
+		radius := pitch * 0.3
+		for hole := range holes {
+			centre := (float64(hole) + 0.5) * pitch
+			for step := 0; step <= 8; step++ {
+				angle := math.Pi * float64(step) / 8
+				along := centre - radius*math.Cos(angle)
+				depth := radius * math.Sin(angle)
+				points = append(points, fpdf.PointType{X: from[0] + ux*along + nx*depth, Y: from[1] + uy*along + ny*depth})
+			}
+		}
+	}
+	pdf.Polygon(points, "D")
 }
 
 // reduce decodes a photo upright and reduces it to print at sizeMM on its

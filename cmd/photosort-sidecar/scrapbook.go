@@ -24,6 +24,11 @@ type scrapPlacement struct {
 	Y    float64 `json:"y"`
 	W    float64 `json:"w"`
 	H    float64 `json:"h"`
+	// The photo inside its frame, relative to the piece.
+	PX float64 `json:"px"`
+	PY float64 `json:"py"`
+	PW float64 `json:"pw"`
+	PH float64 `json:"ph"`
 }
 
 type scrapSheet struct {
@@ -87,6 +92,7 @@ func (s *server) weekPhotos(ctx context.Context, req request) error {
 // arrangement is the placement of the chosen photos.
 type arrangement struct {
 	paper  scrapbook.Paper
+	frame  scrapbook.Frame
 	photos []string
 	sheets []scrapbook.Sheet
 	failed []scrapFailure
@@ -101,6 +107,10 @@ func (s *server) arrange(ctx context.Context, req request) (arrangement, error) 
 		return arrangement{}, fmt.Errorf("unknown page format %q", req.Page)
 	}
 	paper = paper.WithBleed(req.Bleed)
+	frame, ok := scrapbook.ParseFrame(req.Frame)
+	if !ok {
+		return arrangement{}, fmt.Errorf("unknown frame style %q", req.Frame)
+	}
 	longSide := req.LongSide
 	if longSide <= 0 {
 		longSide = scrapbook.DefaultLongSide
@@ -109,7 +119,7 @@ func (s *server) arrange(ctx context.Context, req request) (arrangement, error) 
 	if err := ctx.Err(); err != nil {
 		return arrangement{}, err
 	}
-	result := arrangement{paper: paper}
+	result := arrangement{paper: paper, frame: frame}
 	var kept []float64
 	for i, path := range req.Files {
 		if errs[i] != nil {
@@ -119,7 +129,7 @@ func (s *server) arrange(ctx context.Context, req request) (arrangement, error) 
 		result.photos = append(result.photos, path)
 		kept = append(kept, ratios[i])
 	}
-	result.sheets = scrapbook.Layout(paper, longSide, req.Gutter, kept)
+	result.sheets = scrapbook.LayoutFramed(paper, frame, longSide, req.Gutter, kept)
 	return result, nil
 }
 
@@ -133,7 +143,7 @@ func (s *server) scrapbookLayout(ctx context.Context, req request) error {
 	for i, sheet := range arranged.sheets {
 		sheets[i].Placements = make([]scrapPlacement, len(sheet.Placements))
 		for j, placement := range sheet.Placements {
-			sheets[i].Placements[j] = scrapPlacement{Path: arranged.photos[placement.Index], X: placement.X, Y: placement.Y, W: placement.W, H: placement.H}
+			sheets[i].Placements[j] = scrapPlacement{Path: arranged.photos[placement.Index], X: placement.X, Y: placement.Y, W: placement.W, H: placement.H, PX: placement.PX - placement.X, PY: placement.PY - placement.Y, PW: placement.PW, PH: placement.PH}
 		}
 	}
 	s.send(event{"id": req.ID, "type": "layout", "pageWidth": arranged.paper.SheetWidth(), "pageHeight": arranged.paper.SheetHeight(), "bleed": arranged.paper.Bleed, "sheets": sheets, "failed": nonNil(arranged.failed)})
@@ -157,6 +167,7 @@ func (s *server) scrapbook(ctx context.Context, req request) error {
 	var throttle statusThrottle
 	result, err := scrapbook.Render(ctx, scrapbook.Job{
 		Paper:       arranged.paper,
+		Frame:       arranged.frame,
 		Photos:      arranged.photos,
 		Sheets:      arranged.sheets,
 		Dir:         req.OutDir,

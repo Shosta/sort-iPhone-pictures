@@ -21,14 +21,16 @@ export interface Prefs {
   scrapLongSide: number
   scrapGutter: number
   scrapBleed: boolean
+  scrapFrame: ScrapFrame
   language: Language
   theme: ThemeId
 }
 
+export type ScrapFrame = 'none' | 'polaroid' | 'stamp'
 export type ScrapPage =
   | 'a4-landscape' | 'a4-portrait' | 'letter-landscape' | 'letter-portrait'
-  | 'a5-landscape' | 'a5-portrait' | '10x15-landscape' | '10x15-portrait'
-  | '13x18-landscape' | '13x18-portrait' | 'square-20' | 'square-21'
+  | '10x15-landscape' | '10x15-portrait'
+  | 'square-20'
 
 const STORAGE_KEY = 'prefs'
 
@@ -53,6 +55,7 @@ function load(): Prefs {
     scrapLongSide: 65,
     scrapGutter: 5,
     scrapBleed: false,
+    scrapFrame: 'none',
     language: detectLanguage(),
     theme: 'aurora'
   }

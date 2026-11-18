@@ -68,6 +68,11 @@ export interface ScrapPlacement {
   y: number
   w: number
   h: number
+  /** The photo inside its frame, relative to the piece. */
+  px: number
+  py: number
+  pw: number
+  ph: number
 }
 
 export interface ScrapLayout {

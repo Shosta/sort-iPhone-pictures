@@ -2,9 +2,9 @@ import confetti from 'canvas-confetti'
 import { motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useT } from '../i18n'
-import type { Prefs, ScrapPage } from '../prefs'
+import type { Prefs, ScrapFrame, ScrapPage } from '../prefs'
 import { cachedThumbnail, loadThumbnail, request } from '../sidecar'
-import type { ScrapJob, ScrapLayout, ScrapPhoto } from '../types'
+import type { ScrapJob, ScrapLayout, ScrapPhoto, ScrapPlacement } from '../types'
 import { addDays, Calendar, isoDay, isoWeek, mondayOf, monthWeeks } from './Calendar'
 import { Flights, type Flight } from './Flights'
 import { Select } from './Select'
@@ -17,10 +17,11 @@ interface Props {
   onClose: () => void
 }
 
+const FRAMES: ScrapFrame[] = ['none', 'polaroid', 'stamp']
 const PAGES: ScrapPage[] = [
   'a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait',
-  'a5-landscape', 'a5-portrait', '10x15-landscape', '10x15-portrait',
-  '13x18-landscape', '13x18-portrait', 'square-20', 'square-21'
+  '10x15-landscape', '10x15-portrait',
+  'square-20'
 ]
 /** Thumbnails that take off when the PDF is created. */
 const MAX_FLIGHTS = 14
@@ -34,7 +35,7 @@ const dirName = (path: string): string => path.replace(/[\\/][^\\/]*$/, '')
 const squash = (text: string): string => text.replace(/\s+/g, ' ')
 
 /** A photo placed on the preview sheet, drawn from the thumbnail already in cache. */
-function PreviewPhoto({ x, y, w, h, path }: { x: number; y: number; w: number; h: number; path: string }): JSX.Element {
+function PreviewPhoto({ x, y, w, h, px, py, pw, ph, path }: ScrapPlacement): JSX.Element {
   const [url, setUrl] = useState(() => cachedThumbnail(path))
   useEffect(() => {
     const known = cachedThumbnail(path)
@@ -44,7 +45,7 @@ function PreviewPhoto({ x, y, w, h, path }: { x: number; y: number; w: number; h
   return (
     <g className="scrap-ph" style={{ transform: `translate(${x}px, ${y}px)` }}>
       <rect width={w} height={h} className="scrap-ph-bg" />
-      {url && <image href={url} width={w} height={h} preserveAspectRatio="xMidYMid slice" />}
+      {url && <image href={url} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid slice" />}
       <rect width={w} height={h} className="scrap-ph-edge" />
     </g>
   )
@@ -154,7 +155,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     let live = true
     let handle: { cancel: () => void } | null = null
     const timer = setTimeout(() => {
-      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0 }, (event) => {
+      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame }, (event) => {
         if (!live) return
         if (event.type === 'layout') {
           setLayout(event)
@@ -172,7 +173,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
       handle?.cancel()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter, prefs.scrapBleed])
+  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter, prefs.scrapBleed, prefs.scrapFrame])
 
   const range = useMemo(() => {
     const format = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' })
@@ -223,7 +224,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     const name = squash(t('scrap.file', { year: week.year, week: String(week.week).padStart(2, '0'), range }))
     setJob({ state: 'running', done: 0, total: files.length })
     run.current = request(
-      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, outDir, fallbackDir: downloads, name },
+      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame, outDir, fallbackDir: downloads, name },
       (event) => {
         if (event.type === 'progress') {
           setJob((previous) => previous && { ...previous, done: event.done, total: event.total })
@@ -316,6 +317,14 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
                   {t('scrap.gutter')} <em>{prefs.scrapGutter / 10} cm</em>
                 </label>
                 <input type="range" min={5} max={10} step={1} value={prefs.scrapGutter} onChange={(event) => onChange({ scrapGutter: Number(event.target.value) })} />
+              </div>
+              <div className="field">
+                <label>{t('scrap.frame')}</label>
+                <Select
+                  value={prefs.scrapFrame}
+                  options={FRAMES.map((frame) => ({ value: frame, label: t(`scrap.frame.${frame}`), icon: null }))}
+                  onChange={(scrapFrame) => onChange({ scrapFrame })}
+                />
               </div>
               <label className="check">
                 <input type="checkbox" checked={prefs.scrapBleed} onChange={(event) => onChange({ scrapBleed: event.target.checked })} /> {t('scrap.bleed')}
