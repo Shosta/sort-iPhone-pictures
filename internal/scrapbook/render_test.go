@@ -180,3 +180,18 @@ func TestMeasurerReadsUprightRatios(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderFramedPages(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "in", "a.jpg")
+	writePhoto(t, path, 300, 400)
+	for _, frame := range []Frame{FramePolaroid, FrameStamp, FrameTape} {
+		job := renderJob(t, filepath.Join(dir, string(frame)), []string{path}, []float64{0.75})
+		job.Frame = frame
+		job.Sheets = LayoutFramed(job.Paper, frame, DefaultLongSide, MinGutter, []float64{0.75})
+		result, err := Render(context.Background(), job)
+		if err != nil || result.Pages != 1 || len(result.Failed) != 0 {
+			t.Errorf("%s: %+v, %v", frame, result, err)
+		}
+	}
+}

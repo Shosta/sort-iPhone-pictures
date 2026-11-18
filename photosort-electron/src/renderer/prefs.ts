@@ -26,11 +26,9 @@ export interface Prefs {
   theme: ThemeId
 }
 
-export type ScrapFrame = 'none' | 'polaroid' | 'stamp'
-export type ScrapPage =
-  | 'a4-landscape' | 'a4-portrait' | 'letter-landscape' | 'letter-portrait'
-  | '10x15-landscape' | '10x15-portrait'
-  | 'square-20'
+export type ScrapFrame = 'none' | 'polaroid' | 'stamp' | 'tape'
+export type ScrapPage = 'a4-landscape' | 'a4-portrait' | 'letter-landscape' | 'letter-portrait'
+
 
 const STORAGE_KEY = 'prefs'
 

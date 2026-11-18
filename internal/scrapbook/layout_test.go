@@ -160,26 +160,19 @@ func TestParsePaper(t *testing.T) {
 	}
 }
 
-func TestAlbumFormats(t *testing.T) {
-	sizes := map[string][2]float64{
-		"10x15-landscape": {150, 100}, "10x15-portrait": {100, 150}, "square-20": {200, 200},
+func TestOnlyDocumentPapers(t *testing.T) {
+	for _, name := range []string{"a4-portrait", "a4-landscape", "letter-portrait", "letter-landscape"} {
+		if _, ok := ParsePaper(name); !ok {
+			t.Errorf("%s missing", name)
+		}
 	}
 	if _, ok := ParsePaper("a5-portrait"); ok {
 		t.Error("a5 should not be offered")
 	}
-	for name, size := range sizes {
-		paper, ok := ParsePaper(name)
-		if !ok || paper.Width != size[0] || paper.Height != size[1] {
-			t.Errorf("%s = %+v, %v", name, paper, ok)
-			continue
-		}
-		ratios := repeat(3.0/4.0, 6)
-		checkSheets(t, paper, 40, ratios, Layout(paper, 40, MinGutter, ratios))
-	}
 }
 
 func TestBleedKeepsSafetyZone(t *testing.T) {
-	paper, _ := ParsePaper("square-20")
+	paper := Paper{Name: "square", Width: 200, Height: 200}
 	paper = paper.WithBleed(DefaultBleed)
 	if paper.SheetWidth() != 206 || paper.SheetHeight() != 206 {
 		t.Fatalf("sheet = %v x %v", paper.SheetWidth(), paper.SheetHeight())
@@ -200,7 +193,7 @@ func TestBleedKeepsSafetyZone(t *testing.T) {
 func TestFramedLayoutKeepsCuttingSpace(t *testing.T) {
 	paper := a4Landscape(t)
 	ratios := append(repeat(3.0/4.0, 7), repeat(4.0/3.0, 6)...)
-	for _, frame := range []Frame{FramePolaroid, FrameStamp} {
+	for _, frame := range []Frame{FramePolaroid, FrameStamp, FrameTape} {
 		top, side, bottom := frame.insets()
 		sheets := LayoutFramed(paper, frame, DefaultLongSide, MinGutter, ratios)
 		placed := 0

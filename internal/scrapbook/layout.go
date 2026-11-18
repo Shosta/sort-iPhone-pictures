@@ -52,9 +52,6 @@ var papers = map[string]Paper{
 	"a4-portrait":      {Name: "A4", Width: 210, Height: 297},
 	"letter-landscape": {Name: "Letter", Width: 279.4, Height: 215.9},
 	"letter-portrait":  {Name: "Letter", Width: 215.9, Height: 279.4},
-	"10x15-landscape":  {Name: "10x15", Width: 150, Height: 100},
-	"10x15-portrait":   {Name: "10x15", Width: 100, Height: 150},
-	"square-20":        {Name: "20x20", Width: 200, Height: 200},
 }
 
 // DefaultPaper is the page used when none is given.
@@ -80,6 +77,7 @@ const (
 	FrameNone     Frame = "none"
 	FramePolaroid Frame = "polaroid"
 	FrameStamp    Frame = "stamp"
+	FrameTape     Frame = "tape"
 )
 
 // ParseFrame resolves a frame name; an empty name selects FrameNone.
@@ -87,7 +85,7 @@ func ParseFrame(name string) (Frame, bool) {
 	switch f := Frame(strings.ToLower(name)); f {
 	case "":
 		return FrameNone, true
-	case FrameNone, FramePolaroid, FrameStamp:
+	case FrameNone, FramePolaroid, FrameStamp, FrameTape:
 		return f, true
 	}
 	return "", false
@@ -100,6 +98,8 @@ func (f Frame) insets() (top, side, bottom float64) {
 		return 4, 4, 14
 	case FrameStamp:
 		return 3.5, 3.5, 3.5
+	case FrameTape:
+		return tapeInset, tapeInset, tapeInset
 	}
 	return 0, 0, 0
 }

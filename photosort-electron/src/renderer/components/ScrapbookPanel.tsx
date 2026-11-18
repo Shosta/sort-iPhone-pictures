@@ -17,12 +17,8 @@ interface Props {
   onClose: () => void
 }
 
-const FRAMES: ScrapFrame[] = ['none', 'polaroid', 'stamp']
-const PAGES: ScrapPage[] = [
-  'a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait',
-  '10x15-landscape', '10x15-portrait',
-  'square-20'
-]
+const FRAMES: ScrapFrame[] = ['none', 'polaroid', 'stamp', 'tape']
+const PAGES: ScrapPage[] = ['a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait']
 /** Thumbnails that take off when the PDF is created. */
 const MAX_FLIGHTS = 14
 

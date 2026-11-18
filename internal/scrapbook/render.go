@@ -186,7 +186,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 			if result.err != nil {
 				failed = append(failed, Failure{Path: job.Photos[placement.Index], Error: result.err.Error()})
 			} else {
-				place(pdf, job.Frame, fmt.Sprintf("photo%d", i), result, placement)
+				place(pdf, job.Frame, i, result, placement)
 			}
 			if job.Progress != nil {
 				job.Progress(i+1, len(slots))
@@ -223,7 +223,7 @@ func trimMarks(pdf *fpdf.Fpdf, paper Paper) {
 // place draws a reduced photo in the photo area of its box (the layout gives
 // that area the photo's own proportions), inside its frame, with a thin
 // cutting guide around the whole piece.
-func place(pdf *fpdf.Fpdf, frame Frame, name string, photo rendered, box Placement) {
+func place(pdf *fpdf.Fpdf, frame Frame, seed int, photo rendered, box Placement) {
 	scale := math.Min(box.PW/float64(photo.width), box.PH/float64(photo.height))
 	w, h := float64(photo.width)*scale, float64(photo.height)*scale
 	x, y := box.PX+(box.PW-w)/2, box.PY+(box.PH-h)/2
@@ -232,12 +232,70 @@ func place(pdf *fpdf.Fpdf, frame Frame, name string, photo rendered, box Placeme
 	} else {
 		pdf.Rect(box.X, box.Y, box.W, box.H, "D")
 	}
+	name := fmt.Sprintf("photo%d", seed)
 	pdf.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "JPG"}, bytes.NewReader(photo.data))
 	pdf.ImageOptions(name, x, y, w, h, false, fpdf.ImageOptions{ImageType: "JPG"}, 0, "")
-	if frame == FrameNone {
-		return
+	switch frame {
+	case FrameNone:
+	case FrameTape:
+		tapes(pdf, seed, x, y, w, h)
+	default:
+		pdf.Rect(x, y, w, h, "D")
 	}
-	pdf.Rect(x, y, w, h, "D")
+}
+
+// tapeInset is the room left around a photo for its tape: the strips stick
+// out of the photo by tapeOut and cover tapeWidth-tapeOut of it, and a
+// millimetre of slack keeps them inside the piece when slightly turned.
+const (
+	tapeInset = 5.0
+	tapeWidth = 7.0
+	tapeOut   = 4.0
+)
+
+var tapeColours = [][3]int{{236, 213, 170}, {244, 190, 200}, {180, 224, 200}, {178, 208, 236}}
+
+// tapes sticks a translucent washi strip with notched ends along each side of
+// the photo, each turned a little, in a colour that changes from photo to photo.
+func tapes(pdf *fpdf.Fpdf, seed int, x, y, w, h float64) {
+	colour := tapeColours[seed%len(tapeColours)]
+	pdf.SetFillColor(colour[0], colour[1], colour[2])
+	pdf.SetAlpha(0.75, "Normal")
+	defer pdf.SetAlpha(1, "Normal")
+	turns := [4]float64{1.2, -1.5, -1.0, 1.6}
+	offset := tapeOut - tapeWidth/2
+	for side := range 4 {
+		length := w
+		cx, cy, angle := x+w/2, y-offset, 0.0
+		switch side {
+		case 1:
+			length, cx, cy, angle = h, x+w+offset, y+h/2, 90
+		case 2:
+			cy = y + h + offset
+		case 3:
+			length, cx, cy, angle = h, x-offset, y+h/2, 90
+		}
+		points := tapeShape(length, tapeWidth, cx, cy)
+		pdf.TransformBegin()
+		pdf.TransformRotate(angle+turns[(side+seed)%4], cx, cy)
+		pdf.Polygon(points, "F")
+		pdf.TransformEnd()
+	}
+}
+
+// tapeShape is a strip centred on (cx, cy), lying along x, with zigzag ends.
+func tapeShape(length, width, cx, cy float64) []fpdf.PointType {
+	const teeth, depth = 4, 0.7
+	var points []fpdf.PointType
+	for k := 0; k <= teeth; k++ {
+		inset := depth * float64(k%2)
+		points = append(points, fpdf.PointType{X: cx - length/2 + inset, Y: cy - width/2 + width*float64(k)/teeth})
+	}
+	for k := teeth; k >= 0; k-- {
+		inset := depth * float64(k%2)
+		points = append(points, fpdf.PointType{X: cx + length/2 - inset, Y: cy - width/2 + width*float64(k)/teeth})
+	}
+	return points
 }
 
 // stampOutline draws the box with perforated edges, like a postage stamp.
