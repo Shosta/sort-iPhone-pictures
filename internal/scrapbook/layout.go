@@ -165,6 +165,9 @@ func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []f
 
 	var portraits, landscapes []item
 	for index, ratio := range ratios {
+		if frame == FramePolaroid {
+			ratio = 1 // photos are cropped square
+		}
 		if !(ratio > 0) || math.IsInf(ratio, 0) {
 			ratio = 1
 		}

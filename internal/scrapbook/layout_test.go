@@ -200,7 +200,7 @@ func TestFramedLayoutKeepsCuttingSpace(t *testing.T) {
 		for _, sheet := range sheets {
 			for i, a := range sheet.Placements {
 				placed++
-				if math.Abs(math.Max(a.PW, a.PH)-DefaultLongSide) > 0.1 || math.Abs(a.PW/a.PH-ratios[a.Index]) > 0.01 {
+				if math.Abs(math.Max(a.PW, a.PH)-DefaultLongSide) > 0.1 || math.Abs(a.PW/a.PH-wantRatio(frame, ratios[a.Index])) > 0.01 {
 					t.Errorf("%s: photo %d resized: %+v", frame, a.Index, a)
 				}
 				if math.Abs(a.PX-a.X-side) > 0.01 || math.Abs(a.PY-a.Y-top) > 0.01 || math.Abs(a.H-a.PH-top-bottom) > 0.01 {
@@ -225,4 +225,11 @@ func TestFramedLayoutKeepsCuttingSpace(t *testing.T) {
 	if _, ok := ParseFrame("wooden"); ok {
 		t.Error("unknown frame accepted")
 	}
+}
+
+func wantRatio(frame Frame, ratio float64) float64 {
+	if frame == FramePolaroid {
+		return 1
+	}
+	return ratio
 }

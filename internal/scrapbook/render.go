@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"math"
 	"os"
@@ -120,11 +121,8 @@ func Render(ctx context.Context, job Job) (Result, error) {
 
 // draw builds the document of job.
 func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
-	orientation := "P"
-	if job.Paper.Landscape() {
-		orientation = "L"
-	}
-	pdf := fpdf.NewCustom(&fpdf.InitType{OrientationStr: orientation, UnitStr: "mm", Size: fpdf.SizeType{Wd: job.Paper.SheetWidth(), Ht: job.Paper.SheetHeight()}})
+	// The size is given as is: fpdf would swap it again for "L".
+	pdf := fpdf.NewCustom(&fpdf.InitType{OrientationStr: "P", UnitStr: "mm", Size: fpdf.SizeType{Wd: job.Paper.SheetWidth(), Ht: job.Paper.SheetHeight()}})
 	pdf.SetMargins(0, 0, 0)
 	pdf.SetAutoPageBreak(false, 0)
 	pdf.SetCreator("Photosort", true)
@@ -163,7 +161,7 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 					return
 				}
 				placement := slots[i].placement
-				results[i] <- reduce(job.Photos[placement.Index], math.Max(placement.PW, placement.PH))
+				results[i] <- reduce(job.Photos[placement.Index], math.Max(placement.PW, placement.PH), job.Frame == FramePolaroid)
 			}
 		}()
 	}
@@ -264,41 +262,36 @@ func polaroidCard(pdf *fpdf.Fpdf, box Placement) {
 	pdf.SetDrawColor(170, 170, 170)
 }
 
-// tapeInset is the room left around a photo for its tape: the strips stick
-// out of the photo by tapeOut and cover tapeWidth-tapeOut of it, and a
-// millimetre of slack keeps them inside the piece when slightly turned.
+// tapeInset is the room left around a photo for its tape: each strip is
+// centred a little inside a corner and turned 45°, which sticks out of the
+// photo by about 4.8 mm; the rest of the inset absorbs the slight random turn.
 const (
-	tapeInset = 5.0
-	tapeWidth = 7.0
-	tapeOut   = 4.0
+	tapeInset  = 6.0
+	tapeLength = 12.0
+	tapeWidth  = 5.0
+	tapeShift  = 1.2
 )
 
 var tapeColours = [][3]int{{236, 213, 170}, {244, 190, 200}, {180, 224, 200}, {178, 208, 236}}
 
-// tapes sticks a translucent washi strip with notched ends along each side of
-// the photo, each turned a little, in a colour that changes from photo to photo.
+// tapes sticks a translucent washi strip with notched ends across each corner
+// of the photo, in a colour that changes from photo to photo.
 func tapes(pdf *fpdf.Fpdf, seed int, x, y, w, h float64) {
 	colour := tapeColours[seed%len(tapeColours)]
 	pdf.SetFillColor(colour[0], colour[1], colour[2])
 	pdf.SetAlpha(0.75, "Normal")
 	defer pdf.SetAlpha(1, "Normal")
-	turns := [4]float64{1.2, -1.5, -1.0, 1.6}
-	offset := tapeOut - tapeWidth/2
-	for side := range 4 {
-		length := w
-		cx, cy, angle := x+w/2, y-offset, 0.0
-		switch side {
-		case 1:
-			length, cx, cy, angle = h, x+w+offset, y+h/2, 90
-		case 2:
-			cy = y + h + offset
-		case 3:
-			length, cx, cy, angle = h, x-offset, y+h/2, 90
-		}
-		points := tapeShape(length, tapeWidth, cx, cy)
+	jitter := [4]float64{1.5, -1.0, 1.0, -1.5}
+	corners := []struct{ cx, cy, angle float64 }{
+		{x + tapeShift, y + tapeShift, 45},
+		{x + w - tapeShift, y + tapeShift, -45},
+		{x + w - tapeShift, y + h - tapeShift, 45},
+		{x + tapeShift, y + h - tapeShift, -45},
+	}
+	for i, c := range corners {
 		pdf.TransformBegin()
-		pdf.TransformRotate(angle+turns[(side+seed)%4], cx, cy)
-		pdf.Polygon(points, "F")
+		pdf.TransformRotate(c.angle+jitter[(i+seed)%4], c.cx, c.cy)
+		pdf.Polygon(tapeShape(tapeLength, tapeWidth, c.cx, c.cy), "F")
 		pdf.TransformEnd()
 	}
 }
@@ -347,9 +340,19 @@ func stampOutline(pdf *fpdf.Fpdf, box Placement) {
 
 // reduce decodes a photo upright and reduces it to print at sizeMM on its
 // longest side, as a JPEG.
-func reduce(path string, sizeMM float64) rendered {
+// With square set, the photo is cropped to a square around its subject.
+func reduce(path string, sizeMM float64, square bool) rendered {
 	pixels := int(math.Ceil(sizeMM / mmPerInch * printDPI))
-	img, err := thumbs.Analysis(path, pixels, pixels)
+	var img image.Image
+	var err error
+	if square {
+		img, err = thumbs.Analysis(path, pixels, 2*pixels)
+		if err == nil {
+			img = SubjectSquare(img)
+		}
+	} else {
+		img, err = thumbs.Analysis(path, pixels, pixels)
+	}
 	if err != nil {
 		return rendered{err: err}
 	}

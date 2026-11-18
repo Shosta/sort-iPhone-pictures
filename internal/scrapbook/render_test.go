@@ -77,6 +77,9 @@ func TestRenderWritesAPDFWithOnePagePerSheet(t *testing.T) {
 	if !bytes.HasPrefix(data, []byte("%PDF")) || len(regexp.MustCompile(`/Type /Page[^s]`).FindAll(data, -1)) != 2 {
 		t.Errorf("not a two-page PDF (%d bytes)", len(data))
 	}
+	if box := regexp.MustCompile(`/MediaBox \[[^\]]*\]`).Find(data); !strings.Contains(string(box), "841.89 595.28") {
+		t.Errorf("pages are not A4 landscape: %s", box)
+	}
 	if filepath.Dir(result.Path) != out || filepath.Base(result.Path) != "Semaine.pdf" {
 		t.Errorf("path = %s", result.Path)
 	}
