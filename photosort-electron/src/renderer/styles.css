@@ -200,6 +200,8 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .scrap-ph { transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); animation: fade-in 0.3s ease backwards; }
 .scrap-ph-bg { fill: #e4dfd2; }
 .scrap-ph-edge { fill: none; stroke: rgba(0,0,0,0.3); stroke-width: 0.35; }
+.ymap-preview { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.18); border-radius: 14px; padding: 12px; }
+.ymap-sheet { max-width: 100%; max-height: 100%; border-radius: 3px; box-shadow: 0 4px 14px rgba(0,0,0,0.45); }
 .scrap-count { font-variant-numeric: tabular-nums; }
 .scrap-weekbar { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .scrap-week { font-family: ui-serif, 'New York', Georgia, serif; font-size: 15px; font-weight: 600; }

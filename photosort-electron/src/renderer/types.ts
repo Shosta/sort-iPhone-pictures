@@ -103,3 +103,36 @@ export interface ScrapJob {
   failed?: { path: string; error: string }[]
   message?: string
 }
+
+export interface YearPin {
+  x: number
+  y: number
+  name: string
+  count: number
+  shown: string[]
+  /** The card of photos and name, in millimetres; null when it did not fit. */
+  card: { x: number; y: number; w: number; h: number } | null
+}
+
+/** The map of the year drawn for a page, in millimetres. */
+export interface YearMapLayout {
+  pageWidth: number
+  pageHeight: number
+  land: string
+  lakes: string
+  pins: YearPin[]
+}
+
+export interface YearPlace {
+  name: string
+  lat: number
+  lon: number
+  count: number
+  shown: string[]
+}
+
+export interface YearScan {
+  places: YearPlace[]
+  total: number
+  located: number
+}

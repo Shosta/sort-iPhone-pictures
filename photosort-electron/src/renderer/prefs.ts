@@ -24,6 +24,7 @@ export interface Prefs {
   scrapFrame: ScrapFrame
   scrapLayout: ScrapLayoutStyle
   scrapBackground: ScrapBackground
+  yearMapPage: ScrapPage
   language: Language
   theme: ThemeId
 }
@@ -60,6 +61,7 @@ function load(): Prefs {
     scrapFrame: 'none',
     scrapLayout: 'grid',
     scrapBackground: 'none',
+    yearMapPage: 'a4-landscape',
     language: detectLanguage(),
     theme: 'aurora'
   }
