@@ -15,6 +15,7 @@ extraResources:
     to: ai/
     filter: ["**/*"]
 icon: resources/icon.png
+afterPack: scripts/after-pack.cjs
 mac:
   category: public.app-category.photography
   target: [dmg, zip]
