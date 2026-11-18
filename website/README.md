@@ -1,6 +1,6 @@
 # Photosort – site de présentation
 
-Site Astro statique, en français, publié sur GitHub Pages. Il vit dans `website/`,
+Site Astro statique, en français, anglais et danois, publié sur GitHub Pages. Il vit dans `website/`,
 indépendamment de l'application (Go + Electron).
 
 ## Développement
@@ -39,6 +39,18 @@ si le dépôt s'appelle `shosta.github.io`).
 
 ## Contenu
 
-- Page : `src/pages/index.astro` ; styles : `src/styles/global.css`.
-- Logo : `src/assets/photosort.png` ; favicons : `public/favicon-*.png`.
-- Pas de police externe, d'analytics, de cookie ni de formulaire.
+- Pages : `/fr/`, `/en/`, `/da/` (gabarit `src/pages/[lang]/index.astro`). La racine `/`
+  choisit la langue du navigateur, avec un choix manuel si JavaScript est absent.
+- Textes : `src/i18n/{fr,en,da}.ts`, typés par `Copy` (`types.ts`). Modifier une langue
+  impose de modifier les deux autres. Le danois est à relire par une personne native.
+- Composants : `src/components/` (herbier, tampon, planche, tirage).
+- Styles : `src/styles/global.css`. Logo : `src/assets/photosort.png` ; favicons : `public/favicon-*.png`.
+- Polices (Young Serif, Newsreader, IBM Plex Mono, Caveat) : fichiers `woff2` dans
+  `src/assets/fonts/`, licences OFL incluses. Aucune requête externe, aucun analytics,
+  cookie ou formulaire.
+
+## Captures d'écran
+
+Déposer les images dans `src/assets/screenshots/` (png, jpg ou webp), nommées :
+`apercu`, `lieux`, `doublons`, `scrapbook`. Tant qu'un fichier manque, la page affiche
+un emplacement « Capture à venir ».

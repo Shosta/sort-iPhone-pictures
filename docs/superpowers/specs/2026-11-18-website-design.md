@@ -18,23 +18,31 @@ Exclus : analytics, formulaire, cookies, JavaScript applicatif, annonce du NAS
 
 ## Contenu (même structure dans les 3 langues)
 
-1. **Accroche** : trier les photos d'iPhone par date et par lieu, sans cloud ;
-   boutons Télécharger et Voir le code.
-2. **3 étapes** : choisir le dossier source, vérifier l'aperçu, copier (les
+1. **Accroche** : trier les photos d'iPhone par date et par lieu, sans cloud,
+   puis générer un PDF de scrapbook à imprimer et découper pour coller la
+   semaine dans son semainier. Visuel : une planche A4 en perspective avec ses
+   tirages et ses filets de coupe, et le tampon « sans cloud ». Boutons
+   Télécharger et Découvrir le scrapbook.
+2. **Scrapbook / semainier** (section dédiée juste après l'accroche) : choisir
+   une semaine (lundi à dimanche) dans un calendrier, cocher les photos, obtenir
+   un PDF A4 paysage (A4 portrait ou Letter en option), photos de 6,5 cm sur le
+   grand côté, au moins 5 mm entre les photos pour la découpe, ouverture
+   automatique du PDF. Les originaux ne sont jamais modifiés.
+3. **3 étapes** : choisir le dossier source, vérifier l'aperçu, copier (les
    originaux ne sont jamais modifiés).
-3. **Fonctionnalités** :
+4. **Fonctionnalités** (présentées comme des étiquettes d'herbier numérotées) :
    - classement par date EXIF (`AAAA/AAAA-MM`) ;
    - classement par lieu, villes et monuments, hors ligne ;
    - doublons et quasi-doublons ;
    - tags IA locaux (ONNX Runtime) et tags libres ;
    - scrapbook PDF hebdomadaire ;
    - préférences : langues fr / en-GB / da, thèmes, ⌘,.
-4. **Captures** : 3 à 4 tirages (emplacements, voir plus bas).
-5. **Téléchargements** : macOS (dmg arm64 et Intel), Linux (AppImage x86_64),
+5. **Captures** : 3 à 4 tirages (emplacements, voir plus bas).
+6. **Téléchargements** : macOS (dmg arm64 et Intel), Linux (AppImage x86_64),
    Windows (exe portable), tous vers `…/releases/latest`.
-6. **Limites honnêtes** : paquets non signés (notarisation macOS, SmartScreen
+7. **Limites honnêtes** : paquets non signés (notarisation macOS, SmartScreen
    Windows) ; tags IA indisponibles sur Mac Intel ; date EXIF requise.
-7. **FAQ** (`<details>`, sans JavaScript) et pied de page avec licence MIT.
+8. **FAQ** (`<details>`, sans JavaScript) et pied de page avec licence MIT.
 
 ## Architecture
 
@@ -59,13 +67,22 @@ Exclus : analytics, formulaire, cookies, JavaScript applicatif, annonce du NAS
 - **Palette** (variables CSS) : papier crème `#f4ecdd`, encre `#1d1a16`, gris
   chaud `#6b6257`, accent unique rouge tampon `#b3362b`, filet `#d9cdb6`.
   Aucun dégradé violet, aucun vert.
-- **Typographie** (auto-hébergée via `@fontsource`, aucun appel externe) :
-  Fraunces variable pour les titres (axes optique et « soft »), Newsreader pour
+- **Typographie** (fichiers `woff2` copiés dans `src/assets/fonts/`, aucun appel externe) :
+  Young Serif pour les titres (Fraunces écartée : trop répandue), Newsreader pour
   le texte courant, IBM Plex Mono pour les légendes et métadonnées, Caveat
   uniquement pour les annotations manuscrites des tirages.
 - **Atmosphère** : grain de papier léger (bruit SVG inline en fond), ombres
-  portées douces sous les tirages, coins photo en SVG, un tampon rond rouge
-  « sans cloud » légèrement pivoté.
+  portées douces sous les tirages, coins photo en SVG, bandes de masking tape
+  translucides qui tiennent les tirages.
+- **Herbier** : en fond, très discrètement (opacité 6 à 12 %, teinte encre
+  brun-sépia), des plantes séchées dessinées en SVG inline (fougère, ginkgo,
+  feuille de chêne, brin de graminée), posées dans les marges, pivotées et
+  parfois coupées par le bord de page. Aucune ne passe derrière du texte long :
+  la lisibilité prime. Les étiquettes de fonctionnalités reprennent les
+  étiquettes d'herbier (numéro, nom, mono).
+- **Tampon « sans cloud »** : différenciateur de l'application. Tampon rond rouge
+  encre, légèrement pivoté et irrégulier (filtre SVG de bruit), dans l'accroche
+  et repris, plus petit, sur la section Téléchargements.
 - **Composition** : asymétrique ; titre décalé sur une grille de 12 colonnes,
   tirages qui débordent de la grille et se chevauchent, rotations de ±1 à 4°
   (neutralisées sous 640 px pour la lisibilité).

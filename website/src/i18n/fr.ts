@@ -1,0 +1,115 @@
+import type { Copy } from './types';
+
+export const fr: Copy = {
+  htmlLang: 'fr',
+  ogLocale: 'fr_FR',
+  languageName: 'Français',
+  meta: {
+    title: 'Photosort — Triez vos photos d’iPhone, imprimez votre semainier',
+    description:
+      'Photosort classe vos photos d’iPhone par date et par lieu, sans cloud, puis génère un PDF de scrapbook à imprimer et découper pour votre semainier. Open source, pour macOS, Linux et Windows.',
+  },
+  skip: 'Aller au contenu',
+  nav: { label: 'Navigation principale', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', languages: 'Langue' },
+  hero: {
+    eyebrow: 'Open source · local · sans compte',
+    titleA: 'Vos photos d’iPhone, triées.',
+    titleB: 'Et la semaine prête à coller dans votre semainier.',
+    lead: 'Photosort range vos photos par date et par lieu, sur votre ordinateur, sans rien envoyer dans le cloud. Puis il compose un PDF à imprimer et à découper : les photos de la semaine, prêtes à coller.',
+    ctaScrapbook: 'Voir le scrapbook',
+    ctaDownload: 'Télécharger',
+    note: 'macOS · Linux · Windows — vos originaux ne sont jamais modifiés',
+    sheetAlt: 'Illustration d’une planche A4 de scrapbook : des photos de formats variés, séparées par des filets de coupe.',
+    sheetCaption: 'Semaine 2026-S20 · A4 paysage',
+  },
+  stamp: { top: 'PHOTOSORT', main: 'SANS CLOUD', bottom: '100 % LOCAL' },
+  scrapbook: {
+    eyebrow: 'Le scrapbook de la semaine',
+    title: 'Du dossier classé à la page du semainier.',
+    lead: 'Vous avez un semainier papier ? Choisissez une semaine dans un calendrier, cochez les photos à garder, et Photosort génère un PDF prêt à imprimer. Il ne reste qu’à découper et coller.',
+    steps: [
+      { title: 'Choisissez la semaine', text: 'Un calendrier du lundi au dimanche. Les jours qui contiennent des photos sont marqués.' },
+      { title: 'Cochez vos photos', text: 'Aucune n’est cochée au départ : vous gardez uniquement celles qui comptent.' },
+      { title: 'Imprimez et découpez', text: 'Le PDF s’ouvre tout seul. Imprimez à 100 %, suivez les filets, collez.' },
+    ],
+    facts: [
+      { label: 'Page', value: 'A4 paysage (A4 portrait et Letter en option)' },
+      { label: 'Taille', value: '6,5 cm sur le grand côté, ratio conservé' },
+      { label: 'Découpe', value: '5 mm au moins entre deux photos, filet fin autour' },
+      { label: 'Originaux', value: 'jamais modifiés, aucun recadrage' },
+    ],
+    note: 'Raccourci Cmd/Ctrl + P dans l’application.',
+  },
+  how: {
+    eyebrow: 'Le classement',
+    title: 'Trois étapes, une bibliothèque lisible.',
+    items: [
+      { title: 'Récupérez vos photos', text: 'Transférez les originaux de votre iPhone vers un dossier de votre ordinateur avec votre outil habituel.' },
+      { title: 'Choisissez vos dossiers', text: 'Un ou plusieurs dossiers sources, et une destination distincte pour la bibliothèque classée.' },
+      { title: 'Vérifiez, puis copiez', text: 'Un aperçu du classement avant toute copie. Les photos sont copiées dans AAAA/AAAA-MM, avec des noms lisibles.' },
+    ],
+    note: 'Le transfert et le classement sont deux étapes distinctes : Photosort ne se connecte pas directement à votre iPhone.',
+  },
+  features: {
+    eyebrow: 'Dans l’herbier',
+    title: 'Ce que Photosort sait faire.',
+    lead: 'Tout se passe hors ligne, sur votre machine.',
+    specimen: 'Spécimen',
+    items: [
+      { name: 'La vraie date', latin: 'Tempus exif', text: 'Classement par date de prise de vue (EXIF) : un souvenir de juillet reste en juillet, même copié en décembre.' },
+      { name: 'Le lieu', latin: 'Locus urbis', text: 'Un dossier par ville, et par monument ou musée proche, grâce aux coordonnées GPS. Sans connexion.' },
+      { name: 'Les doublons', latin: 'Gemini imago', text: 'Doublons et quasi-doublons repérés, les quasi-doublons étant rangés à part.' },
+      { name: 'Les tags', latin: 'Nota localis', text: 'Plage, montagne, ville, selfie… Une IA locale écrit des mots-clés dans des fichiers .xmp, plus vos propres tags.' },
+      { name: 'Le scrapbook', latin: 'Charta hebdomada', text: 'Un PDF hebdomadaire à imprimer, découper et coller dans le semainier.' },
+      { name: 'Les préférences', latin: 'Optio', text: 'Interface en français, anglais ou danois, plusieurs thèmes, dossier de sortie au choix.' },
+    ],
+  },
+  shots: {
+    eyebrow: 'Dans l’application',
+    title: 'Un coup d’œil.',
+    pending: 'Capture à venir',
+    items: [
+      { key: 'apercu', alt: 'Aperçu du classement avant la copie des photos', caption: 'L’aperçu avant la copie' },
+      { key: 'lieux', alt: 'Photos classées par ville dans la bibliothèque', caption: 'Classées par lieu' },
+      { key: 'doublons', alt: 'Doublons et quasi-doublons repérés', caption: 'Doublons repérés' },
+      { key: 'scrapbook', alt: 'Choix de la semaine et des photos pour le scrapbook', caption: 'Le scrapbook de la semaine' },
+    ],
+  },
+  download: {
+    eyebrow: 'Télécharger',
+    title: 'Gratuit, open source, sans compte.',
+    lead: 'Choisissez le paquet de votre système dans la dernière version publiée.',
+    platforms: [
+      { os: 'macOS', detail: 'Image disque .dmg, Apple silicon et Intel' },
+      { os: 'Linux', detail: 'AppImage x86_64' },
+      { os: 'Windows', detail: 'Exécutable portable .exe, sans installation' },
+    ],
+    button: 'Dernière version',
+    repoButton: 'Voir le code source',
+    pendingRepo: 'Publication du dépôt à venir. Les liens de téléchargement seront ajoutés ici dès leur disponibilité.',
+    unsigned: 'Les paquets ne sont pas encore signés : macOS demandera une confirmation à la première ouverture, et Windows peut afficher un avertissement SmartScreen.',
+  },
+  limits: {
+    eyebrow: 'En toute transparence',
+    title: 'Ce que Photosort ne fait pas (encore).',
+    items: [
+      'Pas d’import direct depuis l’iPhone : il travaille sur des dossiers de votre ordinateur.',
+      'Une photo sans date EXIF est ignorée et signalée, jamais classée au hasard.',
+      'Les vidéos, les Live Photos et les fichiers XMP/AAE ne sont pas gérés.',
+      'Les tags par IA ne sont pas disponibles sur les Mac Intel.',
+    ],
+  },
+  faq: {
+    eyebrow: 'Questions fréquentes',
+    title: 'Avant de faire le tri.',
+    items: [
+      { q: 'Photosort importe-t-il directement depuis mon iPhone ?', a: 'Non. Récupérez d’abord vos photos avec votre outil de transfert habituel, en conservant les originaux et leurs métadonnées. Photosort organise ensuite les fichiers déjà présents sur votre ordinateur.' },
+      { q: 'Mes photos quittent-elles mon ordinateur ?', a: 'Jamais. Le classement, la recherche de lieux, la détection des doublons et les tags par IA fonctionnent hors ligne, sans compte ni serveur.' },
+      { q: 'Mes originaux sont-ils modifiés ?', a: 'Non. Les photos sont copiées vers une nouvelle bibliothèque ; aucun fichier existant n’est écrasé, déplacé ni renommé.' },
+      { q: 'Quels formats sont pris en charge ?', a: 'Notamment JPEG, HEIC/HEIF, PNG, TIFF, AVIF et plusieurs formats RAW. Le classement exige une date de prise de vue lisible dans les métadonnées EXIF : une photo sans date est ignorée et signalée dans le bilan.' },
+      { q: 'Comment fonctionne le scrapbook ?', a: 'À partir de la bibliothèque classée, vous choisissez une semaine et cochez des photos. Photosort les place sur des pages A4 avec un espace de découpe, puis ouvre le PDF. Il suffit d’imprimer à 100 %.' },
+      { q: 'Sur quels systèmes fonctionne-t-il ?', a: 'macOS (Apple silicon et Intel), Linux x86_64 (AppImage) et Windows (exécutable portable). Les paquets ne sont pas signés, et les tags par IA ne sont pas disponibles sur Mac Intel.' },
+    ],
+  },
+  footer: { tagline: 'Moins de désordre. Plus de souvenirs.', independent: 'Projet indépendant, non affilié à Apple.', license: 'Licence MIT' },
+};
