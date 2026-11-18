@@ -2,7 +2,7 @@ import confetti from 'canvas-confetti'
 import { motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useT } from '../i18n'
-import type { Prefs, ScrapFrame, ScrapPage } from '../prefs'
+import type { Prefs, ScrapBackground, ScrapFrame, ScrapLayoutStyle, ScrapPage } from '../prefs'
 import { cachedThumbnail, loadThumbnail, request } from '../sidecar'
 import type { ScrapJob, ScrapLayout, ScrapPhoto, ScrapPlacement } from '../types'
 import { addDays, Calendar, isoDay, isoWeek, mondayOf, monthWeeks } from './Calendar'
@@ -18,6 +18,8 @@ interface Props {
 }
 
 const FRAMES: ScrapFrame[] = ['none', 'polaroid', 'stamp', 'tape']
+const LAYOUTS: ScrapLayoutStyle[] = ['grid', 'collage']
+const BACKGROUNDS: Record<ScrapBackground, string | null> = { none: null, cream: '#faf1dc', rose: '#f8e0e4', mint: '#def2e6', sky: '#dceaf8', lavender: '#e9e2f7', kraft: '#dec8a6' }
 const PAGES: ScrapPage[] = ['a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait']
 /** Thumbnails that take off when the PDF is created. */
 const MAX_FLIGHTS = 14
@@ -31,7 +33,7 @@ const dirName = (path: string): string => path.replace(/[\\/][^\\/]*$/, '')
 const squash = (text: string): string => text.replace(/\s+/g, ' ')
 
 /** A photo placed on the preview sheet, drawn from the thumbnail already in cache. */
-function PreviewPhoto({ x, y, w, h, px, py, pw, ph, path }: ScrapPlacement): JSX.Element {
+function PreviewPhoto({ x, y, w, h, angle, ux, uy, uw, uh, px, py, pw, ph, path }: ScrapPlacement): JSX.Element {
   const [url, setUrl] = useState(() => cachedThumbnail(path))
   useEffect(() => {
     const known = cachedThumbnail(path)
@@ -40,9 +42,11 @@ function PreviewPhoto({ x, y, w, h, px, py, pw, ph, path }: ScrapPlacement): JSX
   }, [path])
   return (
     <g className="scrap-ph" style={{ transform: `translate(${x}px, ${y}px)` }}>
-      <rect width={w} height={h} className="scrap-ph-bg" />
-      {url && <image href={url} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid slice" />}
-      <rect width={w} height={h} className="scrap-ph-edge" />
+      <g transform={angle ? `rotate(${-angle} ${w / 2} ${h / 2})` : undefined}>
+        <rect x={ux} y={uy} width={uw} height={uh} className="scrap-ph-bg" />
+        {url && <image href={url} x={px} y={py} width={pw} height={ph} preserveAspectRatio="xMidYMid slice" />}
+        <rect x={ux} y={uy} width={uw} height={uh} className="scrap-ph-edge" />
+      </g>
     </g>
   )
 }
@@ -151,7 +155,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     let live = true
     let handle: { cancel: () => void } | null = null
     const timer = setTimeout(() => {
-      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame }, (event) => {
+      handle = request({ op: 'scrapbookLayout', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame, layout: prefs.scrapLayout }, (event) => {
         if (!live) return
         if (event.type === 'layout') {
           setLayout(event)
@@ -169,7 +173,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
       handle?.cancel()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter, prefs.scrapBleed, prefs.scrapFrame])
+  }, [filesKey, prefs.scrapPage, prefs.scrapLongSide, prefs.scrapGutter, prefs.scrapBleed, prefs.scrapFrame, prefs.scrapLayout])
 
   const range = useMemo(() => {
     const format = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' })
@@ -220,7 +224,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
     const name = squash(t('scrap.file', { year: week.year, week: String(week.week).padStart(2, '0'), range }))
     setJob({ state: 'running', done: 0, total: files.length })
     run.current = request(
-      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame, outDir, fallbackDir: downloads, name },
+      { op: 'scrapbook', files, page: prefs.scrapPage, longSide: prefs.scrapLongSide, gutter: prefs.scrapGutter, bleed: prefs.scrapBleed ? 3 : 0, frame: prefs.scrapFrame, layout: prefs.scrapLayout, background: prefs.scrapBackground, outDir, fallbackDir: downloads, name },
       (event) => {
         if (event.type === 'progress') {
           setJob((previous) => previous && { ...previous, done: event.done, total: event.total })
@@ -322,6 +326,22 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
                   onChange={(scrapFrame) => onChange({ scrapFrame })}
                 />
               </div>
+              <div className="field">
+                <label>{t('scrap.layout')}</label>
+                <Select
+                  value={prefs.scrapLayout}
+                  options={LAYOUTS.map((style) => ({ value: style, label: t(`scrap.layout.${style}`), icon: null }))}
+                  onChange={(scrapLayout) => onChange({ scrapLayout })}
+                />
+              </div>
+              <div className="field">
+                <label>{t('scrap.background')}</label>
+                <Select
+                  value={prefs.scrapBackground}
+                  options={(Object.keys(BACKGROUNDS) as ScrapBackground[]).map((colour) => ({ value: colour, label: t(`scrap.background.${colour}`), icon: null }))}
+                  onChange={(scrapBackground) => onChange({ scrapBackground })}
+                />
+              </div>
               <label className="check">
                 <input type="checkbox" checked={prefs.scrapBleed} onChange={(event) => onChange({ scrapBleed: event.target.checked })} /> {t('scrap.bleed')}
               </label>
@@ -384,6 +404,7 @@ export function ScrapbookPanel({ prefs, onChange, onClose }: Props): JSX.Element
                           animate={{ opacity: 1, y: 0, rotate: 0 }}
                           transition={{ type: 'spring', stiffness: 260, damping: 24, delay: index * 0.06 }}
                         >
+                          {BACKGROUNDS[prefs.scrapBackground] && <rect width={layout.pageWidth} height={layout.pageHeight} fill={BACKGROUNDS[prefs.scrapBackground] ?? undefined} />}
                           {sheet.placements.map((placement) => (
                             <PreviewPhoto key={placement.path} {...placement} />
                           ))}

@@ -34,6 +34,8 @@ const (
 type Job struct {
 	Paper Paper
 	Frame Frame
+	// Background is the colour of the page; the zero value leaves it white.
+	Background Background
 	// Photos are the file paths, indexed by Placement.Index.
 	Photos []string
 	Sheets []Sheet
@@ -46,6 +48,29 @@ type Job struct {
 	Title       string
 	// Progress (optional) is called after each photo, from one goroutine.
 	Progress func(done, total int)
+}
+
+// Background is a page colour.
+type Background string
+
+var backgrounds = map[Background][3]int{
+	"cream":    {250, 241, 220},
+	"rose":     {248, 224, 228},
+	"mint":     {222, 242, 230},
+	"sky":      {220, 236, 248},
+	"lavender": {233, 226, 247},
+	"kraft":    {222, 200, 166},
+}
+
+// ParseBackground resolves a background name; an empty name or "none" is a
+// plain white page.
+func ParseBackground(name string) (Background, bool) {
+	name = strings.ToLower(name)
+	if name == "" || name == "none" {
+		return "", true
+	}
+	_, ok := backgrounds[Background(name)]
+	return Background(name), ok
 }
 
 // Failure is a photo that could not be printed.
@@ -170,6 +195,10 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []Failure, error) {
 	var failed []Failure
 	for sheet := range job.Sheets {
 		pdf.AddPage()
+		if colour, ok := backgrounds[job.Background]; ok {
+			pdf.SetFillColor(colour[0], colour[1], colour[2])
+			pdf.Rect(0, 0, job.Paper.SheetWidth(), job.Paper.SheetHeight(), "F")
+		}
 		trimMarks(pdf, job.Paper)
 		for i, current := range slots {
 			if current.sheet != sheet {
@@ -222,7 +251,15 @@ func trimMarks(pdf *fpdf.Fpdf, paper Paper) {
 // place draws a reduced photo in the photo area of its box (the layout gives
 // that area the photo's own proportions), inside its frame, with a thin
 // cutting guide around the whole piece.
-func place(pdf *fpdf.Fpdf, frame Frame, seed int, photo rendered, box Placement) {
+func place(pdf *fpdf.Fpdf, frame Frame, seed int, photo rendered, placed Placement) {
+	// A turned piece is drawn upright around its centre, then turned.
+	top, side, bottom := frame.insets()
+	box := Placement{X: placed.PX - side, Y: placed.PY - top, W: placed.PW + 2*side, H: placed.PH + top + bottom, PX: placed.PX, PY: placed.PY, PW: placed.PW, PH: placed.PH}
+	if placed.Angle != 0 {
+		pdf.TransformBegin()
+		defer pdf.TransformEnd()
+		pdf.TransformRotate(placed.Angle, placed.X+placed.W/2, placed.Y+placed.H/2)
+	}
 	scale := math.Min(box.PW/float64(photo.width), box.PH/float64(photo.height))
 	w, h := float64(photo.width)*scale, float64(photo.height)*scale
 	x, y := box.PX+(box.PW-w)/2, box.PY+(box.PH-h)/2

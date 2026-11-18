@@ -22,11 +22,15 @@ export interface Prefs {
   scrapGutter: number
   scrapBleed: boolean
   scrapFrame: ScrapFrame
+  scrapLayout: ScrapLayoutStyle
+  scrapBackground: ScrapBackground
   language: Language
   theme: ThemeId
 }
 
 export type ScrapFrame = 'none' | 'polaroid' | 'stamp' | 'tape'
+export type ScrapLayoutStyle = 'grid' | 'collage'
+export type ScrapBackground = 'none' | 'cream' | 'rose' | 'mint' | 'sky' | 'lavender' | 'kraft'
 export type ScrapPage = 'a4-landscape' | 'a4-portrait' | 'letter-landscape' | 'letter-portrait'
 
 
@@ -54,6 +58,8 @@ function load(): Prefs {
     scrapGutter: 5,
     scrapBleed: false,
     scrapFrame: 'none',
+    scrapLayout: 'grid',
+    scrapBackground: 'none',
     language: detectLanguage(),
     theme: 'aurora'
   }

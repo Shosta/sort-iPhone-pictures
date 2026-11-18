@@ -86,6 +86,8 @@ type request struct {
 	Gutter       float64  `json:"gutter"`
 	Bleed        float64  `json:"bleed"`
 	Frame        string   `json:"frame"`
+	Layout       string   `json:"layout"`
+	Background   string   `json:"background"`
 	OutDir       string   `json:"outDir"`
 	FallbackDir  string   `json:"fallbackDir"`
 	Name         string   `json:"name"`

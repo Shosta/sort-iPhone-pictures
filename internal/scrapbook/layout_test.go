@@ -233,3 +233,52 @@ func wantRatio(frame Frame, ratio float64) float64 {
 	}
 	return ratio
 }
+
+func TestCollageVariesSizesAndKeepsCuttingSpace(t *testing.T) {
+	var ratios []float64
+	for i := 0; i < 40; i++ {
+		ratios = append(ratios, []float64{3.0 / 4.0, 4.0 / 3.0, 1, 16.0 / 9.0}[i%4])
+	}
+	for _, name := range []string{"a4-landscape", "a4-portrait", "letter-landscape", "letter-portrait"} {
+		paper, _ := ParsePaper(name)
+		for _, frame := range []Frame{FrameNone, FramePolaroid, FrameStamp, FrameTape} {
+			sizes, turned, placed := map[float64]bool{}, false, 0
+			var hero, other float64
+			for _, sheet := range LayoutStyled(paper, StyleCollage, frame, DefaultLongSide, MinGutter, ratios) {
+				for i, a := range sheet.Placements {
+					placed++
+					size := math.Round(math.Max(a.PW, a.PH))
+					sizes[size] = true
+					turned = turned || a.Angle != 0
+					if a.Index == 0 {
+						hero = size
+					} else if a.Index == 1 {
+						other = size
+					}
+					if a.X < Margin-epsilon || a.Y < Margin-epsilon || a.X+a.W > paper.Width-Margin+0.001 || a.Y+a.H > paper.Height-Margin+0.001 {
+						t.Errorf("%s/%s: piece %d outside the margins: %+v", name, frame, a.Index, a)
+					}
+					if a.PX < a.X-0.01 || a.PY < a.Y-0.01 || a.PX+a.PW > a.X+a.W+0.01 || a.PY+a.PH > a.Y+a.H+0.01 {
+						t.Errorf("%s/%s: photo %d leaves its box: %+v", name, frame, a.Index, a)
+					}
+					for _, b := range sheet.Placements[i+1:] {
+						gapX := math.Max(b.X-(a.X+a.W), a.X-(b.X+b.W))
+						gapY := math.Max(b.Y-(a.Y+a.H), a.Y-(b.Y+b.H))
+						if math.Max(gapX, gapY) < MinGutter-0.01 {
+							t.Errorf("%s/%s: pieces %d and %d too close %+v %+v", name, frame, a.Index, b.Index, a, b)
+						}
+					}
+				}
+			}
+			if placed != len(ratios) || len(sizes) < 3 || !turned || hero <= other {
+				t.Errorf("%s/%s: placed %d, %d sizes, turned %v, hero %v vs %v", name, frame, placed, len(sizes), turned, hero, other)
+			}
+		}
+	}
+	if _, ok := ParseStyle("spiral"); ok {
+		t.Error("unknown style accepted")
+	}
+	if style, ok := ParseStyle(""); !ok || style != StyleGrid {
+		t.Error("empty style should be the grid")
+	}
+}

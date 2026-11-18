@@ -68,6 +68,13 @@ export interface ScrapPlacement {
   y: number
   w: number
   h: number
+  /** Turn of the piece in degrees, counter-clockwise, around its centre. */
+  angle: number
+  /** The piece before turning, relative to the box above. */
+  ux: number
+  uy: number
+  uw: number
+  uh: number
   /** The photo inside its frame, relative to the piece. */
   px: number
   py: number
@@ -78,6 +85,7 @@ export interface ScrapPlacement {
 export interface ScrapLayout {
   pageWidth: number
   pageHeight: number
+  background: string
   sheets: { placements: ScrapPlacement[] }[]
   failed: { path: string; error: string }[]
 }

@@ -91,7 +91,9 @@ func ParseFrame(name string) (Frame, bool) {
 	return "", false
 }
 
-// insets are the widths, in millimetres, of the border around the photo.
+// Insets are the widths, in millimetres, of the border around the photo.
+func (f Frame) Insets() (top, side, bottom float64) { return f.insets() }
+
 func (f Frame) insets() (top, side, bottom float64) {
 	switch f {
 	case FramePolaroid:
@@ -104,13 +106,45 @@ func (f Frame) insets() (top, side, bottom float64) {
 	return 0, 0, 0
 }
 
+// Style is the arrangement of photos on a sheet.
+type Style string
+
+const (
+	// StyleGrid puts photos of one size in tidy rows.
+	StyleGrid Style = "grid"
+	// StyleCollage varies photo sizes (every fifth photo is a larger hero) and
+	// turns each one slightly.
+	StyleCollage Style = "collage"
+)
+
+// ParseStyle resolves a layout style name; an empty name selects StyleGrid.
+func ParseStyle(name string) (Style, bool) {
+	switch s := Style(strings.ToLower(name)); s {
+	case "":
+		return StyleGrid, true
+	case StyleGrid, StyleCollage:
+		return s, true
+	}
+	return "", false
+}
+
+const heroScale = 1.4
+
+var (
+	collageScales = []float64{1, 0.85, 1, 0.9}
+	collageAngles = []float64{-3, 2, -1.5, 3, 1, -2}
+)
+
 // Placement is a photo on a sheet. Index is the position of the photo in the
 // list given to Layout. X, Y, W, H is the whole printed piece, frame
-// included, which is what gets cut out; PX, PY, PW, PH is the photo inside it.
+// included, which is what gets cut out (for a turned piece, the box around
+// it); PX, PY, PW, PH is the photo inside it, before turning, with the same
+// centre as the piece. Angle is the turn in degrees, counter-clockwise.
 type Placement struct {
 	Index          int
 	X, Y, W, H     float64
 	PX, PY, PW, PH float64
+	Angle          float64
 }
 
 // Sheet is one printed page.
@@ -123,6 +157,7 @@ type item struct {
 	w, h  float64
 	// photo size, inside the frame
 	pw, ph float64
+	angle  float64
 }
 
 type row struct {
@@ -158,6 +193,13 @@ func Layout(paper Paper, longSide, gutter float64, ratios []float64) []Sheet {
 // size of the photo itself, the frame comes on top, and gutter is kept
 // between frames.
 func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []float64) []Sheet {
+	return LayoutStyled(paper, StyleGrid, frame, longSide, gutter, ratios)
+}
+
+// LayoutStyled is LayoutFramed with a choice of arrangement. In a collage the
+// size of a photo varies around longSide and the pieces are turned a few
+// degrees; the space between the boxes around the pieces is still gutter.
+func LayoutStyled(paper Paper, style Style, frame Frame, longSide, gutter float64, ratios []float64) []Sheet {
 	top, side, bottom := frame.insets()
 	gutter = clamp(gutter, MinGutter, MaxGutter)
 	usableW, usableH := paper.Width-2*Margin, paper.Height-2*Margin
@@ -171,13 +213,28 @@ func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []f
 		if !(ratio > 0) || math.IsInf(ratio, 0) {
 			ratio = 1
 		}
-		it := item{index: index, pw: longSide, ph: longSide}
-		if ratio > 1 {
-			it.ph = longSide / ratio
-		} else {
-			it.pw = longSide * ratio
+		size, angle := longSide, 0.0
+		if style == StyleCollage {
+			scale := collageScales[index%len(collageScales)]
+			if index%5 == 0 {
+				scale = heroScale
+			}
+			size, angle = longSide*scale, collageAngles[(index*5+index/6)%len(collageAngles)]
 		}
-		it.w, it.h = it.pw+2*side, it.ph+top+bottom
+		var it item
+		for range 40 {
+			it = item{index: index, pw: size, ph: size, angle: angle}
+			if ratio > 1 {
+				it.ph = size / ratio
+			} else {
+				it.pw = size * ratio
+			}
+			it.w, it.h = turnedBox(it.pw+2*side, it.ph+top+bottom, angle)
+			if (it.w <= usableW+epsilon && it.h <= usableH+epsilon) || size <= 10 {
+				break
+			}
+			size *= 0.95
+		}
 		if ratio > 1 {
 			landscapes = append(landscapes, it)
 		} else {
@@ -226,9 +283,13 @@ func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []f
 		for _, r := range page.rows {
 			x := Margin + paper.Bleed
 			for _, it := range r.items {
+				// The unturned piece shares its centre with the box around it.
+				pieceW, pieceH := it.pw+2*side, it.ph+top+bottom
+				px, py := x+(it.w-pieceW)/2, y+(it.h-pieceH)/2
 				sheets[i].Placements = append(sheets[i].Placements, Placement{
 					Index: it.index, X: round(x), Y: round(y), W: round(it.w), H: round(it.h),
-					PX: round(x + side), PY: round(y + top), PW: round(it.pw), PH: round(it.ph),
+					PX: round(px + side), PY: round(py + top), PW: round(it.pw), PH: round(it.ph),
+					Angle: it.angle,
 				})
 				x += it.w + gutter
 			}
@@ -236,6 +297,12 @@ func LayoutFramed(paper Paper, frame Frame, longSide, gutter float64, ratios []f
 		}
 	}
 	return sheets
+}
+
+// turnedBox is the size of the box around a w x h piece turned by angle degrees.
+func turnedBox(w, h, angle float64) (float64, float64) {
+	sin, cos := math.Abs(math.Sin(angle*math.Pi/180)), math.Abs(math.Cos(angle*math.Pi/180))
+	return w*cos + h*sin, w*sin + h*cos
 }
 
 // fill cuts items, in order, into rows no wider than width.

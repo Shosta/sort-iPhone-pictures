@@ -198,3 +198,25 @@ func TestRenderFramedPages(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderCollageOnColouredPage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "in", "a.jpg")
+	writePhoto(t, path, 300, 400)
+	back, ok := ParseBackground("Cream")
+	if !ok || back == "" {
+		t.Fatal("cream not accepted")
+	}
+	if _, ok := ParseBackground("plaid"); ok {
+		t.Error("unknown background accepted")
+	}
+	for _, frame := range []Frame{FrameNone, FramePolaroid, FrameStamp, FrameTape} {
+		job := renderJob(t, filepath.Join(dir, string(frame)), []string{path, path}, []float64{0.75, 0.75})
+		job.Frame, job.Background = frame, back
+		job.Sheets = LayoutStyled(job.Paper, StyleCollage, frame, DefaultLongSide, MinGutter, []float64{0.75, 0.75})
+		result, err := Render(context.Background(), job)
+		if err != nil || result.Pages != 1 || len(result.Failed) != 0 {
+			t.Errorf("%s: %+v, %v", frame, result, err)
+		}
+	}
+}
