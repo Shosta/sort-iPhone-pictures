@@ -464,6 +464,9 @@ export function App(): JSX.Element {
   const folders = planFolders ?? draftFolders
   const busy = phase === 'analyzing' || phase === 'copying'
   const tagging = tagJob?.state === 'loading' || tagJob?.state === 'running'
+  const cleanable = !!plan || !!error || sources.length > 0
+  const canAnalyze = !busy && sources.length > 0 && !!destination.trim()
+  const canSort = !busy && !tagging && phase === 'ready' && entries.length > 0
   const deep = skipDuplicates || groupSimilar
   const progress =
     phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copiedCount / entries.length : 0) : 0
@@ -669,10 +672,10 @@ export function App(): JSX.Element {
             </motion.button>
           )}
           <motion.button
-            className="btn ghost"
+            className={`btn ${cleanable && phase === 'ready' ? 'hot' : 'ghost'}`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            disabled={busy || (!plan && !error && sources.length === 0)}
+            disabled={busy || !cleanable}
             title={t('clean.hint')}
             onClick={() => {
               setSources([])
@@ -682,19 +685,19 @@ export function App(): JSX.Element {
             {t('clean')}
           </motion.button>
           <motion.button
-            className="btn"
+            className={`btn${canAnalyze && !plan ? ' hot' : ''}`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            disabled={busy || sources.length === 0 || !destination.trim()}
+            disabled={!canAnalyze}
             onClick={analyze}
           >
             {t('analyze')}
           </motion.button>
           <motion.button
-            className="btn primary"
+            className={`btn primary${canSort ? ' hot' : ''}`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            disabled={busy || tagging || phase !== 'ready' || entries.length === 0}
+            disabled={!canSort}
             title={tagging ? t('tags.busy') : undefined}
             onClick={sort}
           >
