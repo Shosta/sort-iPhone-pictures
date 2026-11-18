@@ -111,5 +111,5 @@ export const fr: Copy = {
       { q: 'Sur quels systèmes fonctionne-t-il ?', a: 'macOS (Apple silicon et Intel), Linux x86_64 (AppImage) et Windows (exécutable portable). Les paquets ne sont pas signés, et les tags par IA ne sont pas disponibles sur Mac Intel.' },
     ],
   },
-  footer: { tagline: 'Moins de désordre. Plus de souvenirs.', independent: 'Projet indépendant, non affilié à Apple.', license: 'Licence MIT' },
+  footer: { tagline: 'Moins de désordre. Plus de souvenirs.', made: 'Made with ❤️ in Paris by Shosta', license: 'Licence MIT' },
 };

@@ -111,5 +111,5 @@ export const da: Copy = {
       { q: 'Hvilke systemer kører det på?', a: 'macOS (Apple silicon og Intel), Linux x86_64 (AppImage) og Windows (bærbar programfil). Pakkerne er ikke signeret, og AI-tags findes ikke på Mac med Intel-processor.' },
     ],
   },
-  footer: { tagline: 'Mindre rod. Flere minder.', independent: 'Uafhængigt projekt, ikke tilknyttet Apple.', license: 'MIT-licens' },
+  footer: { tagline: 'Mindre rod. Flere minder.', made: 'Made with ❤️ in Paris by Shosta', license: 'MIT-licens' },
 };

@@ -111,5 +111,5 @@ export const en: Copy = {
       { q: 'Which systems does it run on?', a: 'macOS (Apple silicon and Intel), Linux x86_64 (AppImage) and Windows (portable executable). Packages are unsigned, and AI tags are not available on Intel Macs.' },
     ],
   },
-  footer: { tagline: 'Less clutter. More memories.', independent: 'Independent project, not affiliated with Apple.', license: 'MIT licence' },
+  footer: { tagline: 'Less clutter. More memories.', made: 'Made with ❤️ in Paris by Shosta', license: 'MIT licence' },
 };

@@ -54,5 +54,5 @@ export interface Copy {
   };
   limits: { eyebrow: string; title: string; items: string[] };
   faq: { eyebrow: string; title: string; items: { q: string; a: string }[] };
-  footer: { tagline: string; independent: string; license: string };
+  footer: { tagline: string; made: string; license: string };
 }
