@@ -1,15 +1,13 @@
 name: Package Photosort
 
-# Lancement manuel : onglet Actions > "Package Photosort" > Run workflow.
-# Un tag `v*` déclenche aussi la construction et crée une release brouillon.
+# - Merge (push) sur main : construit les paquets, disponibles en artefacts du run.
+# - Tag `v*` sur un commit de main : construit les paquets puis publie la release.
+# - Lancement manuel : onglet Actions > "Package Photosort" > Run workflow.
 on:
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Tag de release à créer ou compléter (ex. v0.1.0). Vide : artefacts du run uniquement."
-        required: false
-        type: string
   push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
     tags: ['v*']
 
 permissions:
@@ -52,7 +50,7 @@ jobs:
             os: windows-latest
             goos: windows
             goarch: amd64
-            builder: --win nsis --x64
+            builder: --win portable --x64
     defaults:
       run:
         shell: bash
@@ -101,24 +99,35 @@ jobs:
           name: photosort-${{ matrix.artifact }}
           path: |
             photosort-electron/release/*.dmg
-            photosort-electron/release/*.zip
             photosort-electron/release/*.exe
             photosort-electron/release/*.AppImage
           if-no-files-found: error
           retention-days: 30
 
   release:
-    name: Release brouillon
+    name: Release
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      TAG: ${{ inputs.release_tag || github.ref_name }}
+      TAG: ${{ github.ref_name }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier que le tag est sur main et correspond à la version
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::Le tag $TAG ne pointe pas sur un commit de main."; exit 1; }
+          VERSION=$(node -p "require('./photosort-electron/package.json').version")
+          [ "$TAG" = "v$VERSION" ] \
+            || { echo "::error::Le tag $TAG ne correspond pas à la version $VERSION de package.json."; exit 1; }
+
       - uses: actions/download-artifact@v8
         with:
           pattern: photosort-*
@@ -131,5 +140,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --draft --generate-notes --title "Photosort $TAG" --target "$GITHUB_SHA"
+            gh release create "$TAG" dist/* --generate-notes --title "Photosort $TAG" --verify-tag
           fi
