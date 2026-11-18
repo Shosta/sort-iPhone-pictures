@@ -26,12 +26,12 @@ func TestRunPreviewJSON(t *testing.T) {
 	var result struct {
 		Applied bool
 		Copied  int
-		Plan    struct{ Skipped []json.RawMessage }
+		Plan    struct{ Entries, Skipped []json.RawMessage }
 	}
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Applied || result.Copied != 0 || len(result.Plan.Skipped) != 1 {
+	if result.Applied || result.Copied != 0 || len(result.Plan.Entries) != 1 || len(result.Plan.Skipped) != 0 {
 		t.Fatalf("unexpected JSON: %s", output.String())
 	}
 	if _, err := os.Stat(destination); !os.IsNotExist(err) {

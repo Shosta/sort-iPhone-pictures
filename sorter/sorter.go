@@ -18,6 +18,9 @@ import (
 	"sort-iphone-pictures/internal/geo"
 )
 
+// UndatedFolder receives photos without a usable capture date.
+const UndatedFolder = "Photos_Undated"
+
 type Entry struct {
 	Source   string   `json:"source"`
 	Target   string   `json:"target"`
@@ -193,8 +196,13 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		}
 	}) {
 		done++
-		if item := photos[i]; item.folder != "" && engine.Draft != nil {
-			engine.Draft(Entry{ordered[i], filepath.Join(item.folder, filepath.Base(ordered[i])), item.metadata})
+		if item := photos[i]; engine.Draft != nil {
+			switch {
+			case item.folder != "":
+				engine.Draft(Entry{ordered[i], filepath.Join(item.folder, filepath.Base(ordered[i])), item.metadata})
+			case item.err == nil || errors.Is(item.err, errNoEXIF):
+				engine.Draft(Entry{ordered[i], filepath.Join(UndatedFolder, filepath.Base(ordered[i])), item.metadata})
+			}
 		}
 		if engine.Progress != nil {
 			engine.Progress("exif", done, len(ordered))
@@ -203,13 +211,13 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 	if err := ctx.Err(); err != nil {
 		return plan, err
 	}
-	var dated []int
+	var dated, undated []int
 	for i, path := range ordered {
 		switch item := photos[i]; {
-		case item.err != nil:
+		case item.err != nil && !errors.Is(item.err, errNoEXIF):
 			plan.Skipped = append(plan.Skipped, Issue{path, item.err.Error()})
 		case item.folder == "":
-			plan.Skipped = append(plan.Skipped, Issue{path, "missing or invalid original capture date"})
+			undated = append(undated, i)
 		default:
 			dated = append(dated, i)
 		}
@@ -325,6 +333,33 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		}
 		reserved[strings.ToLower(target)] = true
 		plan.Entries = append(plan.Entries, Entry{path, target, metadata})
+	}
+	// Photos without a capture date are renamed "Photo undated - N" in one default folder
+	// so none is forgotten after sorting; numbering is incremental.
+	undatedCount := 0
+	for _, i := range undated {
+		if err := ctx.Err(); err != nil {
+			return plan, err
+		}
+		path := ordered[i]
+		extension := strings.ToLower(filepath.Ext(path))
+		var target string
+		for {
+			undatedCount++
+			target = filepath.Join(UndatedFolder, fmt.Sprintf("Photo undated - %d%s", undatedCount, extension))
+			if reserved[strings.ToLower(target)] {
+				continue
+			}
+			_, err := os.Lstat(filepath.Join(plan.Destination, target))
+			if errors.Is(err, fs.ErrNotExist) {
+				break
+			}
+			if err != nil {
+				return plan, fmt.Errorf("check target: %w", err)
+			}
+		}
+		reserved[strings.ToLower(target)] = true
+		plan.Entries = append(plan.Entries, Entry{path, target, photos[i].metadata})
 	}
 	return plan, nil
 }

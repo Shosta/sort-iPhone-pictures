@@ -2,6 +2,7 @@ package sorter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -25,6 +26,9 @@ type Metadata struct {
 	Shot tagger.Shot
 }
 
+// errNoEXIF marks a readable file whose EXIF block is missing or unreadable.
+var errNoEXIF = errors.New("read EXIF")
+
 type MetadataReader func(context.Context, string) (Metadata, error)
 
 func ReadMetadata(ctx context.Context, path string) (Metadata, error) {
@@ -38,7 +42,7 @@ func ReadMetadata(ctx context.Context, path string) (Metadata, error) {
 	defer file.Close()
 	data, err := imagemeta.Decode(file)
 	if err != nil {
-		return Metadata{}, fmt.Errorf("read EXIF: %w", err)
+		return Metadata{}, fmt.Errorf("%w: %w", errNoEXIF, err)
 	}
 	lat, lon := data.GPS.Latitude(), data.GPS.Longitude()
 	hasGPS := (lat != 0 || lon != 0) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180

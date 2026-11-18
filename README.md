@@ -150,7 +150,8 @@ a tester ; les tests integres utilisent un petit TIFF EXIF genere en memoire.
 `sorter.Engine.Plan(ctx, sources, destination)` prepare un plan sans ecriture.
 `sorter.Copy(ctx, plan)` execute les copies et renvoie leur nombre, meme si une
 erreur survient ensuite. Les erreurs de lecture individuelles figurent dans
-`plan.Skipped`. Les deux operations acceptent un contexte d'annulation.
+`plan.Skipped`. Les photos sans date de prise de vue valide (ou sans EXIF)
+sont copiees dans le dossier `Photos_Undated`, renommees `Photo undated - N.ext` (N incremental). Les deux operations acceptent un contexte d'annulation.
 L'interface `internal/desktop` et la CLI reutilisent le meme package.
 `sorter.CopyWithProgress` ajoute une notification par copie reussie pour l'UI.
 `Engine.ReadMetadata` permet de substituer le lecteur EXIF dans les tests.

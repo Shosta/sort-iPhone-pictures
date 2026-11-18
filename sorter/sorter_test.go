@@ -72,8 +72,29 @@ func TestPlanMissingMetadata(t *testing.T) {
 		return Metadata{}, nil
 	}}
 	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
-	if err != nil || len(plan.Entries) != 0 || len(plan.Skipped) != 2 {
+	if err != nil || len(plan.Entries) != 1 || len(plan.Skipped) != 1 {
 		t.Fatalf("unexpected result: %+v, %v", plan, err)
+	}
+}
+
+func TestPlanUndatedFolder(t *testing.T) {
+	base := t.TempDir()
+	source := filepath.Join(base, "source")
+	writePhoto(t, filepath.Join(source, "a", "shot.tiff"))
+	writePhoto(t, filepath.Join(source, "b", "shot.tiff"))
+	writePhoto(t, filepath.Join(source, "c.tiff"))
+	engine := Engine{ReadMetadata: func(_ context.Context, path string) (Metadata, error) {
+		if filepath.Base(path) == "c.tiff" {
+			return Metadata{}, errors.New("permission denied")
+		}
+		return Metadata{}, nil
+	}}
+	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(base, "dest"))
+	if err != nil || len(plan.Entries) != 2 || len(plan.Skipped) != 1 {
+		t.Fatalf("unexpected result: %+v, %v", plan, err)
+	}
+	if plan.Entries[0].Target != "Photos_Undated/Photo undated - 1.tiff" || plan.Entries[1].Target != "Photos_Undated/Photo undated - 2.tiff" {
+		t.Fatalf("unexpected targets: %+v", plan.Entries)
 	}
 }
 

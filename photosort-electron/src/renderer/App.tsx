@@ -78,6 +78,7 @@ function sortedFolders(groups: Map<string, Entry[]>): [string, Entry[]][] {
 
 function folderOf(target: string): string {
   const parts = target.split(/[\\/]/)
+  if (parts.length <= 2) return parts[0] ?? ''
   return parts.length > 3 ? `${parts[1]} · ${parts[2]}` : (parts[1] ?? '')
 }
 
