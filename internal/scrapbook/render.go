@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -114,35 +115,46 @@ func SafeName(text string) string {
 // Render writes the PDF of job. Photos are decoded and reduced in parallel;
 // pages are assembled in order. Nothing is left behind if ctx is cancelled.
 func Render(ctx context.Context, job Job) (Result, error) {
-	dir, fallback, err := outputDir(job.Dir, job.FallbackDir)
-	if err != nil {
-		return Result{}, err
-	}
-	temp, err := os.CreateTemp(dir, ".photosort-*.pdf.tmp")
-	if err != nil {
-		return Result{}, fmt.Errorf("cannot write in %s: %w", dir, err)
-	}
-	defer os.Remove(temp.Name())
-	defer temp.Close()
-
-	pdf, failed, err := draw(ctx, job)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := pdf.Output(temp); err != nil {
-		return Result{}, err
-	}
-	if err := temp.Close(); err != nil {
-		return Result{}, err
-	}
-	if err := os.Chmod(temp.Name(), 0o644); err != nil {
-		return Result{}, err
-	}
-	path, err := publish(temp.Name(), dir, SafeName(job.Name))
+	var failed []Failure
+	path, fallback, err := SavePDF(job.Dir, job.FallbackDir, job.Name, func(w io.Writer) error {
+		pdf, failures, err := draw(ctx, job)
+		if err != nil {
+			return err
+		}
+		failed = failures
+		return pdf.Output(w)
+	})
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{Path: path, Pages: len(job.Sheets), Failed: failed, Fallback: fallback}, nil
+}
+
+// SavePDF writes a PDF with write to dir/name (fallback if dir cannot be
+// written to) through a temporary file, so nothing is left behind on failure.
+// An existing file is never replaced: a numbered name is used instead.
+func SavePDF(dir, fallbackDir, name string, write func(io.Writer) error) (path string, fallback bool, err error) {
+	dir, fallback, err = outputDir(dir, fallbackDir)
+	if err != nil {
+		return "", false, err
+	}
+	temp, err := os.CreateTemp(dir, ".photosort-*.pdf.tmp")
+	if err != nil {
+		return "", false, fmt.Errorf("cannot write in %s: %w", dir, err)
+	}
+	defer os.Remove(temp.Name())
+	defer temp.Close()
+	if err := write(temp); err != nil {
+		return "", false, err
+	}
+	if err := temp.Close(); err != nil {
+		return "", false, err
+	}
+	if err := os.Chmod(temp.Name(), 0o644); err != nil {
+		return "", false, err
+	}
+	path, err = publish(temp.Name(), dir, SafeName(name))
+	return path, fallback, err
 }
 
 // draw builds the document of job.
@@ -376,6 +388,13 @@ func stampOutline(pdf *fpdf.Fpdf, box Placement) {
 		}
 	}
 	pdf.Polygon(points, "D")
+}
+
+// JPEG decodes a photo upright and reduces it to print at sizeMM on its
+// longest side (a square around the subject with square set).
+func JPEG(path string, sizeMM float64, square bool) (data []byte, width, height int, err error) {
+	r := reduce(path, sizeMM, square)
+	return r.data, r.width, r.height, r.err
 }
 
 // reduce decodes a photo upright and reduces it to print at sizeMM on its

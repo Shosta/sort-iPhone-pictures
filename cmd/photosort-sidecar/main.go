@@ -12,6 +12,10 @@
 //	{"id":"7","op":"weekPhotos","root":"...","from":"2026-05-11","to":"2026-05-17"}
 //	{"id":"8","op":"scrapbookLayout","files":[...],"page":"a4-landscape","longSide":65,"gutter":5}
 //	{"id":"9","op":"scrapbook","files":[...],"page":"a4-landscape","longSide":65,"gutter":5,"outDir":"...","fallbackDir":"...","name":"Semaine.pdf"}
+//	{"id":"10","op":"yearMapYears","root":"..."}
+//	{"id":"11","op":"yearMapScan","root":"...","year":2026}
+//	{"id":"12","op":"yearMapLayout","places":[...],"page":"a4-landscape"}
+//	{"id":"13","op":"yearMapPdf","places":[...],"page":"a4-landscape","name":"Carte 2026.pdf","title":"2026","subtitle":"...","outDir":"...","fallbackDir":"..."}
 //
 // Events:
 //   - plan: status (stage exif|hash|similar with done/total), draft (batches of
@@ -29,6 +33,13 @@
 //     placements in mm, failed photos that cannot be read). scrapbook: progress
 //     per photo, then done (path, pages, photos, failed, fallback). Sizes are
 //     in millimetres; a photo is never cropped, with at least 5 mm between photos.
+//   - yearMapYears: years (year folders of the library, newest first) and rootOk.
+//     yearMapScan: status while GPS positions are read, then places (name, lat,
+//     lon, count, shown photos), total and located photo counts. yearMapLayout
+//     takes those places back and answers with the map drawn for a page: pageWidth
+//     and pageHeight in mm, land and lakes (SVG paths in mm), pins (x, y, name,
+//     count, shown, card box in mm or null). yearMapPdf writes that page: progress
+//     per photo, then done (path, places, failed, fallback).
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -56,41 +67,45 @@ import (
 )
 
 type request struct {
-	ID           string   `json:"id"`
-	Op           string   `json:"op"`
-	Sources      []string `json:"sources"`
-	Destination  string   `json:"destination"`
-	ByLocation   bool     `json:"byLocation"`
-	Landmarks    bool     `json:"landmarks"`
-	Dedupe       bool     `json:"dedupe"`
-	Similar      bool     `json:"similar"`
-	DateFallback bool     `json:"dateFallback"`
-	Screenshots  bool     `json:"screenshots"`
-	Blurry       bool     `json:"blurry"`
-	TagScenes    bool     `json:"tagScenes"`
-	TagMoment    bool     `json:"tagMoment"`
-	TagPeople    bool     `json:"tagPeople"`
-	TagMeta      bool     `json:"tagMeta"`
-	AIDir        string   `json:"aiDir"`
-	Folder       string   `json:"folder"`
-	Files        []string `json:"files"`
-	PlanID       string   `json:"planId"`
-	Path         string   `json:"path"`
-	Size         int      `json:"size"`
-	Target       string   `json:"target"`
-	Root         string   `json:"root"`
-	From         string   `json:"from"`
-	To           string   `json:"to"`
-	Page         string   `json:"page"`
-	LongSide     float64  `json:"longSide"`
-	Gutter       float64  `json:"gutter"`
-	Bleed        float64  `json:"bleed"`
-	Frame        string   `json:"frame"`
-	Layout       string   `json:"layout"`
-	Background   string   `json:"background"`
-	OutDir       string   `json:"outDir"`
-	FallbackDir  string   `json:"fallbackDir"`
-	Name         string   `json:"name"`
+	ID           string      `json:"id"`
+	Op           string      `json:"op"`
+	Sources      []string    `json:"sources"`
+	Destination  string      `json:"destination"`
+	ByLocation   bool        `json:"byLocation"`
+	Landmarks    bool        `json:"landmarks"`
+	Dedupe       bool        `json:"dedupe"`
+	Similar      bool        `json:"similar"`
+	DateFallback bool        `json:"dateFallback"`
+	Screenshots  bool        `json:"screenshots"`
+	Blurry       bool        `json:"blurry"`
+	TagScenes    bool        `json:"tagScenes"`
+	TagMoment    bool        `json:"tagMoment"`
+	TagPeople    bool        `json:"tagPeople"`
+	TagMeta      bool        `json:"tagMeta"`
+	AIDir        string      `json:"aiDir"`
+	Folder       string      `json:"folder"`
+	Files        []string    `json:"files"`
+	PlanID       string      `json:"planId"`
+	Path         string      `json:"path"`
+	Size         int         `json:"size"`
+	Target       string      `json:"target"`
+	Root         string      `json:"root"`
+	From         string      `json:"from"`
+	To           string      `json:"to"`
+	Page         string      `json:"page"`
+	LongSide     float64     `json:"longSide"`
+	Gutter       float64     `json:"gutter"`
+	Bleed        float64     `json:"bleed"`
+	Frame        string      `json:"frame"`
+	Layout       string      `json:"layout"`
+	Background   string      `json:"background"`
+	OutDir       string      `json:"outDir"`
+	FallbackDir  string      `json:"fallbackDir"`
+	Name         string      `json:"name"`
+	Year         int         `json:"year"`
+	Title        string      `json:"title"`
+	Subtitle     string      `json:"subtitle"`
+	Places       []yearPlace `json:"places"`
 }
 
 type event map[string]any
@@ -229,6 +244,14 @@ func (s *server) run(ctx context.Context, req request) error {
 		return s.scrapbookLayout(ctx, req)
 	case "scrapbook":
 		return s.scrapbook(ctx, req)
+	case "yearMapYears":
+		return s.yearMapYears(req)
+	case "yearMapScan":
+		return s.yearMapScan(ctx, req)
+	case "yearMapLayout":
+		return s.yearMapLayout(req)
+	case "yearMapPdf":
+		return s.yearMapPdf(ctx, req)
 	default:
 		return fmt.Errorf("unknown op %q", req.Op)
 	}
