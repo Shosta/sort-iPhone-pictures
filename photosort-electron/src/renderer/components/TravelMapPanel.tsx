@@ -6,7 +6,7 @@ import type { Prefs, ScrapPage } from '../prefs'
 import { request } from '../sidecar'
 import type { ScrapJob, TravelLayout, TravelStop, TravelTrip } from '../types'
 import { Select } from './Select'
-import { PinThumb, PROVIDERS } from './YearMapPanel'
+import { MAP_INSET, PinThumb, PROVIDERS } from './YearMapPanel'
 
 interface Props {
   prefs: Prefs
@@ -19,6 +19,15 @@ const PAGES: ScrapPage[] = ['a4-portrait', 'a4-landscape', 'letter-portrait', 'l
 const THUMB = 24
 const PAD = 1.8
 const CARD_H = PAD + THUMB + 6 + PAD / 2
+// The title label, in millimetres as in the PDF.
+const TITLE = { x: MAP_INSET + 4, y: MAP_INSET + 4, w: 132, h: 22 }
+const TITLE_TEXT_X = TITLE.x + 19.5
+const TITLE_TEXT_W = TITLE.w - 19.5 - 4
+
+/** Squeezes a text into the label when it would be wider than it. */
+const fit = (text: string, size: number): { textLength?: number; lengthAdjust?: 'spacingAndGlyphs' } =>
+  text.length * size * 0.52 > TITLE_TEXT_W ? { textLength: TITLE_TEXT_W, lengthAdjust: 'spacingAndGlyphs' } : {}
+
 const RED = '#b04034'
 const INK = '#423428'
 
@@ -241,6 +250,8 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
   const ratio = job && job.total > 0 ? job.done / job.total : 0
   const busy = progress !== null
 
+  const titleText = title.trim() || t('travel.defaultTitle', { place })
+  const subtitleText = trip && layout ? t('travel.subtitle', { dates: dates(trip.from, trip.to), steps: layout.stops.length, km: Math.round(layout.distanceKm) }) : ''
   return (
     <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !running && onClose()}>
       <motion.div
@@ -363,19 +374,28 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
                 <p className="muted">{steps ? t('travel.layouting') : t('travel.pick')}</p>
               ) : (
                 <motion.svg className="ymap-sheet" viewBox={`0 0 ${layout.pageWidth} ${layout.pageHeight}`} style={{ aspectRatio: `${layout.pageWidth} / ${layout.pageHeight}` }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                  <rect width={layout.pageWidth} height={layout.pageHeight} fill="#faf5e8" />
-                  {layout.backdrop && <image href={layout.backdrop} width={layout.pageWidth} height={layout.pageHeight} preserveAspectRatio="none" />}
-                  {layout.land && <path d={layout.land} fill="#ecdfc2" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
-                  {layout.lakes && <path d={layout.lakes} fill="#faf5e8" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
-                  <rect x={3} y={3} width={layout.pageWidth - 6} height={layout.pageHeight - 6} fill="none" stroke={INK} strokeWidth={0.5} />
-                  <rect x={4.2} y={4.2} width={layout.pageWidth - 8.4} height={layout.pageHeight - 8.4} fill="none" stroke={INK} strokeWidth={0.15} />
+                  <rect width={layout.pageWidth} height={layout.pageHeight} fill="#fff" />
+                  <clipPath id="travel-area">
+                    <rect x={MAP_INSET} y={MAP_INSET} width={layout.pageWidth - 2 * MAP_INSET} height={layout.pageHeight - 2 * MAP_INSET} />
+                  </clipPath>
+                  <g clipPath="url(#travel-area)">
+                    <rect width={layout.pageWidth} height={layout.pageHeight} fill="#faf5e8" />
+                    {layout.backdrop && <image href={layout.backdrop} width={layout.pageWidth} height={layout.pageHeight} preserveAspectRatio="none" />}
+                    {layout.land && <path d={layout.land} fill="#ecdfc2" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
+                    {layout.lakes && <path d={layout.lakes} fill="#faf5e8" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
+                  </g>
+                  <rect x={MAP_INSET} y={MAP_INSET} width={layout.pageWidth - 2 * MAP_INSET} height={layout.pageHeight - 2 * MAP_INSET} fill="none" stroke={INK} strokeWidth={0.5} />
+                  <rect x={MAP_INSET + 1.2} y={MAP_INSET + 1.2} width={layout.pageWidth - 2 * MAP_INSET - 2.4} height={layout.pageHeight - 2 * MAP_INSET - 2.4} fill="none" stroke={INK} strokeWidth={0.15} />
                   {layout.stops.length > 1 && <path d={layout.route} fill="none" stroke={RED} strokeWidth={0.6} strokeLinecap="round" strokeDasharray="0.01 1.7" />}
-                  <rect x={6} y={6} width={90} height={18} fill="#fffcf4" fillOpacity={0.85} stroke={INK} strokeWidth={0.4} />
-                  <text x={10} y={15.2} fontSize={14} fontWeight={700} fontFamily="Georgia, serif" fill={INK}>
-                    {title}
+                  <rect x={TITLE.x} y={TITLE.y} width={TITLE.w} height={TITLE.h} fill="#fffcf4" fillOpacity={0.85} stroke={INK} strokeWidth={0.4} />
+                  <text x={TITLE.x + 3.5} y={TITLE.y + 13} fontSize={9}>
+                    🚐
                   </text>
-                  <text x={10} y={20.6} fontSize={6} fontStyle="italic" fontFamily="Georgia, serif" fill="#806f5f">
-                    {trip && t('travel.subtitle', { dates: dates(trip.from, trip.to), steps: layout.stops.length, km: Math.round(layout.distanceKm) })}
+                  <text x={TITLE_TEXT_X} y={TITLE.y + 10} fontSize={6.7} fontWeight={700} fontFamily="Georgia, serif" fill={INK} {...fit(titleText, 6.7)}>
+                    {titleText}
+                  </text>
+                  <text x={TITLE_TEXT_X} y={TITLE.y + 16.6} fontSize={3} fontStyle="italic" fontFamily="Georgia, serif" fill="#806f5f" {...fit(subtitleText, 3)}>
+                    {subtitleText}
                   </text>
                   {layout.stops.map((stop) => (
                     <Stop key={stop.n} stop={stop} />

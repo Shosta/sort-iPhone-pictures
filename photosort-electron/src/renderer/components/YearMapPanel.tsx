@@ -16,6 +16,8 @@ interface Props {
 const PAGES: ScrapPage[] = ['a4-landscape', 'a4-portrait', 'letter-landscape', 'letter-portrait']
 // Card geometry of the engine at scale 1 (internal/yearmap/layout.go), in mm.
 const THUMB = 24
+/** White margin around the map, in millimetres (as in the PDF). */
+export const MAP_INSET = 8
 const PAD = 1.8
 const CARD_H = PAD + THUMB + 6 + PAD / 2
 
@@ -291,12 +293,18 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
                 <p className="muted">{summary && summary.places === 0 ? t('ymap.empty') : places ? t('ymap.layouting') : t('ymap.pick')}</p>
               ) : (
                 <motion.svg className="ymap-sheet" viewBox={`0 0 ${layout.pageWidth} ${layout.pageHeight}`} style={{ aspectRatio: `${layout.pageWidth} / ${layout.pageHeight}` }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                  <rect width={layout.pageWidth} height={layout.pageHeight} fill="#fff" />
+                  <clipPath id="ymap-area">
+                    <rect x={MAP_INSET} y={MAP_INSET} width={layout.pageWidth - 2 * MAP_INSET} height={layout.pageHeight - 2 * MAP_INSET} />
+                  </clipPath>
+                  <g clipPath="url(#ymap-area)">
                   <rect width={layout.pageWidth} height={layout.pageHeight} fill="#cee1ec" />
                   {layout.backdrop && <image href={layout.backdrop} width={layout.pageWidth} height={layout.pageHeight} preserveAspectRatio="none" />}
                   {layout.land && <path d={layout.land} fill="#f6f0e2" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />}
                   {layout.lakes && <path d={layout.lakes} fill="#cee1ec" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />}
+                  </g>
                   {layout.credit && (
-                    <text x={layout.pageWidth - 1.5} y={layout.pageHeight - 1.5} textAnchor="end" fontSize={3.2} fill="#3a322a" stroke="#fff" strokeWidth={0.6} paintOrder="stroke">
+                    <text x={layout.pageWidth - MAP_INSET - 1.5} y={layout.pageHeight - MAP_INSET - 1.5} textAnchor="end" fontSize={3.2} fill="#3a322a" stroke="#fff" strokeWidth={0.6} paintOrder="stroke">
                       {layout.credit}
                     </text>
                   )}

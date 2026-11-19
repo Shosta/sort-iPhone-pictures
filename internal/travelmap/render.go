@@ -82,6 +82,8 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	text := pdf.UnicodeTranslatorFromDescriptor("")
 	pdf.AddPage()
 
+	area := yearmap.MapArea(page.Width, page.Height)
+	pdf.ClipRect(area.X, area.Y, area.W, area.H, false)
 	fill(pdf, paperColour)
 	pdf.Rect(0, 0, page.Width, page.Height, "F")
 	if job.Backdrop != nil {
@@ -93,7 +95,6 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 		pdf.RegisterImageOptionsReader("backdrop", options, &buf)
 		pdf.ImageOptions("backdrop", 0, 0, page.Width, page.Height, false, options, 0, "")
 	}
-	pdf.ClipRect(0, 0, page.Width, page.Height, false)
 	base := mapbase.Default()
 	if job.Backdrop != nil {
 		base = &mapbase.Base{}
@@ -142,13 +143,14 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	return pdf, failed, nil
 }
 
-// frame draws the double border of the notebook page.
+// frame draws the double border of the notebook page around the map.
 func frame(pdf *fpdf.Fpdf, page yearmap.Layout) {
+	area := yearmap.MapArea(page.Width, page.Height)
 	pdf.SetDrawColor(inkColour.r, inkColour.g, inkColour.b)
 	pdf.SetLineWidth(0.5)
-	pdf.Rect(3, 3, page.Width-6, page.Height-6, "D")
+	pdf.Rect(area.X, area.Y, area.W, area.H, "D")
 	pdf.SetLineWidth(0.15)
-	pdf.Rect(4.2, 4.2, page.Width-8.4, page.Height-8.4, "D")
+	pdf.Rect(area.X+1.2, area.Y+1.2, area.W-2.4, area.H-2.4, "D")
 }
 
 // route draws the dotted line through the steps, in order.
@@ -189,10 +191,10 @@ func banner(pdf *fpdf.Fpdf, text func(string) string, title, subtitle string) {
 	van(pdf, box.X+3.5, box.Y+(box.H-vanW*0.62)/2, vanW)
 	left := box.X + 3.5 + vanW + 3
 	pdf.SetFont("Times", "B", 19)
-	pdf.Text(left, box.Y+9.2, yearmap.FitText(pdf, text(yearmap.Latin(title)), box.W-(left-box.X)-4))
+	pdf.Text(left, box.Y+10, yearmap.FitText(pdf, text(yearmap.Latin(title)), box.W-(left-box.X)-4))
 	ink(pdf, mutedColour)
 	pdf.SetFont("Times", "I", 8.5)
-	pdf.Text(left, box.Y+14.6, yearmap.FitText(pdf, text(yearmap.Latin(subtitle)), box.W-(left-box.X)-4))
+	pdf.Text(left, box.Y+16.6, yearmap.FitText(pdf, text(yearmap.Latin(subtitle)), box.W-(left-box.X)-4))
 }
 
 // van draws a camper van facing right in a box of width w and height 0.62*w

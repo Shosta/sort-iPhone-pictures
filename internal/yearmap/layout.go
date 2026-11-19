@@ -15,15 +15,24 @@ const (
 	pinRadius = 2.4
 	// pagePad keeps pins away from the edges so their cards have room.
 	pagePad    = 30.0
-	pageMargin = 5.0
+	pageMargin = 2.0
 	cardGap    = 1.5
 )
 
 // scales are the card sizes tried, from the largest.
 var scales = []float64{1, 0.8, 0.65, 0.5, 0.4}
 
-// TitleBox is the corner of the page reserved for the title.
-var TitleBox = Rect{X: 6, Y: 6, W: 90, H: 18}
+// MapInset is the white margin around the map, like a mount around a picture.
+const MapInset = 8.0
+
+// MapArea is the part of the page showing the map.
+func MapArea(width, height float64) Rect {
+	return Rect{X: MapInset, Y: MapInset, W: width - 2*MapInset, H: height - 2*MapInset}
+}
+
+// TitleBox is the corner of the map reserved for the title, sized for a title
+// and a line of dates, steps and distance.
+var TitleBox = Rect{X: MapInset + 4, Y: MapInset + 4, W: 132, H: 22}
 
 // Rect is a box on the page, in millimetres.
 type Rect struct {
@@ -131,7 +140,7 @@ var distances = []float64{3, 7, 12, 18, 26, 36}
 
 func freeSpot(positions []mapbase.XY, self int, w, h, width, height float64, obstacles []Rect) (Rect, bool) {
 	pin := positions[self]
-	page := Rect{pageMargin, pageMargin, width - 2*pageMargin, height - 2*pageMargin}
+	page := MapArea(width, height).grow(-pageMargin)
 	for _, gap := range distances {
 		for _, d := range directions {
 			card := Rect{X: pin.X + d[0]*(w/2+gap) - w/2, Y: pin.Y + d[1]*(h/2+gap) - h/2, W: w, H: h}

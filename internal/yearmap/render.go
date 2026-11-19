@@ -96,6 +96,8 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	text := pdf.UnicodeTranslatorFromDescriptor("")
 	pdf.AddPage()
 
+	area := MapArea(layout.Width, layout.Height)
+	pdf.ClipRect(area.X, area.Y, area.W, area.H, false)
 	fill(pdf, waterColour)
 	pdf.Rect(0, 0, layout.Width, layout.Height, "F")
 	if job.Backdrop != nil {
@@ -106,7 +108,6 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 		pdf.RegisterImageOptionsReader("backdrop", fpdf.ImageOptions{ImageType: "JPG"}, &buf)
 		pdf.ImageOptions("backdrop", 0, 0, layout.Width, layout.Height, false, fpdf.ImageOptions{ImageType: "JPG"}, 0, "")
 	}
-	pdf.ClipRect(0, 0, layout.Width, layout.Height, false)
 	base := mapbase.Default()
 	if job.Backdrop != nil {
 		base = &mapbase.Base{}
@@ -125,6 +126,9 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 		pdf.DrawPath("FD*")
 	}
 	pdf.ClipEnd()
+	pdf.SetDrawColor(borderColour.r, borderColour.g, borderColour.b)
+	pdf.SetLineWidth(0.2)
+	pdf.Rect(area.X, area.Y, area.W, area.H, "D")
 
 	banner(pdf, text, job.Title, job.Subtitle)
 
@@ -161,10 +165,10 @@ func Credit(pdf *fpdf.Fpdf, text func(string) string, layout Layout, credit stri
 	w := pdf.GetStringWidth(label) + 3
 	pdf.SetAlpha(0.8, "Normal")
 	pdf.SetFillColor(255, 255, 255)
-	pdf.Rect(layout.Width-w, layout.Height-4.2, w, 4.2, "F")
+	pdf.Rect(layout.Width-MapInset-w, layout.Height-MapInset-4.2, w, 4.2, "F")
 	pdf.SetAlpha(1, "Normal")
 	pdf.SetTextColor(inkColour.r, inkColour.g, inkColour.b)
-	pdf.Text(layout.Width-w+1.5, layout.Height-1.4, label)
+	pdf.Text(layout.Width-MapInset-w+1.5, layout.Height-MapInset-1.4, label)
 }
 
 func fill(pdf *fpdf.Fpdf, c colour) { pdf.SetFillColor(c.r, c.g, c.b) }
@@ -191,10 +195,10 @@ func banner(pdf *fpdf.Fpdf, text func(string) string, title, subtitle string) {
 	pdf.SetAlpha(1, "Normal")
 	pdf.SetTextColor(inkColour.r, inkColour.g, inkColour.b)
 	pdf.SetFont("Helvetica", "B", 20)
-	pdf.Text(box.X+4, box.Y+9.5, FitText(pdf, text(Latin(title)), box.W-8))
+	pdf.Text(box.X+4, box.Y+10, FitText(pdf, text(Latin(title)), box.W-8))
 	pdf.SetTextColor(mutedColour.r, mutedColour.g, mutedColour.b)
 	pdf.SetFont("Helvetica", "", 8.5)
-	pdf.Text(box.X+4, box.Y+15, FitText(pdf, text(Latin(subtitle)), box.W-8))
+	pdf.Text(box.X+4, box.Y+17, FitText(pdf, text(Latin(subtitle)), box.W-8))
 }
 
 // marker draws a pin: a red disc with a white ring and centre.
