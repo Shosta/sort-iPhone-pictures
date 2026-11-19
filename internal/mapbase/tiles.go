@@ -35,7 +35,17 @@ type Provider interface {
 
 // UserAgent identifies the application to tile servers, as their usage
 // policies require.
-const UserAgent = "Photosort/1.0 (offline photo sorter; https://github.com/remilavedrine/sort-iPhone-pictures)"
+const UserAgent = "Photosort/1.0 (desktop photo sorter; +https://github.com/remilavedrine/sort-iPhone-pictures)"
+
+// Referer is sent with tile requests; some servers refuse anonymous ones.
+const Referer = "https://github.com/remilavedrine/sort-iPhone-pictures"
+
+// cacheVersion names the cache layout; bumping it drops tiles stored by older
+// versions, which could include error pages.
+const cacheVersion = "v2"
+
+// fetchSlots caps concurrent tile requests (OSM policy: at most 2).
+var fetchSlots = make(chan struct{}, 2)
 
 // maxTiles bounds what one map downloads; tiles are also cached on disk.
 const maxTiles = 36
@@ -58,7 +68,7 @@ func (s *TileServer) MaxZoom() int        { return s.Zoom }
 func (s *TileServer) Tile(ctx context.Context, z, x, y int) (image.Image, error) {
 	file := ""
 	if s.CacheDir != "" {
-		file = filepath.Join(s.CacheDir, s.Key, fmt.Sprint(z), fmt.Sprint(x), fmt.Sprint(y)+".tile")
+		file = filepath.Join(s.CacheDir, cacheVersion, s.Key, fmt.Sprint(z), fmt.Sprint(x), fmt.Sprint(y)+".tile")
 		if data, err := os.ReadFile(file); err == nil {
 			if img, _, err := image.Decode(bytes.NewReader(data)); err == nil {
 				return img, nil
@@ -71,6 +81,14 @@ func (s *TileServer) Tile(ctx context.Context, z, x, y int) (image.Image, error)
 		return nil, err
 	}
 	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Referer", Referer)
+	req.Header.Set("Accept", "image/png,image/jpeg,image/*;q=0.8")
+	select {
+	case fetchSlots <- struct{}{}:
+		defer func() { <-fetchSlots }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	client := s.Client
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
@@ -82,6 +100,9 @@ func (s *TileServer) Tile(ctx context.Context, z, x, y int) (image.Image, error)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tile server answered %s", resp.Status)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "image/png") && !strings.HasPrefix(ct, "image/jpeg") {
+		return nil, fmt.Errorf("tile server sent %q instead of an image", ct)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
@@ -100,13 +121,17 @@ func (s *TileServer) Tile(ctx context.Context, z, x, y int) (image.Image, error)
 	return img, nil
 }
 
-// Providers lists the online backgrounds. None needs an account or a key.
+// DefaultProviderID is the background whose policy allows desktop apps
+// without a key; the others are options or fallbacks.
+const DefaultProviderID = "positron"
+
+// Providers lists the online backgrounds, the default first. None needs an account or a key.
 // cacheDir keeps downloaded tiles; empty disables the cache.
 func Providers(cacheDir string) []Provider {
 	osm := "© OpenStreetMap contributors"
 	return []Provider{
-		&TileServer{Key: "osm", Label: "OpenStreetMap", Credit: osm, URL: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", Zoom: 19, CacheDir: cacheDir},
 		&TileServer{Key: "positron", Label: "Carto Positron", Credit: osm + " © CARTO", URL: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", Zoom: 19, CacheDir: cacheDir},
+		&TileServer{Key: "osm", Label: "OpenStreetMap", Credit: osm, URL: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", Zoom: 19, CacheDir: cacheDir},
 		&TileServer{Key: "topo", Label: "OpenTopoMap", Credit: osm + ", SRTM | © OpenTopoMap (CC-BY-SA)", URL: "https://tile.opentopomap.org/{z}/{x}/{y}.png", Zoom: 17, CacheDir: cacheDir},
 		&TileServer{Key: "satellite", Label: "Esri World Imagery", Credit: "Esri, Maxar, Earthstar Geographics", URL: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", Zoom: 18, CacheDir: cacheDir},
 	}
@@ -159,7 +184,7 @@ func Backdrop(ctx context.Context, p Provider, v View, ppmm float64) (*image.RGB
 	var lock sync.Mutex
 	var wg sync.WaitGroup
 	var firstErr error
-	slots := make(chan struct{}, 4)
+	slots := make(chan struct{}, 2)
 	for ty := max(y0, 0); ty <= min(y1, tiles-1); ty++ {
 		for tx := x0; tx <= x1; tx++ {
 			wx := ((tx % tiles) + tiles) % tiles

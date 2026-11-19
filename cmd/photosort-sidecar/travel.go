@@ -184,7 +184,7 @@ func (s *server) travelPdf(ctx context.Context, req request) error {
 	s.busy.Add(1)
 	defer s.busy.Add(-1)
 	// A failed download only costs the online background.
-	img, credit, backdropErr := backdrop(ctx, req, layout.Page, 6)
+	img, credit, warn, backdropErr := backdrop(ctx, req, layout.Page, 6)
 	if backdropErr != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -214,6 +214,6 @@ func (s *server) travelPdf(ctx context.Context, req request) error {
 	for i, failure := range result.Failed {
 		failed[i] = scrapFailure{Path: failure.Path, Error: failure.Error}
 	}
-	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "steps": len(layout.Stops), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil})
+	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "steps": len(layout.Stops), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil, "backdropWarning": warn})
 	return nil
 }

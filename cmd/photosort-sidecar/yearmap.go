@@ -63,18 +63,37 @@ func yearMapPage(req request) (yearmap.Layout, error) {
 
 var tileProviders = mapbase.Providers(mapbase.TileCacheDir())
 
-// backdrop downloads the online map behind a layout. It returns nil when the
-// request wants the offline map, or an error when the tiles are unavailable.
-func backdrop(ctx context.Context, req request, layout yearmap.Layout, ppmm float64) (image.Image, string, error) {
+// backdrop downloads the online map behind a layout. It returns a nil image
+// when the request wants the offline map. When the requested source fails it
+// tries the default provider, then gives up with an error so that the caller
+// draws the offline map; warn tells which source was refused.
+func backdrop(ctx context.Context, req request, layout yearmap.Layout, ppmm float64) (img image.Image, credit, warn string, err error) {
 	provider, ok := mapbase.ProviderByID(tileProviders, req.Provider)
 	if !ok {
-		return nil, "", nil
+		return nil, "", "", nil
 	}
-	img, err := mapbase.Backdrop(ctx, provider, layout.View, ppmm)
-	if err != nil {
-		return nil, "", err
+	candidates := []mapbase.Provider{provider}
+	if fallback, ok := mapbase.ProviderByID(tileProviders, mapbase.DefaultProviderID); ok && fallback.ID() != provider.ID() {
+		candidates = append(candidates, fallback)
 	}
-	return img, provider.Attribution(), nil
+	for i, p := range candidates {
+		m, e := mapbase.Backdrop(ctx, p, layout.View, ppmm)
+		if e == nil {
+			if i > 0 {
+				warn = fmt.Sprintf("%s: %v; %s used", provider.Name(), err, p.Name())
+			}
+			return m, p.Attribution(), warn, nil
+		}
+		if ctx.Err() != nil {
+			return nil, "", "", ctx.Err()
+		}
+		if i == 0 {
+			err = fmt.Errorf("%s: %w", p.Name(), e)
+		} else {
+			err = fmt.Errorf("%v; %s: %w", err, p.Name(), e)
+		}
+	}
+	return nil, "", "", err
 }
 
 // yearMapYears lists the years of the library.
@@ -110,7 +129,10 @@ func (s *server) yearMapScan(ctx context.Context, req request) error {
 // attachMap adds the map behind a layout to a reply: the online background
 // when it is available, the offline vector map otherwise.
 func attachMap(ctx context.Context, reply event, req request, layout yearmap.Layout) error {
-	img, credit, err := backdrop(ctx, req, layout, 3)
+	img, credit, warn, err := backdrop(ctx, req, layout, 3)
+	if warn != "" {
+		reply["backdropError"] = warn
+	}
 	if err == nil && img != nil {
 		var buf bytes.Buffer
 		if err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 80}); err == nil {
@@ -159,7 +181,7 @@ func (s *server) yearMapPdf(ctx context.Context, req request) error {
 	s.busy.Add(1)
 	defer s.busy.Add(-1)
 	// A failed download only costs the online background.
-	img, credit, backdropErr := backdrop(ctx, req, layout, 6)
+	img, credit, warn, backdropErr := backdrop(ctx, req, layout, 6)
 	if backdropErr != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -189,6 +211,6 @@ func (s *server) yearMapPdf(ctx context.Context, req request) error {
 	for i, failure := range result.Failed {
 		failed[i] = scrapFailure{Path: failure.Path, Error: failure.Error}
 	}
-	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "places": len(layout.Pins), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil})
+	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "places": len(layout.Pins), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil, "backdropWarning": warn})
 	return nil
 }

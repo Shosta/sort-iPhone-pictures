@@ -68,9 +68,9 @@ function load(): Prefs {
     scrapBackground: 'none',
     yearMapPage: 'a4-landscape',
     travelMapPage: 'a4-portrait',
-    travelMapProvider: 'osm',
+    travelMapProvider: 'positron',
     travelMapOutputDir: '',
-    yearMapProvider: 'osm',
+    yearMapProvider: 'positron',
     yearMapOutputDir: '',
     language: detectLanguage(),
     theme: 'aurora'

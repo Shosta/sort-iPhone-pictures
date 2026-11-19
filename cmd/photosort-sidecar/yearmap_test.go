@@ -101,3 +101,35 @@ func TestYearMapOnlineBackdropAndFallback(t *testing.T) {
 		t.Fatalf("up = %v", up)
 	}
 }
+
+func TestYearMapBlockedProviderFallsBack(t *testing.T) {
+	saved := tileProviders
+	defer func() { tileProviders = saved }()
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusForbidden)
+		_ = png.Encode(w, image.NewRGBA(image.Rect(0, 0, 256, 256)))
+	}))
+	defer blocked.Close()
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = png.Encode(w, image.NewRGBA(image.Rect(0, 0, 256, 256)))
+	}))
+	defer good.Close()
+	dir := t.TempDir()
+	tileProviders = []mapbase.Provider{
+		&mapbase.TileServer{Key: "positron", Label: "Positron", Credit: "© good", URL: good.URL + "/{z}/{x}/{y}.png", Zoom: 19, CacheDir: dir},
+		&mapbase.TileServer{Key: "osm", Label: "OSM", Credit: "© osm", URL: blocked.URL + "/{z}/{x}/{y}.png", Zoom: 19, CacheDir: dir},
+	}
+	var out bytes.Buffer
+	srv := newServer(&out)
+	places := []yearPlace{{Name: "Paris", Lat: 48.85, Lon: 2.35, Count: 1, Shown: []string{"x.jpg"}}}
+	srv.handle(context.Background(), request{ID: "b", Op: "yearMapLayout", Places: places, Page: "a4-landscape", Provider: "osm"})
+	srv.wg.Wait()
+	ev := events(t, &out, "b")
+	if len(ev) != 1 || ev[0]["credit"] != "© good" || ev[0]["backdropError"] == nil || ev[0]["backdrop"] == nil {
+		t.Fatalf("ev = %v", ev)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "v2", "osm")); err == nil {
+		t.Fatal("error tiles were cached")
+	}
+}
