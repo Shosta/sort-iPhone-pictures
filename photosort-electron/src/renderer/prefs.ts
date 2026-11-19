@@ -64,7 +64,7 @@ function load(): Prefs {
     scrapLayout: 'grid',
     scrapBackground: 'none',
     yearMapPage: 'a4-landscape',
-    yearMapProvider: 'osm',
+    yearMapProvider: 'positron',
     yearMapOutputDir: '',
     language: detectLanguage(),
     theme: 'aurora'
