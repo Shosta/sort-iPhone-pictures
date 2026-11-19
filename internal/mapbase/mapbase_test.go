@@ -1,10 +1,68 @@
 package mapbase
 
 import (
+	"context"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+type flatProvider struct{ calls int }
+
+func (*flatProvider) ID() string          { return "flat" }
+func (*flatProvider) Name() string        { return "Flat" }
+func (*flatProvider) Attribution() string { return "test" }
+func (*flatProvider) MaxZoom() int        { return 19 }
+func (p *flatProvider) Tile(_ context.Context, z, x, y int) (image.Image, error) {
+	p.calls++
+	img := image.NewRGBA(image.Rect(0, 0, 256, 256))
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{10, 200, 30, 255}), image.Point{}, draw.Src)
+	return img, nil
+}
+
+func TestBackdropFillsThePageWithFewTiles(t *testing.T) {
+	view := Fit([]LatLon{{Lat: 48.8, Lon: 2.3}, {Lat: 55.6, Lon: 12.5}}, 297, 210, FitOptions{Padding: 30})
+	p := &flatProvider{}
+	img, err := Backdrop(context.Background(), p, view, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Bounds().Dx() != 891 || img.Bounds().Dy() != 630 {
+		t.Errorf("size = %v", img.Bounds())
+	}
+	if p.calls == 0 || p.calls > maxTiles {
+		t.Errorf("tiles fetched = %d", p.calls)
+	}
+	if c := img.RGBAAt(400, 300); c.G != 200 {
+		t.Errorf("centre pixel = %v", c)
+	}
+}
+
+func TestTileServerCachesOnDisk(t *testing.T) {
+	var hits int
+	var agent string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		agent = r.Header.Get("User-Agent")
+		_ = png.Encode(w, image.NewRGBA(image.Rect(0, 0, 256, 256)))
+	}))
+	defer server.Close()
+	s := &TileServer{Key: "t", URL: server.URL + "/{z}/{x}/{y}.png", Zoom: 5, CacheDir: t.TempDir()}
+	for range 2 {
+		if _, err := s.Tile(context.Background(), 3, 4, 5); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hits != 1 || agent != UserAgent {
+		t.Errorf("hits = %d, agent = %q", hits, agent)
+	}
+}
 
 func inLand(b *Base, p LatLon) bool {
 	inside := false

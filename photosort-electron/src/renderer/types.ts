@@ -118,8 +118,12 @@ export interface YearPin {
 export interface YearMapLayout {
   pageWidth: number
   pageHeight: number
-  land: string
-  lakes: string
+  land?: string
+  lakes?: string
+  /** Online map as a JPEG data URL, with the credit to show. */
+  backdrop?: string
+  credit?: string
+  backdropError?: string
   pins: YearPin[]
 }
 

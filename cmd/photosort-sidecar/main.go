@@ -33,6 +33,11 @@
 //     placements in mm, failed photos that cannot be read). scrapbook: progress
 //     per photo, then done (path, pages, photos, failed, fallback). Sizes are
 //     in millimetres; a photo is never cropped, with at least 5 mm between photos.
+//   - yearMapLayout and yearMapPdf take an optional provider (osm, positron,
+//     topo, satellite; anything else is the offline vector map). Online maps
+//     download only map tiles (cached on disk); if that fails the offline map
+//     is used and the layout carries backdropError. The layout then has a
+//     backdrop (JPEG data URL) and the credit to show on the map.
 //   - yearMapYears: years (year folders of the library, newest first) and rootOk.
 //     yearMapScan: status while GPS positions are read, then places (name, lat,
 //     lon, count, shown photos), total and located photo counts. yearMapLayout
@@ -103,6 +108,7 @@ type request struct {
 	FallbackDir  string      `json:"fallbackDir"`
 	Name         string      `json:"name"`
 	Year         int         `json:"year"`
+	Provider     string      `json:"provider"`
 	Title        string      `json:"title"`
 	Subtitle     string      `json:"subtitle"`
 	Places       []yearPlace `json:"places"`
@@ -249,7 +255,7 @@ func (s *server) run(ctx context.Context, req request) error {
 	case "yearMapScan":
 		return s.yearMapScan(ctx, req)
 	case "yearMapLayout":
-		return s.yearMapLayout(req)
+		return s.yearMapLayout(ctx, req)
 	case "yearMapPdf":
 		return s.yearMapPdf(ctx, req)
 	default:
