@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"math"
 
@@ -29,6 +31,10 @@ var (
 // Job describes a PDF to write.
 type Job struct {
 	Layout Layout
+	// Backdrop (optional) replaces the vector map; Credit is then written on
+	// the page.
+	Backdrop image.Image
+	Credit   string
 	// Title and Subtitle are written in the corner of the page.
 	Title, Subtitle string
 	// Dir and Name give the output file; an existing file is never replaced.
@@ -78,8 +84,20 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 
 	fill(pdf, paperColour)
 	pdf.Rect(0, 0, page.Width, page.Height, "F")
+	if job.Backdrop != nil {
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, job.Backdrop, &jpeg.Options{Quality: 85}); err != nil {
+			return nil, nil, err
+		}
+		options := fpdf.ImageOptions{ImageType: "JPG"}
+		pdf.RegisterImageOptionsReader("backdrop", options, &buf)
+		pdf.ImageOptions("backdrop", 0, 0, page.Width, page.Height, false, options, 0, "")
+	}
 	pdf.ClipRect(0, 0, page.Width, page.Height, false)
 	base := mapbase.Default()
+	if job.Backdrop != nil {
+		base = &mapbase.Base{}
+	}
 	fill(pdf, landColour)
 	pdf.SetDrawColor(borderColour.r, borderColour.g, borderColour.b)
 	pdf.SetLineWidth(0.15)
@@ -98,6 +116,9 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	frame(pdf, page)
 	route(pdf, layout.Stops)
 	banner(pdf, text, job.Title, job.Subtitle)
+	if job.Credit != "" {
+		yearmap.Credit(pdf, text, page, job.Credit)
+	}
 
 	pdf.SetDrawColor(routeColour.r, routeColour.g, routeColour.b)
 	pdf.SetLineWidth(0.25)
@@ -164,11 +185,42 @@ func banner(pdf *fpdf.Fpdf, text func(string) string, title, subtitle string) {
 	pdf.SetLineWidth(0.12)
 	pdf.Rect(box.X+1, box.Y+1, box.W-2, box.H-2, "D")
 	ink(pdf, inkColour)
+	const vanW = 13.0
+	van(pdf, box.X+3.5, box.Y+(box.H-vanW*0.62)/2, vanW)
+	left := box.X + 3.5 + vanW + 3
 	pdf.SetFont("Times", "B", 19)
-	pdf.Text(box.X+4, box.Y+9.2, yearmap.FitText(pdf, text(yearmap.Latin(title)), box.W-8))
+	pdf.Text(left, box.Y+9.2, yearmap.FitText(pdf, text(yearmap.Latin(title)), box.W-(left-box.X)-4))
 	ink(pdf, mutedColour)
 	pdf.SetFont("Times", "I", 8.5)
-	pdf.Text(box.X+4, box.Y+14.6, yearmap.FitText(pdf, text(yearmap.Latin(subtitle)), box.W-8))
+	pdf.Text(left, box.Y+14.6, yearmap.FitText(pdf, text(yearmap.Latin(subtitle)), box.W-(left-box.X)-4))
+}
+
+// van draws a camper van facing right in a box of width w and height 0.62*w
+// whose top left corner is (x, y).
+func van(pdf *fpdf.Fpdf, x, y, w float64) {
+	u := w / 100
+	pdf.SetLineWidth(0.3)
+	pdf.SetDrawColor(inkColour.r, inkColour.g, inkColour.b)
+	fill(pdf, routeColour)
+	pdf.RoundedRect(x, y+4*u, 96*u, 44*u, 9*u, "1234", "FD")
+	// A cream roof stripe, the windows and the headlight.
+	pdf.SetFillColor(255, 252, 244)
+	pdf.Rect(x+2*u, y+30*u, 92*u, 6*u, "F")
+	pdf.RoundedRect(x+8*u, y+11*u, 22*u, 16*u, 2*u, "1234", "FD")
+	pdf.RoundedRect(x+34*u, y+11*u, 22*u, 16*u, 2*u, "1234", "FD")
+	pdf.RoundedRect(x+62*u, y+11*u, 26*u, 16*u, 2*u, "1234", "FD")
+	pdf.SetFillColor(240, 190, 70)
+	pdf.Circle(x+92*u, y+36*u, 2.6*u, "F")
+	// A roof rack and the wheels.
+	pdf.Line(x+20*u, y+4*u, x+20*u, y)
+	pdf.Line(x+60*u, y+4*u, x+60*u, y)
+	pdf.Line(x+14*u, y, x+66*u, y)
+	for _, cx := range []float64{24, 74} {
+		fill(pdf, inkColour)
+		pdf.Circle(x+cx*u, y+50*u, 9*u, "F")
+		pdf.SetFillColor(255, 252, 244)
+		pdf.Circle(x+cx*u, y+50*u, 3.5*u, "F")
+	}
 }
 
 // badge is a red disc holding the number of a step.

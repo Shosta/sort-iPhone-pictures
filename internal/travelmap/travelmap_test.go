@@ -152,4 +152,12 @@ func TestComposeAndRender(t *testing.T) {
 	if len(result.Failed) != 1 {
 		t.Errorf("the missing photo should be reported, got %v", result.Failed)
 	}
+	backdrop := image.NewRGBA(image.Rect(0, 0, 40, 30))
+	result, err = Render(context.Background(), Job{Layout: layout, Title: "Été", Backdrop: backdrop, Credit: "© OpenStreetMap", Dir: filepath.Join(dir, "out"), Name: "Fond.pdf"})
+	if err != nil {
+		t.Fatalf("with a backdrop: %v", err)
+	}
+	if info, err := os.Stat(result.Path); err != nil || info.Size() == 0 {
+		t.Errorf("no PDF with a backdrop: %v", err)
+	}
 }

@@ -6,7 +6,7 @@ import type { Prefs, ScrapPage } from '../prefs'
 import { request } from '../sidecar'
 import type { ScrapJob, TravelLayout, TravelStop, TravelTrip } from '../types'
 import { Select } from './Select'
-import { PinThumb } from './YearMapPanel'
+import { PinThumb, PROVIDERS } from './YearMapPanel'
 
 interface Props {
   prefs: Prefs
@@ -93,7 +93,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
 
   const rootDir = root.trim()
   const running = job?.state === 'running'
-  const outDir = prefs.scrapOutputDir.trim() || downloads
+  const outDir = prefs.travelMapOutputDir.trim() || downloads
   const trip = selected === 'custom' ? custom : (trips?.[selected] ?? null)
   const steps = trip?.steps
 
@@ -195,7 +195,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
     setLayout(null)
     if (!steps || steps.length === 0) return
     let live = true
-    const handle = request({ op: 'travelLayout', steps, page: prefs.travelMapPage, lang }, (event) => {
+    const handle = request({ op: 'travelLayout', steps, page: prefs.travelMapPage, provider: prefs.travelMapProvider, lang }, (event) => {
       if (!live) return
       if (event.type === 'layout') setLayout(event)
       else if (event.type === 'error' && !event.cancelled) setLayoutError(event.message)
@@ -204,7 +204,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
       live = false
       handle.cancel()
     }
-  }, [steps, prefs.travelMapPage, lang])
+  }, [steps, prefs.travelMapPage, prefs.travelMapProvider, lang])
 
   const dates = (a: string, b: string): string => {
     const format = new Intl.DateTimeFormat(prefs.language, { day: 'numeric', month: 'long', year: 'numeric' })
@@ -219,6 +219,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
         op: 'travelPdf',
         steps,
         page: prefs.travelMapPage,
+        provider: prefs.travelMapProvider,
         lang,
         title: title.trim() || t('travel.defaultTitle', { place }),
         subtitle: t('travel.subtitle', { dates: dates(trip.from, trip.to), steps: steps.length, km: Math.round(layout.distanceKm) }),
@@ -250,7 +251,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
         onClick={(event) => event.stopPropagation()}
       >
         <header className="scrap-head">
-          <h2>🧭 {t('travel')}</h2>
+          <h2>🚐 {t('travel')}</h2>
           <p className="hint">{t('travel.hint')}</p>
         </header>
 
@@ -323,6 +324,31 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
               <label>{t('travel.paper')}</label>
               <Select value={prefs.travelMapPage} options={PAGES.map((page) => ({ value: page, label: t(`scrap.page.${page}`), icon: null }))} onChange={(travelMapPage) => onChange({ travelMapPage })} />
             </div>
+            <div className="field">
+              <label>{t('ymap.provider')}</label>
+              <Select
+                value={prefs.travelMapProvider}
+                options={PROVIDERS.map((p) => ({ value: p.id, label: p.label ?? t('ymap.provider.offline'), icon: null }))}
+                onChange={(travelMapProvider) => onChange({ travelMapProvider })}
+              />
+            </div>
+            <div className="field">
+              <label>{t('ymap.outDir')}</label>
+              <div className="row">
+                <input value={prefs.travelMapOutputDir} disabled={running} placeholder={downloads || t('ymap.outDirHint')} onChange={(event) => onChange({ travelMapOutputDir: event.target.value })} />
+                <button
+                  className="btn ghost"
+                  disabled={running}
+                  onClick={async () => {
+                    const [path] = await window.photosort.pickFolders(t('ymap.outDir'))
+                    if (path) onChange({ travelMapOutputDir: path })
+                  }}
+                >
+                  {t('choose')}
+                </button>
+              </div>
+              <p className="hint">{t('ymap.outDirHint')}</p>
+            </div>
           </aside>
 
           <section className="scrap-main">
@@ -338,8 +364,9 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
               ) : (
                 <motion.svg className="ymap-sheet" viewBox={`0 0 ${layout.pageWidth} ${layout.pageHeight}`} style={{ aspectRatio: `${layout.pageWidth} / ${layout.pageHeight}` }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                   <rect width={layout.pageWidth} height={layout.pageHeight} fill="#faf5e8" />
-                  <path d={layout.land} fill="#ecdfc2" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />
-                  <path d={layout.lakes} fill="#faf5e8" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />
+                  {layout.backdrop && <image href={layout.backdrop} width={layout.pageWidth} height={layout.pageHeight} preserveAspectRatio="none" />}
+                  {layout.land && <path d={layout.land} fill="#ecdfc2" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
+                  {layout.lakes && <path d={layout.lakes} fill="#faf5e8" fillRule="evenodd" stroke="#a08a68" strokeWidth={0.2} />}
                   <rect x={3} y={3} width={layout.pageWidth - 6} height={layout.pageHeight - 6} fill="none" stroke={INK} strokeWidth={0.5} />
                   <rect x={4.2} y={4.2} width={layout.pageWidth - 8.4} height={layout.pageHeight - 8.4} fill="none" stroke={INK} strokeWidth={0.15} />
                   {layout.stops.length > 1 && <path d={layout.route} fill="none" stroke={RED} strokeWidth={0.6} strokeLinecap="round" strokeDasharray="0.01 1.7" />}
@@ -356,7 +383,7 @@ export function TravelMapPanel({ prefs, onChange, onClose }: Props): JSX.Element
                 </motion.svg>
               )}
             </div>
-            <p className="hint">{t('ymap.credit')}</p>
+            <p className="hint">{layout?.backdropError ? `⚠️ ${t('ymap.backdropError', { error: layout.backdropError })}` : (layout?.credit ?? t('ymap.credit'))}</p>
           </section>
         </div>
 

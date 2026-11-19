@@ -19,6 +19,14 @@ const THUMB = 24
 const PAD = 1.8
 const CARD_H = PAD + THUMB + 6 + PAD / 2
 
+export const PROVIDERS: { id: string; label: string | null }[] = [
+  { id: 'osm', label: 'OpenStreetMap' },
+  { id: 'positron', label: 'Carto Positron' },
+  { id: 'topo', label: 'OpenTopoMap' },
+  { id: 'satellite', label: 'Esri World Imagery' },
+  { id: 'offline', label: null }
+]
+
 const dirName = (path: string): string => path.replace(/[\\/][^\\/]*$/, '')
 
 export function PinThumb({ path, x, y, size }: { path: string; x: number; y: number; size: number }): JSX.Element {
@@ -88,7 +96,7 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
 
   const rootDir = root.trim()
   const running = job?.state === 'running'
-  const outDir = prefs.scrapOutputDir.trim() || downloads
+  const outDir = prefs.yearMapOutputDir.trim() || downloads
   const places = scan?.places
 
   useEffect(() => {
@@ -159,7 +167,7 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
       return
     }
     let live = true
-    const handle = request({ op: 'yearMapLayout', places, page: prefs.yearMapPage }, (event) => {
+    const handle = request({ op: 'yearMapLayout', places, page: prefs.yearMapPage, provider: prefs.yearMapProvider }, (event) => {
       if (!live) return
       if (event.type === 'layout') setLayout(event)
       else if (event.type === 'error' && !event.cancelled) setLayoutError(event.message)
@@ -168,7 +176,7 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
       live = false
       handle.cancel()
     }
-  }, [places, prefs.yearMapPage])
+  }, [places, prefs.yearMapPage, prefs.yearMapProvider])
 
   const summary = useMemo(() => (scan ? { places: scan.places.length, photos: scan.located, total: scan.total } : null), [scan])
 
@@ -180,6 +188,7 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
         op: 'yearMapPdf',
         places,
         page: prefs.yearMapPage,
+        provider: prefs.yearMapProvider,
         title: t('ymap.title', { year }),
         subtitle: t('ymap.subtitle', { photos: summary.photos, places: summary.places }),
         outDir,
@@ -246,6 +255,31 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
               <label>{t('ymap.paper')}</label>
               <Select value={prefs.yearMapPage} options={PAGES.map((page) => ({ value: page, label: t(`scrap.page.${page}`), icon: null }))} onChange={(yearMapPage) => onChange({ yearMapPage })} />
             </div>
+            <div className="field">
+              <label>{t('ymap.provider')}</label>
+              <Select
+                value={prefs.yearMapProvider}
+                options={PROVIDERS.map((p) => ({ value: p.id, label: p.label ?? t('ymap.provider.offline'), icon: null }))}
+                onChange={(yearMapProvider) => onChange({ yearMapProvider })}
+              />
+            </div>
+            <div className="field">
+              <label>{t('ymap.outDir')}</label>
+              <div className="row">
+                <input value={prefs.yearMapOutputDir} disabled={running} placeholder={downloads || t('ymap.outDirHint')} onChange={(event) => onChange({ yearMapOutputDir: event.target.value })} />
+                <button
+                  className="btn ghost"
+                  disabled={running}
+                  onClick={async () => {
+                    const [path] = await window.photosort.pickFolders(t('ymap.outDir'))
+                    if (path) onChange({ yearMapOutputDir: path })
+                  }}
+                >
+                  {t('choose')}
+                </button>
+              </div>
+              <p className="hint">{t('ymap.outDirHint')}</p>
+            </div>
             {summary && <p className="muted">{summary.places > 0 ? t('ymap.summary', { places: summary.places, located: summary.photos, total: summary.total }) : t('ymap.empty')}</p>}
           </aside>
 
@@ -260,15 +294,21 @@ export function YearMapPanel({ prefs, onChange, onClose }: Props): JSX.Element {
               ) : (
                 <motion.svg className="ymap-sheet" viewBox={`0 0 ${layout.pageWidth} ${layout.pageHeight}`} style={{ aspectRatio: `${layout.pageWidth} / ${layout.pageHeight}` }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                   <rect width={layout.pageWidth} height={layout.pageHeight} fill="#cee1ec" />
-                  <path d={layout.land} fill="#f6f0e2" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />
-                  <path d={layout.lakes} fill="#cee1ec" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />
+                  {layout.backdrop && <image href={layout.backdrop} width={layout.pageWidth} height={layout.pageHeight} preserveAspectRatio="none" />}
+                  {layout.land && <path d={layout.land} fill="#f6f0e2" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />}
+                  {layout.lakes && <path d={layout.lakes} fill="#cee1ec" fillRule="evenodd" stroke="#bab098" strokeWidth={0.2} />}
+                  {layout.credit && (
+                    <text x={layout.pageWidth - 1.5} y={layout.pageHeight - 1.5} textAnchor="end" fontSize={3.2} fill="#3a322a" stroke="#fff" strokeWidth={0.6} paintOrder="stroke">
+                      {layout.credit}
+                    </text>
+                  )}
                   {layout.pins.map((pin, index) => (
                     <Pin key={index} pin={pin} />
                   ))}
                 </motion.svg>
               )}
             </div>
-            <p className="hint">{t('ymap.credit')}</p>
+            <p className="hint">{layout?.backdropError ? `⚠️ ${t('ymap.backdropError', { error: layout.backdropError })}` : layout?.credit ?? t('ymap.credit')}</p>
           </section>
         </div>
 

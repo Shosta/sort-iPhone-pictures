@@ -26,6 +26,10 @@ export interface Prefs {
   scrapBackground: ScrapBackground
   yearMapPage: ScrapPage
   travelMapPage: ScrapPage
+  travelMapProvider: string
+  travelMapOutputDir: string
+  yearMapProvider: string
+  yearMapOutputDir: string
   language: Language
   theme: ThemeId
 }
@@ -64,6 +68,10 @@ function load(): Prefs {
     scrapBackground: 'none',
     yearMapPage: 'a4-landscape',
     travelMapPage: 'a4-portrait',
+    travelMapProvider: 'osm',
+    travelMapOutputDir: '',
+    yearMapProvider: 'osm',
+    yearMapOutputDir: '',
     language: detectLanguage(),
     theme: 'aurora'
   }

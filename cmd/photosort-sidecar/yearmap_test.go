@@ -3,10 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"image"
+	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sort-iphone-pictures/internal/mapbase"
 )
 
 func TestYearMapOps(t *testing.T) {
@@ -63,5 +69,35 @@ func TestYearMapOps(t *testing.T) {
 	}
 	if data, err := os.ReadFile(path); err != nil || !bytes.HasPrefix(data, []byte("%PDF")) {
 		t.Errorf("not a PDF: %v", err)
+	}
+}
+
+func TestYearMapOnlineBackdropAndFallback(t *testing.T) {
+	saved := tileProviders
+	defer func() { tileProviders = saved }()
+	var out bytes.Buffer
+	srv := newServer(&out)
+	ctx := context.Background()
+	places := []yearPlace{{Name: "Paris", Lat: 48.85, Lon: 2.35, Count: 1, Shown: []string{"x.jpg"}}}
+
+	// An unreachable tile server falls back to the offline map.
+	tileProviders = []mapbase.Provider{&mapbase.TileServer{Key: "osm", Credit: "© test", URL: "http://127.0.0.1:1/{z}/{x}/{y}.png", Zoom: 19}}
+	srv.handle(ctx, request{ID: "down", Op: "yearMapLayout", Places: places, Page: "a4-landscape", Provider: "osm"})
+	srv.wg.Wait()
+	down := events(t, &out, "down")
+	if len(down) != 1 || down[0]["backdropError"] == nil || down[0]["backdrop"] != nil || down[0]["land"] == "" {
+		t.Fatalf("down = %v", down)
+	}
+
+	tiles := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = png.Encode(w, image.NewRGBA(image.Rect(0, 0, 256, 256)))
+	}))
+	defer tiles.Close()
+	tileProviders = []mapbase.Provider{&mapbase.TileServer{Key: "osm", Credit: "© test", URL: tiles.URL + "/{z}/{x}/{y}.png", Zoom: 19}}
+	srv.handle(ctx, request{ID: "up", Op: "yearMapLayout", Places: places, Page: "a4-landscape", Provider: "osm"})
+	srv.wg.Wait()
+	up := events(t, &out, "up")
+	if len(up) != 1 || !strings.HasPrefix(up[0]["backdrop"].(string), "data:image/jpeg") || up[0]["credit"] != "© test" || up[0]["land"] != nil {
+		t.Fatalf("up = %v", up)
 	}
 }

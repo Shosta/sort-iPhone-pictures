@@ -147,12 +147,11 @@ func (s *server) travelScan(ctx context.Context, req request) error {
 }
 
 // travelLayout answers with the map and the stops of a route for a page.
-func (s *server) travelLayout(req request) error {
+func (s *server) travelLayout(ctx context.Context, req request) error {
 	layout, steps, err := travelPage(req)
 	if err != nil {
 		return err
 	}
-	base := mapbase.Default()
 	stops := make([]travelStop, len(layout.Stops))
 	var route strings.Builder
 	for i, stop := range layout.Stops {
@@ -163,15 +162,16 @@ func (s *server) travelLayout(req request) error {
 		}
 		route.WriteString(command + strconv.FormatFloat(stop.Pos.X, 'f', 2, 64) + " " + strconv.FormatFloat(stop.Pos.Y, 'f', 2, 64))
 	}
-	view := layout.Page.View
-	s.send(event{
+	reply := event{
 		"id": req.ID, "type": "layout",
 		"pageWidth": layout.Page.Width, "pageHeight": layout.Page.Height, "scale": layout.Page.Scale,
-		"land":  mapbase.SVGPath(base.Land(view)),
-		"lakes": mapbase.SVGPath(base.Lakes(view)),
 		"route": route.String(),
 		"stops": stops, "distanceKm": travelmap.Distance(steps),
-	})
+	}
+	if err := attachMap(ctx, reply, req, layout.Page); err != nil {
+		return err
+	}
+	s.send(reply)
 	return nil
 }
 
@@ -183,9 +183,19 @@ func (s *server) travelPdf(ctx context.Context, req request) error {
 	}
 	s.busy.Add(1)
 	defer s.busy.Add(-1)
+	// A failed download only costs the online background.
+	img, credit, backdropErr := backdrop(ctx, req, layout.Page, 6)
+	if backdropErr != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		img, credit = nil, ""
+	}
 	var throttle statusThrottle
 	result, err := travelmap.Render(ctx, travelmap.Job{
 		Layout:      layout,
+		Backdrop:    img,
+		Credit:      credit,
 		Title:       req.Title,
 		Subtitle:    req.Subtitle,
 		Dir:         req.OutDir,
@@ -204,6 +214,6 @@ func (s *server) travelPdf(ctx context.Context, req request) error {
 	for i, failure := range result.Failed {
 		failed[i] = scrapFailure{Path: failure.Path, Error: failure.Error}
 	}
-	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "steps": len(layout.Stops), "failed": failed, "fallback": result.Fallback})
+	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "steps": len(layout.Stops), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil})
 	return nil
 }

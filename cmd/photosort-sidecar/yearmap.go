@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
 
 	"sort-iphone-pictures/internal/mapbase"
 	"sort-iphone-pictures/internal/scrapbook"
@@ -57,6 +61,22 @@ func yearMapPage(req request) (yearmap.Layout, error) {
 	return yearmap.Compose(fromYearPlaces(req.Places), paper.Width, paper.Height), nil
 }
 
+var tileProviders = mapbase.Providers(mapbase.TileCacheDir())
+
+// backdrop downloads the online map behind a layout. It returns nil when the
+// request wants the offline map, or an error when the tiles are unavailable.
+func backdrop(ctx context.Context, req request, layout yearmap.Layout, ppmm float64) (image.Image, string, error) {
+	provider, ok := mapbase.ProviderByID(tileProviders, req.Provider)
+	if !ok {
+		return nil, "", nil
+	}
+	img, err := mapbase.Backdrop(ctx, provider, layout.View, ppmm)
+	if err != nil {
+		return nil, "", err
+	}
+	return img, provider.Attribution(), nil
+}
+
 // yearMapYears lists the years of the library.
 func (s *server) yearMapYears(req request) error {
 	if req.Root == "" {
@@ -87,24 +107,46 @@ func (s *server) yearMapScan(ctx context.Context, req request) error {
 	return nil
 }
 
+// attachMap adds the map behind a layout to a reply: the online background
+// when it is available, the offline vector map otherwise.
+func attachMap(ctx context.Context, reply event, req request, layout yearmap.Layout) error {
+	img, credit, err := backdrop(ctx, req, layout, 3)
+	if err == nil && img != nil {
+		var buf bytes.Buffer
+		if err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 80}); err == nil {
+			reply["backdrop"] = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+			reply["credit"] = credit
+		}
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		reply["backdropError"] = err.Error()
+	}
+	if reply["backdrop"] == nil {
+		base := mapbase.Default()
+		reply["land"] = mapbase.SVGPath(base.Land(layout.View))
+		reply["lakes"] = mapbase.SVGPath(base.Lakes(layout.View))
+	}
+	return nil
+}
+
 // yearMapLayout answers with the map and the pins of the places for a page.
-func (s *server) yearMapLayout(req request) error {
+func (s *server) yearMapLayout(ctx context.Context, req request) error {
 	layout, err := yearMapPage(req)
 	if err != nil {
 		return err
 	}
-	base := mapbase.Default()
 	pins := make([]yearPin, len(layout.Pins))
 	for i, pin := range layout.Pins {
 		pins[i] = yearPin{X: pin.Pos.X, Y: pin.Pos.Y, Name: pin.Place.Name, Count: pin.Place.Count, Shown: nonNil(pin.Place.Shown), Card: pin.Card}
 	}
-	s.send(event{
-		"id": req.ID, "type": "layout",
-		"pageWidth": layout.Width, "pageHeight": layout.Height, "scale": layout.Scale,
-		"land":  mapbase.SVGPath(base.Land(layout.View)),
-		"lakes": mapbase.SVGPath(base.Lakes(layout.View)),
-		"pins":  pins,
-	})
+	reply := event{"id": req.ID, "type": "layout", "pageWidth": layout.Width, "pageHeight": layout.Height, "scale": layout.Scale, "pins": pins}
+	if err := attachMap(ctx, reply, req, layout); err != nil {
+		return err
+	}
+	s.send(reply)
 	return nil
 }
 
@@ -116,9 +158,19 @@ func (s *server) yearMapPdf(ctx context.Context, req request) error {
 	}
 	s.busy.Add(1)
 	defer s.busy.Add(-1)
+	// A failed download only costs the online background.
+	img, credit, backdropErr := backdrop(ctx, req, layout, 6)
+	if backdropErr != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		img, credit = nil, ""
+	}
 	var throttle statusThrottle
 	result, err := yearmap.Render(ctx, yearmap.Job{
 		Layout:      layout,
+		Backdrop:    img,
+		Credit:      credit,
 		Title:       req.Title,
 		Subtitle:    req.Subtitle,
 		Dir:         req.OutDir,
@@ -137,6 +189,6 @@ func (s *server) yearMapPdf(ctx context.Context, req request) error {
 	for i, failure := range result.Failed {
 		failed[i] = scrapFailure{Path: failure.Path, Error: failure.Error}
 	}
-	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "places": len(layout.Pins), "failed": failed, "fallback": result.Fallback})
+	s.send(event{"id": req.ID, "type": "done", "path": result.Path, "places": len(layout.Pins), "failed": failed, "fallback": result.Fallback, "backdropFailed": backdropErr != nil})
 	return nil
 }

@@ -517,7 +517,7 @@ export function App(): JSX.Element {
             🗺️
           </button>
           <button className="gear" title={t('travel')} aria-label={t('travel')} onClick={() => setShowTravelMap(true)}>
-            🧭
+            🚐
           </button>
           <button
             className="gear"

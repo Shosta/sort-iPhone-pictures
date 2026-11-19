@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"math"
 	"runtime"
@@ -38,6 +40,10 @@ type Job struct {
 	FallbackDir string
 	// Progress (optional) is called after each photo, from one goroutine.
 	Progress func(done, total int)
+	// Backdrop (optional) replaces the vector map; Credit is then written on
+	// the page.
+	Backdrop image.Image
+	Credit   string
 }
 
 // Result describes the written PDF.
@@ -92,8 +98,19 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 
 	fill(pdf, waterColour)
 	pdf.Rect(0, 0, layout.Width, layout.Height, "F")
+	if job.Backdrop != nil {
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, job.Backdrop, &jpeg.Options{Quality: 85}); err != nil {
+			return nil, nil, err
+		}
+		pdf.RegisterImageOptionsReader("backdrop", fpdf.ImageOptions{ImageType: "JPG"}, &buf)
+		pdf.ImageOptions("backdrop", 0, 0, layout.Width, layout.Height, false, fpdf.ImageOptions{ImageType: "JPG"}, 0, "")
+	}
 	pdf.ClipRect(0, 0, layout.Width, layout.Height, false)
 	base := mapbase.Default()
+	if job.Backdrop != nil {
+		base = &mapbase.Base{}
+	}
 	fill(pdf, landColour)
 	pdf.SetDrawColor(borderColour.r, borderColour.g, borderColour.b)
 	pdf.SetLineWidth(0.15)
@@ -110,6 +127,10 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 	pdf.ClipEnd()
 
 	banner(pdf, text, job.Title, job.Subtitle)
+
+	if job.Credit != "" {
+		Credit(pdf, text, layout, job.Credit)
+	}
 
 	pdf.SetDrawColor(pinColour.r, pinColour.g, pinColour.b)
 	pdf.SetLineWidth(0.3)
@@ -131,6 +152,19 @@ func draw(ctx context.Context, job Job) (*fpdf.Fpdf, []scrapbook.Failure, error)
 		return nil, nil, err
 	}
 	return pdf, failed, nil
+}
+
+// Credit writes the attribution of the map in the bottom right corner.
+func Credit(pdf *fpdf.Fpdf, text func(string) string, layout Layout, credit string) {
+	pdf.SetFont("Helvetica", "", 5)
+	label := text(Latin(credit))
+	w := pdf.GetStringWidth(label) + 3
+	pdf.SetAlpha(0.8, "Normal")
+	pdf.SetFillColor(255, 255, 255)
+	pdf.Rect(layout.Width-w, layout.Height-4.2, w, 4.2, "F")
+	pdf.SetAlpha(1, "Normal")
+	pdf.SetTextColor(inkColour.r, inkColour.g, inkColour.b)
+	pdf.Text(layout.Width-w+1.5, layout.Height-1.4, label)
 }
 
 func fill(pdf *fpdf.Fpdf, c colour) { pdf.SetFillColor(c.r, c.g, c.b) }
