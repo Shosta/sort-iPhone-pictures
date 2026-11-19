@@ -117,7 +117,7 @@ func TestYearMapBlockedProviderFallsBack(t *testing.T) {
 	defer good.Close()
 	dir := t.TempDir()
 	tileProviders = []mapbase.Provider{
-		&mapbase.TileServer{Key: "positron", Label: "Positron", Credit: "© good", URL: good.URL + "/{z}/{x}/{y}.png", Zoom: 19, CacheDir: dir},
+		&mapbase.TileServer{Key: "esritopo", Label: "Esri Topo", Credit: "© good", URL: good.URL + "/{z}/{x}/{y}.png", Zoom: 19, CacheDir: dir},
 		&mapbase.TileServer{Key: "osm", Label: "OSM", Credit: "© osm", URL: blocked.URL + "/{z}/{x}/{y}.png", Zoom: 19, CacheDir: dir},
 	}
 	var out bytes.Buffer

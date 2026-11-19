@@ -72,9 +72,12 @@ func backdrop(ctx context.Context, req request, layout yearmap.Layout, ppmm floa
 	if !ok {
 		return nil, "", "", nil
 	}
+	// The other providers stand in when the chosen one fails.
 	candidates := []mapbase.Provider{provider}
-	if fallback, ok := mapbase.ProviderByID(tileProviders, mapbase.DefaultProviderID); ok && fallback.ID() != provider.ID() {
-		candidates = append(candidates, fallback)
+	for _, other := range tileProviders {
+		if other.ID() != provider.ID() {
+			candidates = append(candidates, other)
+		}
 	}
 	for i, p := range candidates {
 		m, e := mapbase.Backdrop(ctx, p, layout.View, ppmm)

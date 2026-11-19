@@ -20,10 +20,8 @@ const PAD = 1.8
 const CARD_H = PAD + THUMB + 6 + PAD / 2
 
 export const PROVIDERS: { id: string; label: string | null }[] = [
-  { id: 'positron', label: 'Carto Positron' },
-  { id: 'osm', label: 'OpenStreetMap ⚠' },
-  { id: 'topo', label: 'OpenTopoMap' },
-  { id: 'satellite', label: 'Esri World Imagery' },
+  { id: 'osm', label: 'OpenStreetMap' },
+  { id: 'esritopo', label: 'Esri World Topo' },
   { id: 'offline', label: null }
 ]
 

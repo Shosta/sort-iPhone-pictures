@@ -68,16 +68,21 @@ function load(): Prefs {
     scrapBackground: 'none',
     yearMapPage: 'a4-landscape',
     travelMapPage: 'a4-portrait',
-    travelMapProvider: 'positron',
+    travelMapProvider: 'osm',
     travelMapOutputDir: '',
-    yearMapProvider: 'positron',
+    yearMapProvider: 'osm',
     yearMapOutputDir: '',
     language: detectLanguage(),
     theme: 'aurora'
   }
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Prefs>
-    return { ...defaults, ...stored }
+    const merged = { ...defaults, ...stored }
+    // Backgrounds that were dropped fall back to the default.
+    const known = ['osm', 'esritopo', 'offline']
+    if (!known.includes(merged.yearMapProvider)) merged.yearMapProvider = defaults.yearMapProvider
+    if (!known.includes(merged.travelMapProvider)) merged.travelMapProvider = defaults.travelMapProvider
+    return merged
   } catch {
     return defaults
   }

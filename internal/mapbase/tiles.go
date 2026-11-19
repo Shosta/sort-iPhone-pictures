@@ -123,17 +123,15 @@ func (s *TileServer) Tile(ctx context.Context, z, x, y int) (image.Image, error)
 
 // DefaultProviderID is the background whose policy allows desktop apps
 // without a key; the others are options or fallbacks.
-const DefaultProviderID = "positron"
+const DefaultProviderID = "osm"
 
 // Providers lists the online backgrounds, the default first. None needs an account or a key.
 // cacheDir keeps downloaded tiles; empty disables the cache.
 func Providers(cacheDir string) []Provider {
 	osm := "© OpenStreetMap contributors"
 	return []Provider{
-		&TileServer{Key: "positron", Label: "Carto Positron", Credit: osm + " © CARTO", URL: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", Zoom: 19, CacheDir: cacheDir},
 		&TileServer{Key: "osm", Label: "OpenStreetMap", Credit: osm, URL: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", Zoom: 19, CacheDir: cacheDir},
-		&TileServer{Key: "topo", Label: "OpenTopoMap", Credit: osm + ", SRTM | © OpenTopoMap (CC-BY-SA)", URL: "https://tile.opentopomap.org/{z}/{x}/{y}.png", Zoom: 17, CacheDir: cacheDir},
-		&TileServer{Key: "satellite", Label: "Esri World Imagery", Credit: "Esri, Maxar, Earthstar Geographics", URL: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", Zoom: 18, CacheDir: cacheDir},
+		&TileServer{Key: "esritopo", Label: "Esri World Topo", Credit: "Esri, HERE, Garmin, FAO, NOAA, USGS, " + osm, URL: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", Zoom: 18, CacheDir: cacheDir},
 	}
 }
 
