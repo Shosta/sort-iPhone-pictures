@@ -1,0 +1,36 @@
+---
+// Tampon rond « sans cloud », encre irrégulière grâce à un filtre SVG.
+interface Props {
+  top: string;
+  main: string;
+  bottom: string;
+  id: string;
+  class?: string;
+}
+const { top, main, bottom, id, class: className = '' } = Astro.props;
+---
+
+<svg class={`stamp ${className}`} viewBox="0 0 200 200" role="img" aria-label={`${top} — ${main} — ${bottom}`}>
+  <defs>
+    <filter id={`ink-${id}`} x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4" result="warp" />
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="3.2" result="shape" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="1" seed="9" result="grain" />
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.7" result="holes" />
+      <feComposite in="shape" in2="holes" operator="in" />
+    </filter>
+    <path id={`top-${id}`} d="M 28,100 A 72,72 0 0 1 172,100" />
+    <path id={`bottom-${id}`} d="M 14,100 A 86,86 0 0 0 186,100" />
+  </defs>
+  <g filter={`url(#ink-${id})`} fill="none" stroke="currentColor" color="inherit">
+    <circle cx="100" cy="100" r="95" stroke-width="4.5" />
+    <circle cx="100" cy="100" r="90" stroke-width="1" />
+    <circle cx="100" cy="100" r="62" stroke-width="1.6" />
+    <g fill="currentColor" stroke="none" font-family="'IBM Plex Mono', monospace" font-weight="500" font-size="13" letter-spacing="3.2">
+      <text text-anchor="middle"><textPath href={`#top-${id}`} startOffset="50%">{top}</textPath></text>
+      <text text-anchor="middle"><textPath href={`#bottom-${id}`} startOffset="50%">{bottom}</textPath></text>
+    </g>
+    <text x="100" y="108" text-anchor="middle" fill="currentColor" stroke="none" font-family="'Young Serif', serif" font-weight="400" font-size="21" textLength="104" lengthAdjust="spacingAndGlyphs">{main}</text>
+    <path d="M52 86 H148 M52 122 H148" stroke-width="1.4" />
+  </g>
+</svg>

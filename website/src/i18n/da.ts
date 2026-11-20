@@ -1,0 +1,115 @@
+import type { Copy } from './types';
+
+export const da: Copy = {
+  htmlLang: 'da',
+  ogLocale: 'da_DK',
+  languageName: 'Dansk',
+  meta: {
+    title: 'Photosort — Sortér dine iPhone-billeder efter dato og find dem igen med tags',
+    description:
+      'Photosort sorterer tusindvis af rodede iPhone-billeder efter optagelsesdato og tilføjer tags, så du let kan finde dem igen, uden cloud. Som bonus en scrapbook-PDF til din ugekalender. Open source til macOS, Linux og Windows.',
+  },
+  skip: 'Gå til indholdet',
+  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', languages: 'Sprog' },
+  hero: {
+    eyebrow: 'Open source · lokalt · ingen konto',
+    titleA: 'Tusindvis af rodede iPhone-billeder,',
+    titleB: 'sorteret efter dato og lette at finde.',
+    lead: 'Photosort lægger dine billeder i orden efter optagelsesdato, tilføjer tags, så du hurtigt finder dem, og opdager dubletter. Alt foregår på din egen computer, uden at sende noget til skyen. Som bonus kan du med ét klik lave en side med dine billeder, som du kan printe, klippe ud og klistre ind i din scrapbog.',
+    ctaHow: 'Se sorteringen',
+    ctaDownload: 'Download',
+    note: 'macOS · Linux · Windows — dine originaler ændres aldrig',
+    sheetAlt: 'Illustration af et A4-scrapbogsark: billeder i forskellige formater, adskilt af klippelinjer.',
+    sheetCaption: 'Bonus · ugekalender-PDF',
+  },
+  stamp: { top: 'PHOTOSORT', main: 'INGEN CLOUD', bottom: '100 % LOKALT' },
+  scrapbook: {
+    eyebrow: 'Bagefter: scrapbogen',
+    title: 'Fra en sorteret mappe til en side i ugekalenderen.',
+    lead: 'Når dine billeder er sorteret, er scrapbogen en lille bonus. Har du en ugekalender på papir? Vælg en uge i en kalender, sæt kryds ved de billeder, du vil beholde, og Photosort laver en PDF klar til print. Så skal du bare klippe og klistre.',
+    steps: [
+      { title: 'Vælg ugen', text: 'En kalender fra mandag til søndag. Dage med billeder er markeret.' },
+      { title: 'Sæt kryds ved billederne', text: 'Ingen er afkrydset fra start: du beholder kun dem, der betyder noget.' },
+      { title: 'Print og klip', text: 'PDF’en åbner af sig selv. Print i 100 %, følg linjerne, klistr.' },
+    ],
+    facts: [
+      { label: 'Side', value: 'A4 liggende (A4 stående og Letter som valg)' },
+      { label: 'Størrelse', value: '6,5 cm på den lange side, billedformat bevaret' },
+      { label: 'Udklipning', value: 'Mindst 5 mm mellem billederne, tynd streg rundt om hvert' },
+      { label: 'Originaler', value: 'aldrig ændret, ingen beskæring' },
+    ],
+    note: 'Genvej: Cmd/Ctrl + P i appen.',
+  },
+  how: {
+    eyebrow: 'Det vigtigste: sorteringen',
+    title: 'Fra rod til et overskueligt bibliotek.',
+    items: [
+      { title: 'Hent dine billeder', text: 'Overfør originalerne fra din iPhone til en mappe på din computer med dit sædvanlige værktøj.' },
+      { title: 'Vælg dine mapper', text: 'En eller flere kildemapper og en særskilt destination til det sorterede bibliotek.' },
+      { title: 'Kontrollér, og kopiér', text: 'Et eksempel på sorteringen, før noget kopieres. Billeder lægges i ÅÅÅÅ/ÅÅÅÅ-MM med læsbare navne.' },
+    ],
+    note: 'Overførsel og sortering er to adskilte trin: Photosort forbinder ikke direkte til din iPhone.',
+  },
+  features: {
+    eyebrow: 'Fra herbariet',
+    title: 'Det kan Photosort.',
+    lead: 'Alt foregår offline, på din egen maskine.',
+    specimen: 'Eksemplar',
+    items: [
+      { name: 'Den rigtige dato', latin: 'Tempus exif', text: 'Sorteret efter optagelsesdatoen (EXIF): et minde fra juli bliver i juli, selv hvis du kopierer det i december.' },
+      { name: 'Tags', latin: 'Nota localis', text: 'Så du let kan finde et billede: strand, bjerg, by, selfie… En lokal AI skriver nøgleord i .xmp-filer, plus dine egne tags.' },
+      { name: 'Stedet', latin: 'Locus urbis', text: 'En mappe pr. by og pr. nærliggende seværdighed eller museum, ud fra GPS-koordinater. Uden forbindelse.' },
+      { name: 'Dubletter', latin: 'Gemini imago', text: 'Dubletter og næsten-dubletter opdages, og næsten-dubletter lægges for sig.' },
+      { name: 'Indstillinger', latin: 'Optio', text: 'Grænseflade på fransk, engelsk eller dansk, flere temaer og en udmappe efter eget valg.' },
+      { name: 'Scrapbogen', latin: 'Charta hebdomada', text: 'En ugentlig PDF til at printe, klippe ud og klistre ind i ugekalenderen.' },
+    ],
+  },
+  shots: {
+    eyebrow: 'I appen',
+    title: 'Et hurtigt kig.',
+    pending: 'Skærmbillede følger',
+    items: [
+      { key: 'apercu', alt: 'Eksempel på sorteringen, før billederne kopieres', caption: 'Eksemplet før kopiering' },
+      { key: 'lieux', alt: 'Billeder sorteret efter by i biblioteket', caption: 'Sorteret efter sted' },
+      { key: 'doublons', alt: 'Dubletter og næsten-dubletter fundet', caption: 'Dubletter fundet' },
+      { key: 'scrapbook', alt: 'Valg af uge og billeder til scrapbogen', caption: 'Ugens scrapbog' },
+    ],
+  },
+  download: {
+    eyebrow: 'Download',
+    title: 'Gratis, open source, ingen konto.',
+    lead: 'Vælg pakken til dit system i den seneste udgivne version.',
+    platforms: [
+      { os: 'macOS', detail: '.dmg-diskbillede, Apple silicon og Intel' },
+      { os: 'Linux', detail: 'AppImage x86_64' },
+      { os: 'Windows', detail: 'Bærbar .exe, uden installation' },
+    ],
+    button: 'Seneste version',
+    repoButton: 'Se kildekoden',
+    pendingRepo: 'Repositoriet er ikke offentligt endnu. Download-links dukker op her, så snart de er klar.',
+    unsigned: 'Pakkerne er endnu ikke signeret: macOS beder om bekræftelse første gang, du åbner appen, og Windows kan vise en SmartScreen-advarsel.',
+  },
+  limits: {
+    eyebrow: 'For fuld åbenhed',
+    title: 'Det kan Photosort ikke (endnu).',
+    items: [
+      'Ingen direkte import fra iPhonen: det arbejder på mapper på din computer.',
+      'Et billede uden EXIF-dato springes over og rapporteres, aldrig sorteret på må og få.',
+      'Videoer, Live Photos og XMP/AAE-filer håndteres ikke.',
+      'AI-tags findes ikke på Mac med Intel-processor.',
+    ],
+  },
+  faq: {
+    eyebrow: 'Ofte stillede spørgsmål',
+    title: 'Før du sorterer.',
+    items: [
+      { q: 'Importerer Photosort direkte fra min iPhone?', a: 'Nej. Hent først dine billeder med dit sædvanlige overførselsværktøj, og bevar originalerne og deres metadata. Photosort organiserer derefter filerne, der allerede ligger på din computer.' },
+      { q: 'Forlader mine billeder min computer?', a: 'Aldrig. Sortering, stedsopslag, dubletsøgning og AI-tags kører offline, uden konto og uden server.' },
+      { q: 'Bliver mine originaler ændret?', a: 'Nej. Billederne kopieres til et nyt bibliotek; ingen eksisterende fil overskrives, flyttes eller omdøbes.' },
+      { q: 'Hvilke formater understøttes?', a: 'Blandt andet JPEG, HEIC/HEIF, PNG, TIFF, AVIF og flere RAW-formater. Sortering kræver en læsbar optagelsesdato i EXIF-metadata: et billede uden dato springes over og nævnes i oversigten.' },
+      { q: 'Hvordan virker scrapbogen?', a: 'Fra det sorterede bibliotek vælger du en uge og sætter kryds ved billeder. Photosort placerer dem på A4-sider med plads til udklipning og åbner derefter PDF’en. Print bare i 100 %.' },
+      { q: 'Hvilke systemer kører det på?', a: 'macOS (Apple silicon og Intel), Linux x86_64 (AppImage) og Windows (bærbar programfil). Pakkerne er ikke signeret, og AI-tags findes ikke på Mac med Intel-processor.' },
+    ],
+  },
+  footer: { tagline: 'Mindre rod. Flere minder.', made: 'Made with ❤️ in Paris by Shosta', license: 'MIT-licens' },
+};
