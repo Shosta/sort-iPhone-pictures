@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DropZone } from './components/DropZone'
 import { Flights, type Flight } from './components/Flights'
 import { Preferences } from './components/Preferences'
+import { RemotePanel } from './components/RemotePanel'
 import { ScrapbookPanel } from './components/ScrapbookPanel'
 import { TravelMapPanel } from './components/TravelMapPanel'
 import { YearMapPanel } from './components/YearMapPanel'
@@ -12,7 +13,8 @@ import { Thumb } from './components/Thumb'
 import { VirtualGrid } from './components/VirtualGrid'
 import { IssueList } from './components/IssueList'
 import { I18nContext, makeTranslate, type Translate } from './i18n'
-import { usePrefs } from './prefs'
+import { remoteConfig, remoteLabel, remoteReady, usePrefs } from './prefs'
+import { remoteErrorText } from './remote'
 import { applyTheme, themeById } from './themes'
 import { cachedThumbnail, onFatal, request } from './sidecar'
 import type { Duplicate, Entry, Phase, Plan, TagJob, TagResult } from './types'
@@ -139,6 +141,32 @@ function applyTagResults(job: TagJob, results: TagResult[]): TagJob {
   return { ...job, tagged, failed, counts, done: job.done + results.length, recent: [...results.reverse(), ...job.recent].slice(0, 12) }
 }
 
+interface RemoteSummary {
+  dryRun?: boolean
+  sent?: number
+  existing?: number
+  mismatched?: number
+  mismatchedSample?: string[]
+  warnings?: string[]
+}
+interface RemoteProgress {
+  percent?: number
+  rate?: string
+  eta?: string
+}
+interface RemoteState {
+  progress?: RemoteProgress
+  summary?: RemoteSummary
+}
+
+function remoteProgressText(t: Translate, progress: RemoteProgress): string {
+  return t('remote.status.progress', {
+    percent: Math.round(progress.percent ?? 0),
+    rate: progress.rate ? ` — ${progress.rate}` : '',
+    eta: progress.eta ? t('remote.status.eta', { eta: progress.eta }) : ''
+  })
+}
+
 export function App(): JSX.Element {
   const [sources, setSources] = useState<string[]>([])
   const [prefs, updatePrefs] = usePrefs()
@@ -146,6 +174,12 @@ export function App(): JSX.Element {
   const t = useMemo(() => makeTranslate(prefs.language), [prefs.language])
   const [showPrefs, setShowPrefs] = useState(false)
   const [showTags, setShowTags] = useState(false)
+  const [showRemote, setShowRemote] = useState(false)
+  // The NAS password lives in memory only (and in the system keychain when asked).
+  const [remotePassword, setRemotePassword] = useState('')
+  const [remoteState, setRemoteState] = useState<RemoteState | null>(null)
+  const [resumable, setResumable] = useState(false)
+  const dryRun = useRef(false)
   const [showScrapbook, setShowScrapbook] = useState(false)
   const [showYearMap, setShowYearMap] = useState(false)
   const [showTravelMap, setShowTravelMap] = useState(false)
@@ -163,6 +197,20 @@ export function App(): JSX.Element {
       }),
     []
   )
+  const remote = prefs.remoteEnabled
+  const remoteAccount = `${prefs.remoteUser.trim()}@${prefs.remoteHost.trim()}:${prefs.remoteModule.trim()}`
+  useEffect(() => {
+    if (!prefs.remoteRemember || !prefs.remoteHost.trim()) return
+    void window.photosort.secrets.load(remoteAccount).then((saved) => saved && setRemotePassword((current) => current || saved))
+  }, [prefs.remoteRemember, remoteAccount, prefs.remoteHost])
+  useEffect(() => {
+    if (!prefs.remoteHost.trim()) return
+    const timer = window.setTimeout(() => {
+      if (prefs.remoteRemember && remotePassword) void window.photosort.secrets.store(remoteAccount, remotePassword)
+      else if (!prefs.remoteRemember) void window.photosort.secrets.forget(remoteAccount)
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [prefs.remoteRemember, remotePassword, remoteAccount, prefs.remoteHost])
   const setDestination = (value: string): void => updatePrefs({ destination: value })
   const setByLocation = (value: boolean): void => updatePrefs({ byLocation: value })
   const setLandmarks = (value: boolean): void => updatePrefs({ landmarks: value })
@@ -223,7 +271,12 @@ export function App(): JSX.Element {
         const outcome = finishing.current
         finishing.current = null
         credit.current = 0
-        if (outcome === 'done') {
+        if (outcome === 'done' && dryRun.current) {
+          copiedRef.current = new Set()
+          setCopiedCount(0)
+          setDoneByFolder(new Map())
+          setPhase('ready')
+        } else if (outcome === 'done') {
           setTimeout(() => {
             setPhase('done')
             confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } })
@@ -361,6 +414,8 @@ export function App(): JSX.Element {
     setDoneByFolder(new Map())
     setPhase('idle')
     setError(null)
+    setRemoteState(null)
+    setResumable(false)
   }
 
   const addSources = useCallback((paths: string[]) => {
@@ -376,7 +431,7 @@ export function App(): JSX.Element {
     resetResults()
     setPhase('analyzing')
     setStage(null)
-    const planRequest = request({ op: 'plan', sources, destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
+    const planRequest = request({ op: 'plan', sources, destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
       if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
       else if (event.type === 'draft') {
         const entries: Entry[] = event.entries ?? []
@@ -396,15 +451,19 @@ export function App(): JSX.Element {
         flushDraft()
         setStage(null)
         setPhase('idle')
-        if (!event.cancelled) setError(event.message)
+        if (!event.cancelled) setError(remoteErrorText(t, event))
       }
     })
     planId.current = planRequest.id
     running.current = planRequest
   }
 
-  const sort = (): void => {
+  const sort = (simulate = false): void => {
     if (!plan) return
+    dryRun.current = simulate
+    setRemoteState(null)
+    setError(null)
+    setResumable(false)
     setPhase('copying')
     copiedRef.current = new Set()
     setCopiedCount(0)
@@ -412,17 +471,23 @@ export function App(): JSX.Element {
     copiedTargets.current = []
     finishing.current = null
     credit.current = 0
-    running.current = request({ op: 'copy', planId: planId.current }, (event) => {
+    running.current = request({ op: 'copy', planId: planId.current, ...(remote ? { remote: remoteConfig(prefs, remotePassword), dryRun: simulate } : {}) }, (event) => {
       if (event.type === 'progress') {
         buffer.current.push(event.entry)
         copiedTargets.current.push(`${plan.destination}/${event.entry.target}`)
+      } else if (event.type === 'remoteProgress') {
+        setRemoteState((state) => ({ ...(state ?? {}), progress: event }))
       } else if (event.type === 'done') {
+        if (event.remote) setRemoteState({ summary: event })
         // The tick finishes once every copied photo has been displayed.
         finishing.current = 'done'
       } else if (event.type === 'error') {
         finishing.current = 'error'
         setPhase('ready')
-        if (!event.cancelled) setError(event.message)
+        if (!event.cancelled) {
+          setError(remote ? remoteErrorText(t, event) : event.message)
+          setResumable(!!event.resumable)
+        }
       }
     })
   }
@@ -475,7 +540,7 @@ export function App(): JSX.Element {
   if (wasBusy.current && !busy) busyEnded.current = performance.now()
   wasBusy.current = busy
   const cleanable = !!plan || !!error || sources.length > 0
-  const canAnalyze = !busy && sources.length > 0 && !!destination.trim()
+  const canAnalyze = !busy && sources.length > 0 && (remote ? remoteReady(prefs) : !!destination.trim())
   const canSort = !busy && !tagging && phase === 'ready' && entries.length > 0
   const deep = skipDuplicates || groupSimilar || groupBlurry
   const progress =
@@ -564,6 +629,14 @@ export function App(): JSX.Element {
           <div className="top">
           <div className="glass destination">
             <label>{t('destination')}</label>
+            {remote ? (
+              <div className="row">
+                <input value={remoteLabel(prefs)} readOnly disabled={busy} title={remoteLabel(prefs)} />
+                <button className="btn ghost" disabled={busy} onClick={() => setShowRemote(true)}>
+                  {t('remote.change')}
+                </button>
+              </div>
+            ) : (
             <div className="row">
               <input
                 value={destination}
@@ -588,6 +661,10 @@ export function App(): JSX.Element {
                 {t('choose')}
               </button>
             </div>
+            )}
+            <button className="link remote-link" disabled={busy} onClick={() => (remote ? (updatePrefs({ remoteEnabled: false }), resetResults()) : setShowRemote(true))}>
+              {remote ? t('remote.local') : t('remote.open')}
+            </button>
           </div>
           <label className={`toggle glass ${busy ? 'disabled' : ''}`}>
             <input
@@ -646,14 +723,26 @@ export function App(): JSX.Element {
                 : phase === 'analyzing'
                   ? analysisStatus(t, stage)
                   : phase === 'copying'
-                    ? t('status.copying', { done: copiedCount, total: entries.length })
+                    ? remote && remoteState?.progress
+                      ? remoteProgressText(t, remoteState.progress)
+                      : t(remote ? 'remote.status.sending' : 'status.copying', { done: copiedCount, total: entries.length })
                     : phase === 'done'
-                      ? t('status.done', { n: copiedCount })
-                      : plan
+                      ? remote && remoteState?.summary
+                        ? t('remote.status.done', { n: copiedCount, sent: remoteState.summary.sent ?? 0, existing: remoteState.summary.existing ?? 0 })
+                        : t('status.done', { n: copiedCount })
+                      : remoteState?.summary?.dryRun
+                        ? t('remote.status.dryDone', { sent: remoteState.summary.sent ?? 0, existing: remoteState.summary.existing ?? 0 })
+                        : plan
                         ? t('status.ready', { n: entries.length })
                         : t('status.idle')}
             </motion.span>
           </AnimatePresence>
+          {remoteState?.summary?.warnings?.includes('legacyRsync') && <span className="remote-warn">{t('remote.warn.legacyRsync')}</span>}
+          {(remoteState?.summary?.mismatched ?? 0) > 0 && (
+            <span className="remote-warn">
+              {t('remote.warn.mismatch', { n: remoteState?.summary?.mismatched ?? 0, sample: (remoteState?.summary?.mismatchedSample ?? [])[0] ?? '' })}
+            </span>
+          )}
           {duplicates.length > 0 && (
             <button className="link" onClick={() => setShowSkipped(true)}>
               {t('duplicates', { n: duplicates.length })}
@@ -664,12 +753,12 @@ export function App(): JSX.Element {
               {t('issues', { n: plan.skipped.length })}
             </button>
           )}
-          {phase === 'done' && plan && (
+          {phase === 'done' && plan && !remote && (
             <button className="link" onClick={() => window.photosort.openPath(plan.destination)}>
               {t('openFolder')}
             </button>
           )}
-          {phase === 'done' && copiedTargets.current.length > 0 && !tagging && (
+          {phase === 'done' && !remote && copiedTargets.current.length > 0 && !tagging && (
             <button
               className="link"
               onClick={() => {
@@ -712,10 +801,22 @@ export function App(): JSX.Element {
             whileTap={{ scale: 0.95 }}
             disabled={!canSort}
             title={tagging ? t('tags.busy') : undefined}
-            onClick={sort}
+            onClick={() => sort()}
           >
-            {t('sort')}
+            {resumable ? t('remote.resume') : t('sort')}
           </motion.button>
+          {remote && (
+            <motion.button
+              className="btn ghost"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              disabled={!canSort}
+              title={t('remote.dryRun.hint')}
+              onClick={() => sort(true)}
+            >
+              {t('remote.dryRun')}
+            </motion.button>
+          )}
           {busy && (
             <motion.button className="btn danger" whileTap={{ scale: 0.95 }} onClick={() => running.current?.cancel()}>
               {t('cancel')}
@@ -723,6 +824,22 @@ export function App(): JSX.Element {
           )}
         </div>
       </footer>
+
+      <AnimatePresence>
+        {showRemote && (
+          <RemotePanel
+            prefs={prefs}
+            busy={busy}
+            password={remotePassword}
+            onPassword={setRemotePassword}
+            onChange={(patch) => {
+              updatePrefs(patch)
+              if (!('remoteChecksum' in patch || 'remoteRemember' in patch)) resetResults()
+            }}
+            onClose={() => setShowRemote(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showPrefs && <Preferences prefs={prefs} busy={busy} onChange={updatePrefs} onClose={() => setShowPrefs(false)} />}

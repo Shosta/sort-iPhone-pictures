@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, safeStorage, shell } from 'electron'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -77,6 +78,59 @@ ipcMain.handle('dialog:pickFolder', async (_event, title: string) => {
     properties: ['openDirectory', 'multiSelections', 'createDirectory']
   })
   return result.canceled ? [] : result.filePaths
+})
+
+ipcMain.handle('dialog:pickFile', async (_event, title: string) => {
+  const result = await dialog.showOpenDialog({ title, properties: ['openFile', 'showHiddenFiles'] })
+  return result.canceled ? '' : (result.filePaths[0] ?? '')
+})
+
+// Remote (NAS) passwords are stored encrypted with the OS keychain
+// (Keychain, DPAPI, libsecret) through safeStorage, never in clear text.
+const secretsFile = (): string => join(app.getPath('userData'), 'remote-secrets.json')
+
+function readSecrets(): Record<string, string> {
+  try {
+    return existsSync(secretsFile()) ? JSON.parse(readFileSync(secretsFile(), 'utf8')) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeSecrets(secrets: Record<string, string>): void {
+  mkdirSync(app.getPath('userData'), { recursive: true })
+  writeFileSync(secretsFile(), JSON.stringify(secrets), { mode: 0o600 })
+}
+
+function secretsAvailable(): boolean {
+  if (!safeStorage.isEncryptionAvailable()) return false
+  // Without a keyring Linux falls back to a hard-coded key: not a safe store.
+  const backend = (safeStorage as unknown as { getSelectedStorageBackend?: () => string }).getSelectedStorageBackend
+  return process.platform !== 'linux' || !backend || backend.call(safeStorage) !== 'basic_text'
+}
+
+ipcMain.handle('secret:available', () => secretsAvailable())
+
+ipcMain.handle('secret:store', (_event, account: string, secret: string) => {
+  if (!secretsAvailable()) return false
+  writeSecrets({ ...readSecrets(), [account]: safeStorage.encryptString(secret).toString('base64') })
+  return true
+})
+
+ipcMain.handle('secret:load', (_event, account: string) => {
+  const stored = readSecrets()[account]
+  if (!stored || !secretsAvailable()) return ''
+  try {
+    return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+  } catch {
+    return ''
+  }
+})
+
+ipcMain.handle('secret:forget', (_event, account: string) => {
+  const secrets = readSecrets()
+  delete secrets[account]
+  writeSecrets(secrets)
 })
 
 ipcMain.handle('shell:reveal', (_event, path: string) => shell.openPath(path))
