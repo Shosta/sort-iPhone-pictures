@@ -154,3 +154,25 @@ test('les ressources locales existent et le CSS ne charge rien à distance', asy
   const files = await readdir(dist('_astro'));
   assert.ok(files.some((file) => file.endsWith('.woff2')));
 });
+
+test('la page « tri distant » existe dans chaque langue, est liée depuis l’accueil et sans lien mort', async () => {
+  for (const lang of languages) {
+    const guide = await readFile(dist(`${lang}/tri-distant/index.html`), 'utf8');
+    assert.match(guide, new RegExp(`<html lang="${lang}">`));
+    assert.equal(count(guide, /<h1\b/g), 1, lang);
+    assert.doesNotMatch(guide, /undefined|\[object Object\]|<script\b/, lang);
+    assert.match(guide, /data-placeholder="tri-distant-fenetre"/);
+    assert.match(guide, /<svg[^>]*role="img"/);
+    for (const other of languages) {
+      assert.match(guide, new RegExp(`<a href="${escapedBase}${other}/tri-distant/" lang="${other}" hreflang="${other}"`));
+    }
+    const ids = new Set([...guide.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
+    for (const [, anchor] of guide.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.has(anchor), `${lang} : ${anchor}`);
+    for (const html of [pages[lang], guide]) {
+      assert.ok(html.includes(`href="${base}${lang}/tri-distant/"`), `${lang} : lien vers le guide`);
+    }
+    assert.ok(guide.includes(`href="${base}${lang}/#telecharger"`), `${lang} : ancres de l’accueil`);
+  }
+  const counts = await Promise.all(languages.map(async (lang) => count(await readFile(dist(`${lang}/tri-distant/index.html`), 'utf8'), /<li class="|<details\b|<dt>/g)));
+  assert.deepEqual(counts, [counts[0], counts[0], counts[0]]);
+});

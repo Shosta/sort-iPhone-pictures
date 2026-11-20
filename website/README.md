@@ -39,6 +39,8 @@ si le dépôt s'appelle `shosta.github.io`).
 
 ## Contenu
 
+- Guide « Tri distant vers un NAS » : `/<lang>/tri-distant/` (gabarit `src/pages/[lang]/tri-distant.astro`, textes FR/EN/DA dans `src/i18n/nas.ts`, à tenir à jour avec les libellés et messages de l'application). La capture `src/assets/screenshots/tri-distant-fenetre.png` remplacera l'emplacement dès qu'elle existe.
+
 - Pages : `/fr/`, `/en/`, `/da/` (gabarit `src/pages/[lang]/index.astro`). La racine `/`
   choisit la langue du navigateur, avec un choix manuel si JavaScript est absent.
 - Textes : `src/i18n/{fr,en,da}.ts`, typés par `Copy` (`types.ts`). Modifier une langue

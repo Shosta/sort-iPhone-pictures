@@ -10,7 +10,7 @@ export const da: Copy = {
       'Photosort sorterer tusindvis af rodede iPhone-billeder efter optagelsesdato og tilføjer tags, så du let kan finde dem igen, uden cloud. Som bonus en scrapbook-PDF til din ugekalender. Open source til macOS, Linux og Windows.',
   },
   skip: 'Gå til indholdet',
-  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', languages: 'Sprog' },
+  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', remote: 'Fjernsortering', languages: 'Sprog' },
   hero: {
     eyebrow: 'Open source · lokalt · ingen konto',
     titleA: 'Tusindvis af rodede iPhone-billeder,',

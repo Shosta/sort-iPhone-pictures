@@ -1,0 +1,52 @@
+---
+import { Image } from 'astro:assets';
+import photosortIcon from '../assets/photosort.png';
+import Flag from './Flag.astro';
+import { copies, languages, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  // Chemin de la page courante sous /<lang>/ ('' pour l'accueil, 'tri-distant/' pour le guide).
+  path?: string;
+  // Sur les pages secondaires, les ancres de l'accueil pointent vers l'accueil.
+  onHome?: boolean;
+}
+const { lang, path = '', onHome = true } = Astro.props;
+const t = copies[lang];
+const languageNames: Record<Lang, string> = { fr: 'Français', en: 'English', da: 'Dansk' };
+const base = import.meta.env.BASE_URL;
+const home = base.endsWith('/') ? base : `${base}/`;
+const pageUrl = (l: string, sub = '') => `${home}${l}/${sub}`;
+const anchor = (id: string) => `${onHome ? '' : pageUrl(lang)}#${id}`;
+---
+
+<header class="site-header shell">
+  <a class="brand" href={pageUrl(lang)} aria-label="Photosort">
+    <Image src={photosortIcon} width={36} height={36} densities={[1, 2, 3]} format="webp" loading="eager" alt="" />
+    <span>photosort</span>
+  </a>
+  <nav aria-label={t.nav.label}>
+    <a href={anchor('classement')}>{t.nav.how}</a>
+    <a href={anchor('fonctions')}>{t.nav.features}</a>
+    <a href={anchor('semainier')}>{t.nav.scrapbook}</a>
+    <a href={pageUrl(lang, 'tri-distant/')} aria-current={onHome ? undefined : 'page'}>{t.nav.remote}</a>
+    <a href={anchor('telecharger')}>{t.nav.download}</a>
+    <a href={anchor('faq')}>{t.nav.faq}</a>
+  </nav>
+  <details class="lang-menu">
+    <summary aria-label={t.nav.languages}>
+      <Flag lang={lang} />
+      <span>{languageNames[lang]}</span>
+    </summary>
+    <ul>
+      {languages.map((l) => (
+        <li>
+          <a href={pageUrl(l, path)} lang={l} hreflang={l} aria-current={l === lang ? 'true' : undefined}>
+            <Flag lang={l} />
+            <span>{languageNames[l]}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </details>
+</header>

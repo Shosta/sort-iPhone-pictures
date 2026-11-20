@@ -10,7 +10,7 @@ export const fr: Copy = {
       'Photosort classe des milliers de photos d’iPhone en vrac par date de prise de vue, ajoute des tags pour les retrouver facilement, sans cloud. En bonus, un PDF de scrapbook pour votre semainier. Open source, pour macOS, Linux et Windows.',
   },
   skip: 'Aller au contenu',
-  nav: { label: 'Navigation principale', how: 'Classement', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', languages: 'Langue' },
+  nav: { label: 'Navigation principale', how: 'Classement', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', remote: 'Tri distant', languages: 'Langue' },
   hero: {
     eyebrow: 'Open source · local · sans compte',
     titleA: 'Des milliers de photos d’iPhone en vrac,',

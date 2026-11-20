@@ -10,7 +10,7 @@ export const en: Copy = {
       'Photosort sorts thousands of loose iPhone photos by the date they were taken and adds tags so you can find them again, with no cloud. As a bonus, a scrapbook PDF for your weekly planner. Open source, for macOS, Linux and Windows.',
   },
   skip: 'Skip to content',
-  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', languages: 'Language' },
+  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', remote: 'Remote sort', languages: 'Language' },
   hero: {
     eyebrow: 'Open source · local · no account',
     titleA: 'Thousands of loose iPhone photos,',

@@ -1,0 +1,23 @@
+---
+import { Image } from 'astro:assets';
+import photosortIcon from '../assets/photosort.png';
+import { copies, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  repositoryUrl?: string;
+}
+const { lang, repositoryUrl } = Astro.props;
+const t = copies[lang];
+const base = import.meta.env.BASE_URL;
+const home = base.endsWith('/') ? base : `${base}/`;
+---
+
+<footer class="site-footer shell">
+  <a class="brand" href={`${home}${lang}/`}>
+    <Image src={photosortIcon} width={30} height={30} densities={[1, 2, 3]} format="webp" loading="lazy" alt="" />
+    <span>photosort</span>
+  </a>
+  <p>{t.footer.tagline}</p>
+  <p class="fine-print"><a href={`${home}${lang}/tri-distant/`}>{t.nav.remote}</a> · {t.footer.made} · {repositoryUrl ? <a href={`${repositoryUrl.replace(/\/$/, '')}/blob/main/LICENSE`} rel="noopener noreferrer">{t.footer.license}</a> : t.footer.license}</p>
+</footer>
