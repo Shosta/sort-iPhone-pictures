@@ -30,9 +30,23 @@ export interface Prefs {
   travelMapOutputDir: string
   yearMapProvider: string
   yearMapOutputDir: string
+  // Remote destination (NAS, rsync). The password is never kept here.
+  remoteEnabled: boolean
+  remoteProtocol: RemoteProtocol
+  remoteHost: string
+  remotePort: string
+  remoteUser: string
+  remoteModule: string
+  remotePath: string
+  remoteKeyFile: string
+  remoteChecksum: boolean
+  // true: password kept in the system keychain; false: asked again each session.
+  remoteRemember: boolean
   language: Language
   theme: ThemeId
 }
+
+export type RemoteProtocol = 'daemon' | 'ssh'
 
 export type ScrapFrame = 'none' | 'polaroid' | 'stamp' | 'tape'
 export type ScrapLayoutStyle = 'grid' | 'collage'
@@ -72,6 +86,16 @@ function load(): Prefs {
     travelMapOutputDir: '',
     yearMapProvider: 'osm',
     yearMapOutputDir: '',
+    remoteEnabled: false,
+    remoteProtocol: 'daemon',
+    remoteHost: '',
+    remotePort: '',
+    remoteUser: '',
+    remoteModule: '',
+    remotePath: '',
+    remoteKeyFile: '',
+    remoteChecksum: false,
+    remoteRemember: false,
     language: detectLanguage(),
     theme: 'aurora'
   }
@@ -92,4 +116,34 @@ export function usePrefs(): [Prefs, (patch: Partial<Prefs>) => void] {
   const [prefs, setPrefs] = useState<Prefs>(load)
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)), [prefs])
   return [prefs, (patch) => setPrefs((previous) => ({ ...previous, ...patch }))]
+}
+
+/** The remote destination as the engine expects it (password included, in memory only). */
+export function remoteConfig(prefs: Prefs, password: string): Record<string, unknown> {
+  const daemon = prefs.remoteProtocol === 'daemon'
+  return {
+    protocol: prefs.remoteProtocol,
+    host: prefs.remoteHost.trim(),
+    port: Number.parseInt(prefs.remotePort, 10) || 0,
+    user: prefs.remoteUser.trim(),
+    module: daemon ? prefs.remoteModule.trim() : '',
+    path: prefs.remotePath.trim(),
+    password: daemon ? password : '',
+    keyFile: daemon ? '' : prefs.remoteKeyFile.trim(),
+    checksum: prefs.remoteChecksum
+  }
+}
+
+export function remoteReady(prefs: Prefs): boolean {
+  if (!prefs.remoteHost.trim()) return false
+  return prefs.remoteProtocol === 'daemon' ? !!prefs.remoteModule.trim() : !!prefs.remotePath.trim()
+}
+
+export function remoteLabel(prefs: Prefs): string {
+  const user = prefs.remoteUser.trim() ? `${prefs.remoteUser.trim()}@` : ''
+  const port = prefs.remotePort.trim() ? `:${prefs.remotePort.trim()}` : ''
+  const path = prefs.remotePath.trim().replace(/^\/+/, '')
+  return prefs.remoteProtocol === 'daemon'
+    ? `rsync://${user}${prefs.remoteHost.trim()}${port}/${prefs.remoteModule.trim()}${path ? `/${path}` : ''}`
+    : `ssh://${user}${prefs.remoteHost.trim()}${port}/${path}`
 }

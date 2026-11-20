@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
+	"sort-iphone-pictures/internal/remote"
 	"sort-iphone-pictures/internal/tagger"
 	"sort-iphone-pictures/sorter"
 )
@@ -24,6 +26,9 @@ func (sources *sourcesFlag) Set(value string) error {
 	*sources = append(*sources, value)
 	return nil
 }
+
+// transport sends sorted trees to a remote destination (replaced in tests).
+var transport remote.Transport = remote.Rsync{}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -53,6 +58,12 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	tagPeople := flags.Bool("tag-people", false, "Write XMP keywords People, Portrait and Groupe using local face detection")
 	tagMeta := flags.Bool("tag-meta", false, "Write XMP keywords from the metadata: season, year, weekend, selfie, screenshot, panorama, zoom, macro, low light")
 	aiDir := flags.String("ai-dir", "", "Directory with the AI models (default: $PHOTOSORT_AI_DIR or ./ai next to the executable)")
+	remoteURL := flags.String("remote", "", "Send to a remote library with rsync instead of a local folder: rsync://user@host[:port]/module[/path] (rsync daemon) or ssh://user@host[:port]/path (rsync over SSH)")
+	remotePasswordFile := flags.String("remote-password-file", "", "File holding the rsync daemon password (or set PHOTOSORT_REMOTE_PASSWORD); never put it on the command line")
+	remoteKey := flags.String("remote-key", "", "SSH private key for ssh:// destinations")
+	remoteVerify := flags.Bool("remote-verify", false, "After the upload, compare checksums of the files already on the remote side (nothing is overwritten)")
+	remoteDryRun := flags.Bool("remote-dry-run", false, "Simulate the remote upload (rsync --dry-run) and print what would be sent")
+	remoteTest := flags.Bool("remote-test", false, "Only test the connection to --remote (rsync --list-only) and exit")
 	asJSON := flags.Bool("json", false, "Print the plan and result as JSON")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -62,6 +73,38 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments; use --source and --destination")
+	}
+	if *remoteURL != "" {
+		if *destination != "" {
+			return errors.New("use either --destination or --remote, not both")
+		}
+		if *tagScenes || *tagMoment || *tagPeople || *tagMeta {
+			return errors.New("AI tags are written next to local photos and cannot be combined with --remote")
+		}
+		cfg, err := remote.ParseURL(*remoteURL)
+		if err != nil {
+			return err
+		}
+		cfg.KeyFile, cfg.Checksum = *remoteKey, *remoteVerify
+		if cfg.Password, err = remotePassword(*remotePasswordFile); err != nil {
+			return err
+		}
+		if *remoteTest {
+			res, err := transport.Test(ctx, cfg)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(output, "OK: %s (%d entries)", cfg.URL(), res.Entries)
+			if res.PathMissing {
+				fmt.Fprint(output, ", the folder will be created")
+			}
+			fmt.Fprintln(output)
+			return nil
+		}
+		return runRemote(ctx, cfg, remoteOptions{sources: sources, apply: *apply, dryRun: *remoteDryRun, asJSON: *asJSON, engine: sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates, GroupSimilar: *groupSimilar, DateFallback: *dateFallback, ScreenshotFolder: *screenshots, GroupBlurry: *blurry}}, output, diagnostics)
+	}
+	if *remoteTest || *remoteDryRun || *remoteVerify || *remoteKey != "" || *remotePasswordFile != "" {
+		return errors.New("--remote-* options need --remote")
 	}
 	plan, err := (sorter.Engine{ByLocation: *byLocation, Landmarks: *landmarks, SkipDuplicates: *skipDuplicates, GroupSimilar: *groupSimilar, DateFallback: *dateFallback, ScreenshotFolder: *screenshots, GroupBlurry: *blurry}).Plan(ctx, sources, *destination)
 	if err != nil {
@@ -120,4 +163,110 @@ func run(ctx context.Context, args []string, output, diagnostics io.Writer) erro
 		fmt.Fprintf(output, "Planned: %d | Skipped: %d | Copied: %d\n", len(plan.Entries), len(plan.Skipped), report.Copied)
 	}
 	return copyErr
+}
+
+func remotePassword(file string) (string, error) {
+	if file != "" {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("password file: %w", err)
+		}
+		return strings.TrimRight(string(data), "\r\n"), nil
+	}
+	return os.Getenv("PHOTOSORT_REMOTE_PASSWORD"), nil
+}
+
+type remoteOptions struct {
+	sources []string
+	apply   bool
+	dryRun  bool
+	asJSON  bool
+	engine  sorter.Engine
+}
+
+// runRemote plans against a scratch folder, then (with --apply or
+// --remote-dry-run) stages links and hands them to the transport.
+func runRemote(ctx context.Context, cfg remote.Config, opts remoteOptions, output, diagnostics io.Writer) error {
+	stage, err := os.MkdirTemp("", "photosort-stage-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(stage)
+	plan, err := opts.engine.Plan(ctx, opts.sources, stage)
+	if err != nil {
+		return err
+	}
+	var (
+		result  remote.Result
+		sendErr error
+		ran     = opts.apply || opts.dryRun
+	)
+	if ran {
+		items := make([]remote.Item, 0, len(plan.Entries))
+		for _, entry := range plan.Entries {
+			items = append(items, remote.Item{Source: entry.Source, Target: entry.Target})
+		}
+		result, sendErr = remote.Send(ctx, transport, cfg, plan.Destination, items, remote.Options{
+			DryRun: !opts.apply,
+			OnProgress: func(p remote.Progress) {
+				if !opts.asJSON {
+					fmt.Fprintf(diagnostics, "\r%.0f%% %s %s   ", p.Percent, p.Rate, p.ETA)
+				}
+			},
+		})
+	}
+	if opts.asJSON {
+		out := struct {
+			Plan    sorter.Plan    `json:"plan"`
+			Remote  string         `json:"remote"`
+			Applied bool           `json:"applied"`
+			Result  *remote.Result `json:"result,omitempty"`
+			Error   string         `json:"error,omitempty"`
+		}{Plan: plan, Remote: cfg.URL(), Applied: opts.apply}
+		if ran {
+			out.Result = &result
+		}
+		if sendErr != nil {
+			out.Error = sendErr.Error()
+		}
+		encoder := json.NewEncoder(output)
+		encoder.SetIndent("", "  ")
+		return errors.Join(sendErr, encoder.Encode(out))
+	}
+	switch {
+	case opts.apply:
+		fmt.Fprintln(output, "REMOTE COPY")
+	case opts.dryRun:
+		fmt.Fprintln(output, "REMOTE SIMULATION (nothing is sent)")
+	default:
+		fmt.Fprintln(output, "PREVIEW (no files written)")
+	}
+	fmt.Fprintln(output, "Destination:", cfg.URL())
+	for _, entry := range plan.Entries {
+		fmt.Fprintf(output, "%s -> %s\n", entry.Source, entry.Target)
+	}
+	for _, issue := range plan.Skipped {
+		fmt.Fprintf(diagnostics, "Skipped: %s: %s\n", issue.Path, issue.Reason)
+	}
+	for _, duplicate := range plan.Duplicates {
+		fmt.Fprintf(diagnostics, "Duplicate: %s == %s\n", duplicate.Path, duplicate.Of)
+	}
+	if sendErr != nil {
+		if kind, detail, ok := remote.KindOf(sendErr); ok && kind.Resumable() {
+			fmt.Fprintln(diagnostics, "Interrupted; run the same command again to resume.", detail)
+		}
+		return sendErr
+	}
+	for _, code := range result.Warnings {
+		fmt.Fprintln(diagnostics, "Warning:", code, "(an old rsync is in use; install a recent one, e.g. brew install rsync)")
+	}
+	for _, name := range result.Mismatched {
+		fmt.Fprintln(diagnostics, "Differs on the remote side (left untouched):", name)
+	}
+	verb := "Sent"
+	if !opts.apply {
+		verb = "Would send"
+	}
+	fmt.Fprintf(output, "Planned: %d | Skipped: %d | %s: %d | Already on remote: %d\n", len(plan.Entries), len(plan.Skipped), verb, len(result.Sent), result.Existing)
+	return nil
 }

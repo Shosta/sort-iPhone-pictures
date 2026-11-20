@@ -251,3 +251,16 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .assets-error p { margin: 0 0 6px; }
 .assets-error .info { background: none; border: 0; color: inherit; cursor: pointer; font-size: 15px; padding: 0 2px; opacity: 0.85; }
 .assets-error .diagnostic { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); font-size: 12px; white-space: pre-wrap; word-break: break-all; user-select: text; }
+.remote-link { align-self: flex-start; margin-top: 6px; padding: 0; }
+.remote-panel { max-height: 94vh; overflow-y: auto; }
+.remote-fields { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.remote-fields:disabled { opacity: 0.5; }
+.remote-fields .field { display: flex; flex-direction: column; gap: 8px; }
+.remote-fields .field > label:first-child { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.remote-fields input.narrow { flex: none; width: 90px; }
+.seg { display: grid; gap: 6px; }
+.seg .btn { text-align: left; border: 1px solid transparent; }
+.seg .btn.on { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.22); }
+.remote-test.ok { color: #6ee7a0; }
+.remote-test.error { color: #ff8b8b; }
+.remote-warn { color: #ffcf6b; font-size: 12px; }
