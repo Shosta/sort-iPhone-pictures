@@ -137,7 +137,7 @@ func DecodeFor(r io.ReadSeeker, path string, size int) (Decoded, error) {
 		}
 	}
 	if img == nil {
-		if img, format, err = image.Decode(reader); err != nil {
+		if img, format, err = decodeFull(reader, format, config); err != nil {
 			return Decoded{}, err
 		}
 	}
