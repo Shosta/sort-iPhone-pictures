@@ -186,7 +186,9 @@ type server struct {
 	cache     *thumbCache
 	measurer  scrapbook.Measurer
 	transport remote.Transport
-	wg        sync.WaitGroup
+	// remoteCache overrides where the remote library listing is cached.
+	remoteCache string
+	wg          sync.WaitGroup
 }
 
 func main() {

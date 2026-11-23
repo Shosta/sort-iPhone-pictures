@@ -63,6 +63,7 @@ func TestRemoteSortStagesAndSends(t *testing.T) {
 	srv := newServer(&out)
 	transport := &recordingTransport{}
 	srv.transport = transport
+	srv.remoteCache = t.TempDir()
 	cfg := &remote.Config{Protocol: remote.Daemon, Host: "nas", Module: "photos", Password: "pw"}
 	ctx := context.Background()
 
@@ -113,6 +114,7 @@ func TestRemoteErrorsCarryACode(t *testing.T) {
 	var out bytes.Buffer
 	srv := newServer(&out)
 	srv.transport = &recordingTransport{err: &remote.Error{Kind: remote.KindAuth, Detail: "auth failed"}}
+	srv.remoteCache = t.TempDir()
 	srv.handle(context.Background(), request{ID: "1", Op: "remoteTest", Remote: &remote.Config{Host: "nas", Module: "m"}})
 	srv.wg.Wait()
 	got := events(t, &out, "1")

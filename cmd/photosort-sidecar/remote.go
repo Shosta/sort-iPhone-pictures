@@ -69,9 +69,11 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 			tagItems = append(tagItems, remote.Item{Source: entry.Source + ".xmp", Target: entry.Target + ".xmp", Sidecar: true})
 		}
 	}
-	cacheDir := ""
-	if dir, err := os.UserCacheDir(); err == nil {
-		cacheDir = filepath.Join(dir, "photosort", "remote")
+	cacheDir := s.remoteCache
+	if cacheDir == "" {
+		if dir, err := os.UserCacheDir(); err == nil {
+			cacheDir = filepath.Join(dir, "photosort", "remote")
+		}
 	}
 	var (
 		lib     remote.Library
