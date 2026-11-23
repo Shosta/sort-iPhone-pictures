@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Processus auxiliaires Electron (rendu, GPU...) : V8 compile du code a la volee. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!--
+      Le moteur Go (photosort-sidecar) charge libonnxruntime.dylib, telechargee au
+      premier lancement dans le dossier de donnees de l'utilisateur : elle n'est pas
+      signee par notre identite et serait refusee par la validation des bibliotheques.
+      L'integrite de cette archive est verifiee par sha256 avant extraction.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>

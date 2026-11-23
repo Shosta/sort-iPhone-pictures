@@ -16,6 +16,15 @@ afterPack: scripts/after-pack.cjs
 mac:
   category: public.app-category.photography
   target: [dmg]
+  # Signature Developer ID + notarisation : actives uniquement si les secrets sont
+  # fournis (CSC_LINK / CSC_KEY_PASSWORD, puis APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD +
+  # APPLE_TEAM_ID, ou APPLE_API_KEY / APPLE_API_KEY_ID / APPLE_API_ISSUER).
+  # Sans eux (CSC_IDENTITY_AUTO_DISCOVERY=false) l'installeur reste non signe.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  notarize: true
 win:
   target: [portable]
 linux:

@@ -16,8 +16,9 @@ et dialogue avec lui en JSON ligne par ligne via stdin/stdout.
 npm install
 npm run dev        # compile le sidecar Go puis lance l'application avec rechargement à chaud
 npm run typecheck
+npm test           # tests unitaires (validations IPC, lanceur Linux, empreintes)
 npm run build      # compile le sidecar et l'interface dans out/
-npm run dist       # installeurs dans release/ (dmg, exe portable, AppImage/deb selon l'OS)
+npm run dist       # installeurs dans release/ + release/SHA256SUMS (dmg, exe portable, AppImage/deb selon l'OS)
 ```
 
 `dist:mac`, `dist:win` et `dist:linux` ciblent un OS précis. Le sidecar est
@@ -62,6 +63,60 @@ Cette variable ne doit servir qu'à `npm install` : Electron la refuse au
 lancement (`--use-system-ca is not allowed in NODE_OPTIONS`), donc ne pas
 l'exporter pour `npm run dev`. Aucun droit administrateur n'est nécessaire
 (tout s'installe dans le dossier du projet et `~/.local`).
+
+## Signature, notarisation et empreintes
+
+Les installeurs publiés doivent être signés, et les macOS notarisés. La
+configuration est prête (`electron-builder.yml`, `build/entitlements.mac*.plist`),
+mais elle ne s'active qu'avec des identifiants que le dépôt ne contient pas.
+Sans eux, `electron-builder` produit un installeur non signé (avec
+`CSC_IDENTITY_AUTO_DISCOVERY=false`, comme dans le workflow actuel).
+
+**macOS (runtime durci + notarisation).** Fournir à `electron-builder`, en
+variables d'environnement :
+
+| Variable | Contenu |
+| --- | --- |
+| `CSC_LINK`, `CSC_KEY_PASSWORD` | certificat « Developer ID Application » exporté en `.p12` (chemin ou base64) et son mot de passe |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | compte Apple Developer, mot de passe d'app (appleid.apple.com) et identifiant d'équipe |
+
+À la place des trois `APPLE_*`, on peut utiliser une clé App Store Connect
+(`APPLE_API_KEY` = chemin du `.p8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`).
+`electron-builder` signe tous les binaires imbriqués avec le runtime durci puis
+soumet l'app à Apple (`notarize: true`) et agrafe le ticket. Sans identifiants
+de notarisation, l'étape est ignorée avec un avertissement.
+
+Les droits (`entitlements`) sont volontairement minimaux : `allow-jit` pour V8 ;
+`disable-library-validation` seulement pour les processus enfants (dont le
+sidecar Go), qui chargent `libonnxruntime.dylib` téléchargée au premier
+lancement (non signée par nous ; son sha256 est vérifié avant extraction).
+Vérification locale d'un build : `codesign --verify --deep --strict Photosort.app`
+et `codesign -d --entitlements :- Photosort.app` ; après notarisation,
+`spctl -a -vv Photosort.app` doit répondre `source=Notarized Developer ID`.
+
+**Windows.** `CSC_LINK`/`CSC_KEY_PASSWORD` (ou `WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD`
+pour un certificat différent de celui de macOS) avec un certificat Authenticode,
+ou Azure Trusted Signing (`win.azureSignOptions`). Les exécutables sont signés
+automatiquement dès que la variable est présente.
+
+**Empreintes SHA-256.** `npm run dist*` écrit `release/SHA256SUMS` (un
+`<sha256>  <fichier>` par installeur : `.dmg`, `.exe`, `.AppImage`, `.deb`,
+`.zip`). `npm run checksums` le régénère, `npm run checksums:verify` le contrôle.
+Publier `SHA256SUMS` avec les installeurs ; un utilisateur vérifie son
+téléchargement avec :
+
+```sh
+shasum -a 256 -c SHA256SUMS --ignore-missing   # macOS
+sha256sum -c SHA256SUMS --ignore-missing       # Linux
+Get-FileHash .\Photosort-<version>-win-x64.exe -Algorithm SHA256   # Windows (comparer à SHA256SUMS)
+```
+
+Le workflow `.github/workflows/package.yml` appelle `electron-builder`
+directement : pour que la release publie la signature et les empreintes, il
+reste à (1) fournir les secrets ci-dessus aux jobs, (2) retirer
+`CSC_IDENTITY_AUTO_DISCOVERY: 'false'` des jobs signés, (3) lancer
+`node scripts/checksums.mjs dist` avant `gh release create` et joindre
+`dist/SHA256SUMS`.
 
 ## Architecture
 
@@ -183,5 +238,6 @@ Chaque photo garde sa forme, sans recadrage : son grand côté fait 6,5 cm (port
 ## Limites
 
 - Copie uniquement, aucun original modifié (comportement du moteur Go).
-- Les installeurs ne sont pas signés ni notarisés.
-- Pas encore de tests automatisés (la CI ne fait que packager et vérifier les types).
+- Les installeurs ne sont pas encore signés ni notarisés tant que les identifiants
+  de la section « Signature, notarisation et empreintes » ne sont pas fournis.
+- Tests automatisés : `npm test` (validations IPC, lanceur Linux, empreintes) ; la CI ne fait que packager et vérifier les types.

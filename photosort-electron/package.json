@@ -11,11 +11,13 @@
     "dev": "npm run sidecar && node scripts/rename-dev-electron.mjs && electron-vite dev",
     "build": "npm run sidecar && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test \"src/main/*.test.ts\" \"scripts/*.test.cjs\"",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "test": "node --test \"src/main/*.test.ts\" \"scripts/*.test.cjs\" \"scripts/*.test.mjs\"",
+    "checksums": "node scripts/checksums.mjs release",
+    "checksums:verify": "node scripts/checksums.mjs release --check",
+    "dist": "npm run build && electron-builder && npm run checksums",
+    "dist:mac": "npm run build && electron-builder --mac && npm run checksums",
+    "dist:win": "npm run build && electron-builder --win && npm run checksums",
+    "dist:linux": "npm run build && electron-builder --linux && npm run checksums"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
