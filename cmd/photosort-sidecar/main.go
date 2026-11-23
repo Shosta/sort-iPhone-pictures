@@ -5,6 +5,8 @@
 //
 //	{"id":"1","op":"plan","sources":[...],"destination":"...","byLocation":true,"landmarks":true,"dedupe":true,"similar":true}
 //	{"id":"2","op":"copy","planId":"1"}
+//	{"id":"2","op":"copy","planId":"1","remote":{...},"dryRun":false}
+//	{"id":"18","op":"remoteTest","remote":{"protocol":"daemon","host":"nas","port":873,"user":"me","module":"photos","path":"","password":"..."}}
 //	{"id":"3","op":"thumbnail","path":"...","size":256}
 //	{"id":"4","op":"tag","folder":"...","files":[...],"tagScenes":true,"tagMoment":true,"tagPeople":true,"tagMeta":true,"aiDir":"..."}
 //	{"id":"5","op":"cancel","target":"2"}
@@ -22,26 +24,34 @@
 //	{"id":"17","op":"travelPdf","steps":[...],"page":"a4-portrait","lang":"fr","name":"Voyage.pdf","title":"...","subtitle":"...","outDir":"...","fallbackDir":"..."}
 //
 // Events:
+//
 //   - plan: status (stage exif|hash|similar with done/total), draft (batches of
 //     entries whose folder is known and of duplicates found so far), then plan.
+//
 //   - copy: progress per copied entry, then done.
+//
 //   - thumbnail: thumbnail (JPEG data URL). Previews seen while planning are
 //     cached, so most thumbnails are served without decoding the photo again.
+//
 //   - tag: status (stage tags with done/total), tagged per photo (path, tags),
 //     then done. Photos that already have a <photo>.xmp are left out; files,
 //     if given, replace the folder walk.
+//
 //   - weekDays: days (photo count per YYYY-MM-DD) and rootOk (the folder looks
 //     like a sorted library). weekPhotos: photos (path, date), oldest first;
 //     root is the library folder, the day range is inclusive.
+//
 //   - scrapbookLayout: layout (pageWidth and pageHeight in mm, sheets of
 //     placements in mm, failed photos that cannot be read). scrapbook: progress
 //     per photo, then done (path, pages, photos, failed, fallback). Sizes are
 //     in millimetres; a photo is never cropped, with at least 5 mm between photos.
+//
 //   - yearMapLayout and yearMapPdf take an optional provider (osm, positron,
 //     topo, satellite; anything else is the offline vector map). Online maps
 //     download only map tiles (cached on disk); if that fails the offline map
 //     is used and the layout carries backdropError. The layout then has a
 //     backdrop (JPEG data URL) and the credit to show on the map.
+//
 //   - yearMapYears: years (year folders of the library, newest first) and rootOk.
 //     yearMapScan: status while GPS positions are read, then places (name, lat,
 //     lon, count, shown photos), total and located photo counts. yearMapLayout
@@ -49,6 +59,7 @@
 //     and pageHeight in mm, land and lakes (SVG paths in mm), pins (x, y, name,
 //     count, shown, card box in mm or null). yearMapPdf writes that page: progress
 //     per photo, then done (path, places, failed, fallback).
+//
 //   - travelTrips: status while GPS positions are read (year 0 reads the whole
 //     library), then trips (from, to, photos, distanceKm, steps), most recent
 //     first: runs of days spent more than 100 km from the usual place. travelScan
@@ -58,6 +69,20 @@
 //     (SVG paths in mm), stops (x, y, n, name, dates, photo, card box or null)
 //     and distanceKm. travelPdf writes that page: progress per photo, then done
 //     (path, steps, failed, fallback). lang (fr, en, da) sets the date format.
+//
+//   - remote: a plan (and its copy) with a "remote" object sends the sorted tree
+//     to a NAS with rsync instead of copying locally; the plan destination is
+//     then a scratch folder, "destination" is ignored. protocol is daemon
+//     (module + password) or ssh (key authentication); checksum verifies the
+//     files already on the NAS. copy streams progress per photo, remoteProgress
+//     (percent, bytes, rate, eta, done, total), then done (sent, sentBytes,
+//     existing, mismatched, mismatchedSample, warnings, dryRun). With dryRun
+//     true nothing is sent and done only reports what would be. remoteTest
+//     lists the destination: remoteTest (ok, entries, sample, pathMissing, tool,
+//     warnings). Remote errors carry code (auth, module, denied, refused, host,
+//     unreachable, hostKey, interrupted, diskFull, permission, path,
+//     remoteRsync, rsyncMissing, protocol, config, unknown), detail and
+//     resumable; running copy again resumes an interrupted upload.
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -78,6 +103,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sort-iphone-pictures/internal/remote"
 	"sort-iphone-pictures/internal/scrapbook"
 	"sort-iphone-pictures/internal/tagger"
 	"sort-iphone-pictures/internal/thumbs"
@@ -85,48 +111,50 @@ import (
 )
 
 type request struct {
-	ID           string       `json:"id"`
-	Op           string       `json:"op"`
-	Sources      []string     `json:"sources"`
-	Destination  string       `json:"destination"`
-	ByLocation   bool         `json:"byLocation"`
-	Landmarks    bool         `json:"landmarks"`
-	Dedupe       bool         `json:"dedupe"`
-	Similar      bool         `json:"similar"`
-	DateFallback bool         `json:"dateFallback"`
-	Screenshots  bool         `json:"screenshots"`
-	Blurry       bool         `json:"blurry"`
-	TagScenes    bool         `json:"tagScenes"`
-	TagMoment    bool         `json:"tagMoment"`
-	TagPeople    bool         `json:"tagPeople"`
-	TagMeta      bool         `json:"tagMeta"`
-	AIDir        string       `json:"aiDir"`
-	Folder       string       `json:"folder"`
-	Files        []string     `json:"files"`
-	PlanID       string       `json:"planId"`
-	Path         string       `json:"path"`
-	Size         int          `json:"size"`
-	Target       string       `json:"target"`
-	Root         string       `json:"root"`
-	From         string       `json:"from"`
-	To           string       `json:"to"`
-	Page         string       `json:"page"`
-	LongSide     float64      `json:"longSide"`
-	Gutter       float64      `json:"gutter"`
-	Bleed        float64      `json:"bleed"`
-	Frame        string       `json:"frame"`
-	Layout       string       `json:"layout"`
-	Background   string       `json:"background"`
-	OutDir       string       `json:"outDir"`
-	FallbackDir  string       `json:"fallbackDir"`
-	Name         string       `json:"name"`
-	Year         int          `json:"year"`
-	Provider     string       `json:"provider"`
-	Title        string       `json:"title"`
-	Subtitle     string       `json:"subtitle"`
-	Places       []yearPlace  `json:"places"`
-	Steps        []travelStep `json:"steps"`
-	Lang         string       `json:"lang"`
+	ID           string         `json:"id"`
+	Op           string         `json:"op"`
+	Sources      []string       `json:"sources"`
+	Destination  string         `json:"destination"`
+	ByLocation   bool           `json:"byLocation"`
+	Landmarks    bool           `json:"landmarks"`
+	Dedupe       bool           `json:"dedupe"`
+	Similar      bool           `json:"similar"`
+	DateFallback bool           `json:"dateFallback"`
+	Screenshots  bool           `json:"screenshots"`
+	Blurry       bool           `json:"blurry"`
+	TagScenes    bool           `json:"tagScenes"`
+	TagMoment    bool           `json:"tagMoment"`
+	TagPeople    bool           `json:"tagPeople"`
+	TagMeta      bool           `json:"tagMeta"`
+	AIDir        string         `json:"aiDir"`
+	Folder       string         `json:"folder"`
+	Files        []string       `json:"files"`
+	PlanID       string         `json:"planId"`
+	Path         string         `json:"path"`
+	Size         int            `json:"size"`
+	Target       string         `json:"target"`
+	Root         string         `json:"root"`
+	From         string         `json:"from"`
+	To           string         `json:"to"`
+	Page         string         `json:"page"`
+	LongSide     float64        `json:"longSide"`
+	Gutter       float64        `json:"gutter"`
+	Bleed        float64        `json:"bleed"`
+	Frame        string         `json:"frame"`
+	Layout       string         `json:"layout"`
+	Background   string         `json:"background"`
+	OutDir       string         `json:"outDir"`
+	FallbackDir  string         `json:"fallbackDir"`
+	Name         string         `json:"name"`
+	Year         int            `json:"year"`
+	Provider     string         `json:"provider"`
+	Title        string         `json:"title"`
+	Subtitle     string         `json:"subtitle"`
+	Places       []yearPlace    `json:"places"`
+	Steps        []travelStep   `json:"steps"`
+	Lang         string         `json:"lang"`
+	Remote       *remote.Config `json:"remote"`
+	DryRun       bool           `json:"dryRun"`
 }
 
 type event map[string]any
@@ -153,6 +181,7 @@ type server struct {
 	busySlots chan struct{}
 	cache     *thumbCache
 	measurer  scrapbook.Measurer
+	transport remote.Transport
 	wg        sync.WaitGroup
 }
 
@@ -172,6 +201,7 @@ func newServer(out io.Writer) *server {
 		thumbs:    make(chan struct{}, runtime.NumCPU()),
 		busySlots: make(chan struct{}, busyThumbs),
 		cache:     newThumbCache(cacheBudget),
+		transport: remote.Rsync{},
 	}
 }
 
@@ -227,7 +257,11 @@ func (s *server) handle(parent context.Context, req request) {
 			s.lock.Unlock()
 		}()
 		if err := s.run(ctx, req); err != nil {
-			s.send(event{"id": req.ID, "type": "error", "message": err.Error(), "cancelled": errors.Is(err, context.Canceled)})
+			e := event{"id": req.ID, "type": "error", "message": err.Error(), "cancelled": errors.Is(err, context.Canceled)}
+			if kind, detail, ok := remote.KindOf(err); ok {
+				e["code"], e["detail"], e["resumable"] = string(kind), detail, kind.Resumable()
+			}
+			s.send(e)
 		}
 	}()
 }
@@ -243,6 +277,9 @@ func (s *server) run(ctx context.Context, req request) error {
 		if !ok {
 			return errors.New("unknown plan")
 		}
+		if req.Remote != nil {
+			return s.remoteCopy(ctx, req, plan)
+		}
 		total := len(plan.Entries)
 		s.busy.Add(1)
 		defer s.busy.Add(-1)
@@ -253,6 +290,8 @@ func (s *server) run(ctx context.Context, req request) error {
 			return err
 		}
 		s.send(event{"id": req.ID, "type": "done", "copied": report.Copied, "total": total})
+	case "remoteTest":
+		return s.remoteTest(ctx, req)
 	case "thumbnail":
 		return s.thumbnail(ctx, req)
 	case "tag":
@@ -363,6 +402,15 @@ func (s *server) plan(ctx context.Context, req request) error {
 				s.cache.put(path, data, max(bounds.Dx(), bounds.Dy()))
 			}
 		},
+	}
+	if req.Remote != nil {
+		cleanup, err := prepareRemotePlan(&req)
+		if err != nil {
+			close(stop)
+			<-stopped
+			return err
+		}
+		defer cleanup()
 	}
 	plan, err := engine.Plan(ctx, req.Sources, req.Destination)
 	close(stop)
