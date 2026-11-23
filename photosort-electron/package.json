@@ -11,6 +11,7 @@
     "dev": "npm run sidecar && node scripts/rename-dev-electron.mjs && electron-vite dev",
     "build": "npm run sidecar && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"src/main/*.test.ts\" \"scripts/*.test.cjs\"",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
