@@ -245,11 +245,24 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 		byName[normalize(item.Target)] = item
 	}
 	result := Result{DryRun: job.DryRun, Sent: []string{}, Warnings: tool.warnings()}
+	photos, tags := 0, 0
+	for _, item := range job.Items {
+		if item.Sidecar {
+			tags++
+		} else {
+			photos++
+		}
+	}
+	if !tool.MkPath {
+		if err := r.checkParent(ctx, tool, cfg, conn); err != nil {
+			return result, err
+		}
+	}
 	seen := map[string]bool{}
 	var bytesDone int64
 	emit := func(p Progress) {
 		if job.OnProgress != nil {
-			p.Total = len(job.Items)
+			p.Total = photos
 			job.OnProgress(p)
 		}
 	}
@@ -257,6 +270,10 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 		if item, ok := byName[normalize(line)]; ok {
 			if !seen[normalize(line)] {
 				seen[normalize(line)] = true
+				if item.Sidecar {
+					result.Tags++
+					return
+				}
 				result.Sent = append(result.Sent, item.Target)
 				result.SentBytes += item.Size
 				bytesDone += item.Size
@@ -264,7 +281,7 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 					job.OnSent(item)
 				}
 				if !tool.Info2 {
-					emit(Progress{Done: len(result.Sent), Bytes: bytesDone, Percent: 100 * float64(len(result.Sent)) / float64(max(1, len(job.Items)))})
+					emit(Progress{Done: len(result.Sent), Bytes: bytesDone, Percent: 100 * float64(len(result.Sent)) / float64(max(1, photos))})
 				}
 			}
 			return
@@ -278,7 +295,8 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 	if err != nil {
 		return result, err
 	}
-	result.Existing = len(job.Items) - len(result.Sent)
+	result.Existing = photos - len(result.Sent)
+	result.TagsExisting = tags - result.Tags
 	if cfg.Checksum && !job.DryRun {
 		mismatched, err := r.verify(ctx, tool, cfg, job, conn, dest, byName)
 		if err != nil {
@@ -370,6 +388,9 @@ func listedName(line string) string {
 
 // run executes rsync, feeding every output line (split on \n and \r) to onLine.
 func (r Rsync) run(ctx context.Context, binary string, args []string, password string, onLine func(string)) error {
+	if err := checkArgs(args); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Stdin = nil
 	cmd.WaitDelay = 5 * time.Second
@@ -436,3 +457,29 @@ func (b *tailBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *tailBuffer) String() string { return string(b.data) }
+
+// checkParent covers rsync without --mkpath (older versions, openrsync): only
+// the last folder is created, so a destination missing several levels fails
+// with a clear message instead of an obscure rsync error.
+func (r Rsync) checkParent(ctx context.Context, tool Tool, cfg Config, conn []string) error {
+	if strings.Trim(cfg.Path, "/") == "" {
+		return nil
+	}
+	probe := func(c Config) error {
+		args := append([]string{"--list-only", "-d", "-8"}, conn...)
+		return r.run(ctx, tool.Path, append(args, destination(c)), cfg.Password, func(string) {})
+	}
+	err := probe(cfg)
+	if kind, _, ok := KindOf(err); !ok || kind != KindPath {
+		return nil
+	}
+	parent := cfg
+	parent.Path = path.Dir(strings.TrimRight(cfg.Path, "/"))
+	if parent.Path == "." || parent.Path == "/" {
+		return nil
+	}
+	if kind, _, ok := KindOf(probe(parent)); ok && kind == KindPath {
+		return &Error{Kind: KindMkpath}
+	}
+	return nil
+}

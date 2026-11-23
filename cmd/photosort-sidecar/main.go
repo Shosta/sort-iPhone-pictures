@@ -155,6 +155,10 @@ type request struct {
 	Lang         string         `json:"lang"`
 	Remote       *remote.Config `json:"remote"`
 	DryRun       bool           `json:"dryRun"`
+	// RemoteDir is the folder to browse (remoteList), relative to the module.
+	RemoteDir      string `json:"remoteDir"`
+	RemoteRefresh  bool   `json:"remoteRefresh"`
+	RemoteNoDedupe bool   `json:"remoteNoDedupe"`
 }
 
 type event map[string]any
@@ -292,6 +296,8 @@ func (s *server) run(ctx context.Context, req request) error {
 		s.send(event{"id": req.ID, "type": "done", "copied": report.Copied, "total": total})
 	case "remoteTest":
 		return s.remoteTest(ctx, req)
+	case "remoteList":
+		return s.remoteList(ctx, req)
 	case "thumbnail":
 		return s.thumbnail(ctx, req)
 	case "tag":

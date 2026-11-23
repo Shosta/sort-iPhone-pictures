@@ -18,6 +18,20 @@ type recordingTransport struct {
 	err      error
 }
 
+func (x *recordingTransport) List(context.Context, remote.Config, string) (remote.Listing, error) {
+	return remote.Listing{}, nil
+}
+
+func (x *recordingTransport) ListTree(context.Context, remote.Config) ([]remote.RemoteFile, error) {
+	return nil, nil
+}
+
+func (x *recordingTransport) FetchIndex(context.Context, remote.Config) ([]byte, error) {
+	return nil, nil
+}
+
+func (x *recordingTransport) StoreIndex(context.Context, remote.Config, []byte) error { return nil }
+
 func (r *recordingTransport) Name() string { return "recording" }
 
 func (r *recordingTransport) Test(context.Context, remote.Config) (remote.TestResult, error) {

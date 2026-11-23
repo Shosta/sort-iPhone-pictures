@@ -61,6 +61,7 @@ func Stage(root string, items []Item) ([]Item, error) {
 			}
 		}
 		item.Size = info.Size()
+		item.ModTime = info.ModTime()
 		staged = append(staged, item)
 	}
 	return staged, nil

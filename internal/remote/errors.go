@@ -24,6 +24,7 @@ const (
 	KindDiskFull    Kind = "diskFull"
 	KindPermission  Kind = "permission"
 	KindPath        Kind = "path"
+	KindMkpath      Kind = "mkpath"
 	KindRemoteTool  Kind = "remoteRsync"
 	KindProtocol    Kind = "protocol"
 	KindUnknown     Kind = "unknown"

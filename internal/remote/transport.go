@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Protocol string
@@ -49,6 +50,11 @@ type Item struct {
 	Source string
 	Target string
 	Size   int64
+	// ModTime is the modification time of Source (rsync keeps it with -t).
+	ModTime time.Time
+	// Sidecar marks a tag file (.xmp) sent next to its photo; it is counted
+	// apart from the photos.
+	Sidecar bool
 }
 
 // Progress is a snapshot of a running upload.
@@ -82,6 +88,10 @@ type Result struct {
 	SentBytes int64 `json:"sentBytes"`
 	// Existing is the number of items already present remotely and left untouched.
 	Existing int `json:"existing"`
+	// Tags is the number of tag files (.xmp) sent, TagsExisting the number left
+	// alone because the NAS already had one (never overwritten).
+	Tags         int `json:"tags"`
+	TagsExisting int `json:"tagsExisting"`
 	// Mismatched lists remote files that already existed with different content
 	// (only filled when Config.Checksum is set); they are left untouched.
 	Mismatched []string `json:"mismatched,omitempty"`
@@ -106,10 +116,26 @@ type Transport interface {
 	Name() string
 	Test(ctx context.Context, cfg Config) (TestResult, error)
 	Upload(ctx context.Context, cfg Config, job Job) (Result, error)
+	// List returns the sub-folders of a folder of the remote server; with no
+	// module (daemon) it lists the modules. Nothing is written.
+	List(ctx context.Context, cfg Config, dir string) (Listing, error)
+	// ListTree lists every file of the remote library (cfg.Path), recursively.
+	ListTree(ctx context.Context, cfg Config) ([]RemoteFile, error)
+	// FetchIndex reads the fingerprint index kept in the library (nil if none).
+	FetchIndex(ctx context.Context, cfg Config) ([]byte, error)
+	// StoreIndex writes the fingerprint index into the library: the only file
+	// that is ever replaced remotely.
+	StoreIndex(ctx context.Context, cfg Config, data []byte) error
 }
 
 // Validate checks the configuration and fills defaults.
-func (c *Config) Validate() error {
+func (c *Config) Validate() error { return c.validate(false) }
+
+// ValidateBrowse is Validate for folder browsing: a daemon needs no module yet
+// (the modules themselves are listed).
+func (c *Config) ValidateBrowse() error { return c.validate(true) }
+
+func (c *Config) validate(browse bool) error {
 	c.Host = strings.TrimSpace(c.Host)
 	c.User = strings.TrimSpace(c.User)
 	c.Module = strings.Trim(strings.TrimSpace(c.Module), "/")
@@ -131,6 +157,10 @@ func (c *Config) Validate() error {
 	}
 	switch c.Protocol {
 	case Daemon:
+		if c.Module == "" && browse {
+			c.Path = ""
+			break
+		}
 		if c.Module == "" || strings.ContainsAny(c.Module, " /\\@:") || strings.HasPrefix(c.Module, "-") {
 			return configError("a module name is required")
 		}
@@ -139,7 +169,7 @@ func (c *Config) Validate() error {
 			return configError("invalid path")
 		}
 	case SSH:
-		if c.Path == "" || strings.HasPrefix(c.Path, "-") {
+		if (c.Path == "" && !browse) || strings.HasPrefix(c.Path, "-") {
 			return configError("a remote folder is required")
 		}
 	}
@@ -171,7 +201,7 @@ func (c Config) URL() string {
 	if c.Protocol == SSH {
 		return "ssh://" + userinfo + host + "/" + strings.TrimPrefix(c.Path, "/")
 	}
-	return "rsync://" + userinfo + host + "/" + c.Module + "/" + c.Path
+	return strings.TrimRight("rsync://"+userinfo+host+"/"+c.Module+"/"+c.Path, "/")
 }
 
 // ParseURL reads rsync://user@host[:port]/module[/path] (daemon) or
