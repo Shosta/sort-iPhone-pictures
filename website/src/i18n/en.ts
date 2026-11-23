@@ -62,6 +62,7 @@ export const en: Copy = {
       { name: 'Duplicates', latin: 'Gemini imago', text: 'Duplicates and near-duplicates are spotted, with near-duplicates filed separately.' },
       { name: 'Preferences', latin: 'Optio', text: 'Interface in French, English or Danish, several themes, an output folder of your choice.' },
       { name: 'The scrapbook', latin: 'Charta hebdomada', text: 'A weekly PDF to print, cut out and paste into your planner.' },
+      { name: 'Sorting to a NAS', latin: 'Nas remotus', text: 'Send straight to a NAS (QNAP…) with rsync: pick the shared folder (module), then the library sub-folder, with no duplicates and no deletion. See the guide.' },
     ],
   },
   shots: {

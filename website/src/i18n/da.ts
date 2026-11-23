@@ -62,6 +62,7 @@ export const da: Copy = {
       { name: 'Dubletter', latin: 'Gemini imago', text: 'Dubletter og næsten-dubletter opdages, og næsten-dubletter lægges for sig.' },
       { name: 'Indstillinger', latin: 'Optio', text: 'Grænseflade på fransk, engelsk eller dansk, flere temaer og en udmappe efter eget valg.' },
       { name: 'Scrapbogen', latin: 'Charta hebdomada', text: 'En ugentlig PDF til at printe, klippe ud og klistre ind i ugekalenderen.' },
+      { name: 'Sortering til et NAS', latin: 'Nas remotus', text: 'Send direkte til et NAS (QNAP…) med rsync: vælg den delte mappe (modul) og derefter bibliotekets undermappe, uden dubletter og uden sletning. Se guiden.' },
     ],
   },
   shots: {
