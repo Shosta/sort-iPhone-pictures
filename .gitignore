@@ -3,3 +3,5 @@
 /coverage.out
 /.local/
 .DS_Store
+# Binaires produits par `go test -c` ou `go test -cpuprofile`.
+*.test
