@@ -40,6 +40,9 @@ export interface Prefs {
   remotePath: string
   remoteKeyFile: string
   remoteChecksum: boolean
+  remoteDedupe: boolean
+  // Destinations already sent to; the first send to a new one proposes a simulation.
+  remoteUsed: string[]
   // true: password kept in the system keychain; false: asked again each session.
   remoteRemember: boolean
   language: Language
@@ -95,6 +98,8 @@ function load(): Prefs {
     remotePath: '',
     remoteKeyFile: '',
     remoteChecksum: false,
+    remoteDedupe: true,
+    remoteUsed: [],
     remoteRemember: false,
     language: detectLanguage(),
     theme: 'aurora'

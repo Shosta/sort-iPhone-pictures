@@ -147,6 +147,8 @@ interface RemoteSummary {
   existing?: number
   mismatched?: number
   mismatchedSample?: string[]
+  alreadyTotal?: number
+  tags?: number
   warnings?: string[]
 }
 interface RemoteProgress {
@@ -465,6 +467,7 @@ export function App(): JSX.Element {
 
   const sort = (simulate = false): void => {
     if (!plan) return
+    if (remote && !simulate && !prefs.remoteUsed.includes(remoteLabel(prefs)) && window.confirm(t('remote.firstTime'))) simulate = true
     dryRun.current = simulate
     setRemoteState(null)
     setError(null)
@@ -476,14 +479,18 @@ export function App(): JSX.Element {
     copiedTargets.current = []
     finishing.current = null
     credit.current = 0
-    running.current = request({ op: 'copy', planId: planId.current, ...(remote ? { remote: remoteConfig(prefs, remotePassword), dryRun: simulate } : {}) }, (event) => {
+    running.current = request({ op: 'copy', planId: planId.current, ...(remote ? { remote: remoteConfig(prefs, remotePassword), dryRun: simulate, remoteNoDedupe: !prefs.remoteDedupe, remoteRefresh: simulate } : {}) }, (event) => {
       if (event.type === 'progress') {
         buffer.current.push(event.entry)
         copiedTargets.current.push(`${plan.destination}/${event.entry.target}`)
       } else if (event.type === 'remoteProgress') {
         setRemoteState((state) => ({ ...(state ?? {}), progress: event }))
       } else if (event.type === 'done') {
-        if (event.remote) setRemoteState({ summary: event })
+        if (event.remote) {
+          setRemoteState({ summary: event })
+          const label = remoteLabel(prefs)
+          if (!event.dryRun && !prefs.remoteUsed.includes(label)) updatePrefs({ remoteUsed: [...prefs.remoteUsed, label] })
+        }
         // The tick finishes once every copied photo has been displayed.
         finishing.current = 'done'
       } else if (event.type === 'error') {
@@ -743,6 +750,8 @@ export function App(): JSX.Element {
             </motion.span>
           </AnimatePresence>
           {remoteState?.summary?.warnings?.includes('legacyRsync') && <span className="remote-warn">{t('remote.warn.legacyRsync')}</span>}
+          {(remoteState?.summary?.alreadyTotal ?? 0) > 0 && <span className="remote-warn">{t('remote.status.already', { n: remoteState?.summary?.alreadyTotal ?? 0 })}</span>}
+          {(remoteState?.summary?.tags ?? 0) > 0 && <span className="remote-warn">{t('remote.status.tags', { n: remoteState?.summary?.tags ?? 0 })}</span>}
           {(remoteState?.summary?.mismatched ?? 0) > 0 && (
             <span className="remote-warn">
               {t('remote.warn.mismatch', { n: remoteState?.summary?.mismatched ?? 0, sample: (remoteState?.summary?.mismatchedSample ?? [])[0] ?? '' })}
