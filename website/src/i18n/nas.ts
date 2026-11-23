@@ -31,6 +31,7 @@ export interface NasCopy {
   };
   test: { title: string; text: string; ok: string; pathMissing: string; error: string };
   dry: { title: string; text: string; result: string; then: string };
+  library: { toc: string; title: string; lead: string; items: { title: string; text: string }[] };
   safety: { title: string; items: { title: string; text: string }[] };
   trouble: {
     title: string;
@@ -62,6 +63,7 @@ const fr: NasCopy = {
       { id: 'pas-a-pas', label: 'Pas à pas' },
       { id: 'tester', label: 'Tester la connexion' },
       { id: 'simuler', label: 'Simuler' },
+      { id: 'dossier', label: 'Choisir le dossier' },
       { id: 'depannage', label: 'Dépannage' },
       { id: 'faq', label: 'FAQ' },
     ],
@@ -143,6 +145,18 @@ const fr: NasCopy = {
     result: 'À la fin, l’application indique : « Simulation terminée : X fichiers seraient envoyés, Y déjà présents. Rien n’a été écrit. »',
     then: 'Si le résultat vous convient, lancez le vrai tri.',
   },
+  library: {
+    toc: 'Choisir le dossier',
+    title: 'Choisir le dossier du NAS, éviter les doublons, étiquettes',
+    lead: 'Une fois la connexion testée, vous choisissez où la bibliothèque est rangée sur le NAS.',
+    items: [
+      { title: 'Parcourir le NAS', text: 'À côté du champ du dossier, le bouton « 📁 Parcourir… » liste les dossiers du NAS niveau par niveau. En mode daemon, si le module est vide, la liste commence par les dossiers partagés (modules) ; un clic en choisit un. Entrez dans les sous-dossiers, remontez avec « ⬆ Dossier parent », puis cliquez sur « Choisir ce dossier ». Un dossier inexistant est signalé : il sera créé à l’envoi (si votre rsync ne peut créer qu’un niveau à la fois, installez rsync via Homebrew sur Mac). Les dossiers techniques du NAS (corbeille @Recycle, miniatures) sont masqués.' },
+      { title: 'Ne pas renvoyer ce qui est déjà là', text: 'Avec « Ne pas renvoyer les photos déjà présentes sur le NAS » (coché par défaut), Photosort lit la bibliothèque du NAS et saute une photo si elle y est déjà : même chemin, même nom avec la même taille et la même date, ou même contenu (empreinte SHA-256 mémorisée dans un petit fichier .photosort-index.json à la racine de la bibliothèque), même si elle a été déplacée ou renommée sur le NAS. La liste du NAS est mise en cache ; elle est relue à chaque simulation. Le compte rendu indique combien de photos n’ont pas été renvoyées.' },
+      { title: 'Les étiquettes suivent les photos', text: 'Si une photo a un fichier d’étiquettes (.xmp à côté de l’original), il est envoyé avec elle. Un fichier d’étiquettes déjà présent sur le NAS n’est jamais remplacé.' },
+      { title: 'Garde-fous', text: 'Photosort n’efface jamais rien : ni sur le NAS, ni sur votre ordinateur (jamais d’option de suppression de rsync). Il n’écrit que dans le dossier choisi. La première fois que vous envoyez vers une destination, l’application propose de lancer d’abord une simulation.' },
+      { title: 'Module recommandé sur le QNAP', text: 'Sur le QNAP, le serveur rsync n’a qu’un seul utilisateur, qui ne peut pas être limité à un dossier. Créez donc un module qui ne pointe que vers le dossier de la bibliothèque photo, et non vers un volume entier : c’est le seul périmètre que Photosort pourra atteindre. Les photos restent sur l’ordinateur ; le NAS n’est qu’une destination.' },
+    ],
+  },
   safety: {
     title: 'Ce qui est garanti',
     items: [
@@ -156,6 +170,7 @@ const fr: NasCopy = {
     lead: 'Quand quelque chose ne va pas, Photosort affiche un message en clair, parfois suivi d’un détail technique entre parenthèses. Voici les plus courants, avec ce qu’il faut faire.',
     columns: { message: 'Message dans l’application', fix: 'Que faire' },
     items: [
+      { message: 'Cette version de rsync ne peut pas créer plusieurs niveaux de dossiers d’un coup.', fix: 'Créez le dossier sur le NAS, ou installez rsync via Homebrew (brew install rsync).' },
       { message: 'Identifiants refusés : mot de passe ou nom d’utilisateur incorrect (ou clé SSH non acceptée).', fix: 'Ressaisissez le mot de passe (attention aux majuscules et aux espaces) et vérifiez le nom d’utilisateur. Si vous venez de changer le mot de passe sur le NAS, mettez-le aussi à jour dans Photosort. En mode SSH, vérifiez que la clé est bien autorisée sur le NAS.' },
       { message: 'Le module rsync indiqué n’existe pas sur le NAS. Vérifiez son nom dans le service rsync du NAS.', fix: 'Le nom du module doit être identique à celui du NAS, majuscules comprises (« Photos » n’est pas « photos »). Relisez-le dans la configuration du serveur rsync du QNAP.' },
       { message: 'Adresse du NAS introuvable. Vérifiez son nom ou son adresse IP et que vous êtes sur le même réseau.', fix: 'Essayez l’adresse IP du NAS plutôt que son nom, et assurez-vous que l’ordinateur est sur le même réseau (même box, pas un Wi-Fi invité ni un VPN).' },
@@ -204,6 +219,7 @@ const en: NasCopy = {
       { id: 'pas-a-pas', label: 'Step by step' },
       { id: 'tester', label: 'Test the connection' },
       { id: 'simuler', label: 'Simulate' },
+      { id: 'dossier', label: 'Choosing the folder' },
       { id: 'depannage', label: 'Troubleshooting' },
       { id: 'faq', label: 'FAQ' },
     ],
@@ -285,6 +301,18 @@ const en: NasCopy = {
     result: 'At the end, the app says: “Simulation finished: X files would be sent, Y already there. Nothing was written.”',
     then: 'If the result looks right, start the real sort.',
   },
+  library: {
+    toc: 'Choosing the folder',
+    title: 'Choosing the NAS folder, avoiding duplicates, tags',
+    lead: 'Once the connection works, you choose where the library is stored on the NAS.',
+    items: [
+      { title: 'Browsing the NAS', text: 'Next to the folder field, the “📁 Browse…” button lists the NAS folders one level at a time. In daemon mode, when the module is empty, the list starts with the shared folders (modules); click one to pick it. Enter sub-folders, go back with “⬆ Parent folder”, then click “Choose this folder”. A missing folder is flagged: it will be created when sending (if your rsync can only create one level at a time, install rsync with Homebrew on Mac). The NAS’s technical folders (@Recycle bin, thumbnails) are hidden.' },
+      { title: 'Not resending what is already there', text: 'With “Do not resend photos already on the NAS” (on by default), Photosort reads the NAS library and skips a photo that is already there: same path, same name with the same size and date, or same content (a SHA-256 fingerprint kept in a small .photosort-index.json file at the library root), even if it was moved or renamed on the NAS. The NAS listing is cached; it is read again on every simulation. The report says how many photos were not resent.' },
+      { title: 'Tags travel with the photos', text: 'If a photo has a tag file (.xmp next to the original), it is sent along with it. A tag file already on the NAS is never replaced.' },
+      { title: 'Safeguards', text: 'Photosort never deletes anything: neither on the NAS nor on your computer (rsync’s delete options are never used). It only writes inside the chosen folder. The first time you send to a destination, the app offers to run a simulation first.' },
+      { title: 'Recommended module on the QNAP', text: 'On the QNAP the rsync server has a single user, which cannot be limited to one folder. So create a module that points only to the photo library folder, not a whole volume: that is the only area Photosort can reach. Photos stay on the computer; the NAS is only a destination.' },
+    ],
+  },
   safety: {
     title: 'What is guaranteed',
     items: [
@@ -298,6 +326,7 @@ const en: NasCopy = {
     lead: 'When something goes wrong, Photosort shows a plain message, sometimes followed by a technical detail in brackets. Here are the most common ones, and what to do.',
     columns: { message: 'Message in the app', fix: 'What to do' },
     items: [
+      { message: 'This version of rsync cannot create several folder levels at once.', fix: 'Create the folder on the NAS, or install rsync with Homebrew (brew install rsync).' },
       { message: 'Credentials refused: wrong password or user name (or SSH key not accepted).', fix: 'Type the password again (mind capitals and spaces) and check the user name. If you just changed the password on the NAS, update it in Photosort too. In SSH mode, check that the key is authorised on the NAS.' },
       { message: 'The rsync module does not exist on the NAS. Check its name in the NAS rsync service.', fix: 'The module name must be identical to the one on the NAS, capitals included (“Photos” is not “photos”). Read it again in the QNAP rsync server settings.' },
       { message: 'NAS address not found. Check its name or IP address and that you are on the same network.', fix: 'Try the NAS IP address instead of its name, and make sure the computer is on the same network (same router, not a guest Wi-Fi or a VPN).' },
@@ -346,6 +375,7 @@ const da: NasCopy = {
       { id: 'pas-a-pas', label: 'Trin for trin' },
       { id: 'tester', label: 'Test forbindelsen' },
       { id: 'simuler', label: 'Simulér' },
+      { id: 'dossier', label: 'Vælg mappen' },
       { id: 'depannage', label: 'Fejlfinding' },
       { id: 'faq', label: 'FAQ' },
     ],
@@ -427,6 +457,18 @@ const da: NasCopy = {
     result: 'Til sidst siger programmet: “Simulering færdig: X filer ville blive sendt, Y findes allerede. Intet blev skrevet.”',
     then: 'Ser resultatet rigtigt ud, så start den rigtige sortering.',
   },
+  library: {
+    toc: 'Vælg mappen',
+    title: 'Vælg NAS-mappen, undgå dubletter, tags',
+    lead: 'Når forbindelsen virker, vælger du, hvor biblioteket skal ligge på NAS’et.',
+    items: [
+      { title: 'Gennemse NAS’et', text: 'Ved siden af mappefeltet viser knappen “📁 Gennemse…” NAS’ets mapper ét niveau ad gangen. I daemon-tilstand starter listen med de delte mapper (moduler), hvis modulet er tomt; klik på et for at vælge det. Gå ind i undermapper, gå tilbage med “⬆ Overmappe”, og klik på “Vælg denne mappe”. En manglende mappe markeres: den oprettes ved afsendelse (kan din rsync kun oprette ét niveau ad gangen, så installer rsync med Homebrew på Mac). NAS’ets tekniske mapper (papirkurven @Recycle, miniaturer) skjules.' },
+      { title: 'Send ikke igen, hvad der allerede er der', text: 'Med “Send ikke billeder igen, som allerede er på NAS’et” (slået til som standard) læser Photosort NAS-biblioteket og springer et billede over, hvis det allerede findes: samme sti, samme navn med samme størrelse og dato, eller samme indhold (et SHA-256-fingeraftryk i en lille fil .photosort-index.json i bibliotekets rod), selv hvis det er flyttet eller omdøbt på NAS’et. NAS-listen gemmes i cache og læses igen ved hver simulering. Rapporten viser, hvor mange billeder der ikke blev sendt igen.' },
+      { title: 'Tags følger billederne', text: 'Har et billede en tag-fil (.xmp ved siden af originalen), sendes den med. En tag-fil, der allerede findes på NAS’et, erstattes aldrig.' },
+      { title: 'Sikkerhed', text: 'Photosort sletter aldrig noget: hverken på NAS’et eller på din computer (rsyncs slette-indstillinger bruges aldrig). Der skrives kun i den valgte mappe. Første gang du sender til en destination, foreslår appen at køre en simulering først.' },
+      { title: 'Anbefalet modul på QNAP', text: 'På QNAP har rsync-serveren kun én bruger, som ikke kan begrænses til én mappe. Opret derfor et modul, der kun peger på fotobibliotekets mappe, ikke et helt drev: det er det eneste område, Photosort kan nå. Billederne bliver på computeren; NAS’et er kun en destination.' },
+    ],
+  },
   safety: {
     title: 'Hvad der er garanteret',
     items: [
@@ -440,6 +482,7 @@ const da: NasCopy = {
     lead: 'Når noget går galt, viser Photosort en forståelig besked, nogle gange efterfulgt af en teknisk detalje i parentes. Her er de hyppigste, og hvad du skal gøre.',
     columns: { message: 'Besked i programmet', fix: 'Hvad du skal gøre' },
     items: [
+      { message: 'Denne version af rsync kan ikke oprette flere mappeniveauer på én gang.', fix: 'Opret mappen på NAS’et, eller installer rsync med Homebrew (brew install rsync).' },
       { message: 'Loginoplysninger afvist: forkert adgangskode eller brugernavn (eller SSH-nøglen blev ikke accepteret).', fix: 'Skriv adgangskoden igen (pas på store bogstaver og mellemrum), og kontrollér brugernavnet. Har du lige ændret adgangskoden på NAS’et, så opdatér den også i Photosort. I SSH-tilstand: kontrollér, at nøglen er godkendt på NAS’et.' },
       { message: 'rsync-modulet findes ikke på NAS’et. Kontrollér navnet i NAS’ets rsync-tjeneste.', fix: 'Modulnavnet skal være identisk med det på NAS’et, med store og små bogstaver (“Photos” er ikke “photos”). Læs det igen i QNAP’ens rsync-serverindstillinger.' },
       { message: 'NAS-adressen blev ikke fundet. Kontrollér navn eller IP-adresse, og at du er på samme netværk.', fix: 'Prøv NAS’ets IP-adresse i stedet for navnet, og sørg for, at computeren er på samme netværk (samme router, ikke gæste-Wi-Fi eller VPN).' },

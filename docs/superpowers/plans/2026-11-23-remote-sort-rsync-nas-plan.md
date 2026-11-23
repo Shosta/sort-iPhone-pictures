@@ -28,39 +28,39 @@ Déjà livré dans `main` : `internal/remote` (interface `Transport`, rsync, mis
 
 ## Phase 1 — Sélecteur de dossier distant
 
-- [ ] `internal/remote` : `ListDir(ctx, target, path)` fondé sur `rsync --list-only` (sans récursion, `-d`) ; analyse de la sortie (nom, type, taille, date) ; premier niveau = liste des modules du daemon.
-- [ ] Op sidecar `remoteList` ; erreurs réutilisant les messages existants (mot de passe, module inconnu, hôte injoignable).
-- [ ] UI : navigateur niveau par niveau dans `RemotePanel` (ouverture à la demande, chemin courant, bouton « Choisir ce dossier »), indicateur de chargement, annulation.
-- [ ] **Dossier favori** : dernier dossier mémorisé dans les préférences.
-- [ ] **Création de dossier** : un dossier de départ à plusieurs niveaux demande `--mkpath` (rsync ≥ 3.2.3) ; sinon, message clair invitant à installer le rsync Homebrew.
-- [ ] Tests : sortie rsync simulée (faux exécutable) ; i18n FR/EN/DA.
+- [x] `internal/remote` : `ListDir(ctx, target, path)` fondé sur `rsync --list-only` (sans récursion, `-d`) ; analyse de la sortie (nom, type, taille, date) ; premier niveau = liste des modules du daemon.
+- [x] Op sidecar `remoteList` ; erreurs réutilisant les messages existants (mot de passe, module inconnu, hôte injoignable).
+- [x] UI : navigateur niveau par niveau dans `RemotePanel` (ouverture à la demande, chemin courant, bouton « Choisir ce dossier »), indicateur de chargement, annulation.
+- [x] **Dossier favori** : dernier dossier mémorisé dans les préférences.
+- [x] **Création de dossier** : un dossier de départ à plusieurs niveaux demande `--mkpath` (rsync ≥ 3.2.3) ; sinon, message clair invitant à installer le rsync Homebrew.
+- [x] Tests : sortie rsync simulée (faux exécutable) ; i18n FR/EN/DA.
 
 **Point à vérifier sur le NAS** : si le module QNAP pointe sur tout le partage, le sélecteur voit tout ce qui est dessous. Conseil : un module qui ne pointe que sur la bibliothèque.
 
 ## Phase 2 — Dédoublonnage vers la bibliothèque distante
 
-- [ ] Liste de la bibliothèque : `rsync --list-only -r` sur le dossier choisi (nom, taille, date) ; mise en cache locale, avec une durée de validité.
-- [ ] Une photo est **ignorée** si la bibliothèque contient déjà un fichier au même chemin de destination, ou du même nom, de la même taille et de la même date de prise de vue (empreinte plus fine plus bas).
-- [ ] **Index d'empreintes** : fichier léger (SHA-256, taille, date) des photos envoyées, tenu en local et copié sur le NAS ; détecte un doublon rangé ailleurs ou renommé.
-- [ ] Rapport avant envoi : à envoyer / déjà présentes / ignorées, visible aussi en simulation.
-- [ ] Tests : bibliothèque simulée avec chemins identiques, renommés, déplacés.
+- [x] Liste de la bibliothèque : `rsync --list-only -r` sur le dossier choisi (nom, taille, date) ; mise en cache locale, avec une durée de validité.
+- [x] Une photo est **ignorée** si la bibliothèque contient déjà un fichier au même chemin de destination, ou du même nom, de la même taille et de la même date de prise de vue (empreinte plus fine plus bas).
+- [x] **Index d'empreintes** : fichier léger (SHA-256, taille, date) des photos envoyées, tenu en local et copié sur le NAS ; détecte un doublon rangé ailleurs ou renommé.
+- [x] Rapport avant envoi : à envoyer / déjà présentes / ignorées, visible aussi en simulation.
+- [x] Tests : bibliothèque simulée avec chemins identiques, renommés, déplacés.
 
 ## Phase 3 — Tags
 
-- [ ] Vérifier d'abord **où les tags sont stockés** aujourd'hui (`internal/tagger`).
-- [ ] Les envoyer avec les photos, par rsync : fichiers à côté des photos (XMP) ou fichier d'index, au choix après vérification.
-- [ ] Ne jamais écraser des tags déjà présents sur le NAS sans le dire.
+- [x] Vérifier d'abord **où les tags sont stockés** aujourd'hui (`internal/tagger`).
+- [x] Les envoyer avec les photos, par rsync : fichiers à côté des photos (XMP) ou fichier d'index, au choix après vérification.
+- [x] Ne jamais écraser des tags déjà présents sur le NAS sans le dire.
 
 ## Phase 4 — Garde-fous (D4, D5)
 
-- [ ] Fonction unique qui construit les arguments rsync ; liste blanche d'options.
-- [ ] **Test automatique** : aucune commande générée ne contient `--delete*` ni `--remove-source-files`.
-- [ ] La simulation (`--dry-run`) est proposée avant le premier envoi vers une nouvelle destination.
-- [ ] Écriture uniquement sous le dossier choisi comme bibliothèque.
+- [x] Fonction unique qui construit les arguments rsync ; liste blanche d'options.
+- [x] **Test automatique** : aucune commande générée ne contient `--delete*` ni `--remove-source-files`.
+- [x] La simulation (`--dry-run`) est proposée avant le premier envoi vers une nouvelle destination.
+- [x] Écriture uniquement sous le dossier choisi comme bibliothèque.
 
 ## Phase 5 — Guide du site
 
-- [ ] Mettre à jour la page `tri-distant` (FR/EN/DA) : choix du dossier distant, dédoublonnage, tags, garde-fous, module QNAP conseillé, limite d'un seul utilisateur.
+- [x] Mettre à jour la page `tri-distant` (FR/EN/DA) : choix du dossier distant, dédoublonnage, tags, garde-fous, module QNAP conseillé, limite d'un seul utilisateur.
 
 ## Phase 6 — Recette sur le QNAP `[intervention de l'utilisateur]`
 
