@@ -15,7 +15,7 @@ import { I18nContext, makeTranslate, type Translate } from './i18n'
 import { usePrefs } from './prefs'
 import { applyTheme, themeById } from './themes'
 import { cachedThumbnail, onFatal, request } from './sidecar'
-import type { Duplicate, Entry, Phase, Plan, TagJob, TagResult } from './types'
+import type { AssetsState, Duplicate, Entry, Phase, Plan, TagJob, TagResult } from './types'
 
 /** Thumbnails shown per destination folder in the "Sorted" panel. */
 const PER_FOLDER = 24
@@ -151,8 +151,13 @@ export function App(): JSX.Element {
   const [showTravelMap, setShowTravelMap] = useState(false)
   const [tagScope, setTagScope] = useState<string[] | null>(null)
   const accent = themeById(prefs.theme).vars.accent
+  const [assets, setAssets] = useState<AssetsState>({ state: 'checking' })
   useEffect(() => applyTheme(prefs.theme), [prefs.theme])
   useEffect(() => window.photosort.setMenuLabels({ preferences: `${t('prefs')}…`, tags: `${t('tags')}…`, scrapbook: `${t('scrap')}…` }), [t])
+  useEffect(() => {
+    void window.photosort.getAssets().then(setAssets)
+    return window.photosort.onAssets(setAssets)
+  }, [])
   useEffect(() => window.photosort.onPreferences(() => setShowPrefs(true)), [])
   useEffect(() => window.photosort.onScrapbook(() => setShowScrapbook(true)), [])
   useEffect(
@@ -732,6 +737,7 @@ export function App(): JSX.Element {
         {showTags && (
           <TagsPanel
             job={tagJob}
+            assets={assets}
             prefs={prefs}
             scope={tagScope}
             busy={busy}

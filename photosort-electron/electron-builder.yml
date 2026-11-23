@@ -11,9 +11,6 @@ extraResources:
   - from: resources/bin/
     to: bin/
     filter: ["**/*"]
-  - from: ai-assets/
-    to: ai/
-    filter: ["**/*"]
 icon: resources/icon.png
 afterPack: scripts/after-pack.cjs
 mac:

@@ -247,3 +247,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .travel-trips { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
 .travel-trip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
 .travel-trip.on { outline: 2px solid var(--accent); }
+
+.assets-error p { margin: 0 0 6px; }
+.assets-error .info { background: none; border: 0; color: inherit; cursor: pointer; font-size: 15px; padding: 0 2px; opacity: 0.85; }
+.assets-error .diagnostic { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); font-size: 12px; white-space: pre-wrap; word-break: break-all; user-select: text; }

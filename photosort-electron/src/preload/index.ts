@@ -26,6 +26,13 @@ const api = {
     ipcRenderer.on('menu:scrapbook', listener)
     return () => ipcRenderer.removeListener('menu:scrapbook', listener)
   },
+  getAssets: (): Promise<any> => ipcRenderer.invoke('assets:get'),
+  retryAssets: (): Promise<void> => ipcRenderer.invoke('assets:retry'),
+  onAssets: (callback: (state: any) => void): (() => void) => {
+    const listener = (_: unknown, state: any): void => callback(state)
+    ipcRenderer.on('assets:state', listener)
+    return () => ipcRenderer.removeListener('assets:state', listener)
+  },
   downloadsDir: (): Promise<string> => ipcRenderer.invoke('app:downloadsDir'),
   openPath: (path: string): Promise<string> => ipcRenderer.invoke('shell:reveal', path)
 }

@@ -185,3 +185,13 @@ export interface TravelLayout {
   stops: TravelStop[]
   distanceKm: number
 }
+
+export interface AssetsState {
+  state: 'checking' | 'downloading' | 'ready' | 'error'
+  file?: string
+  index?: number
+  total?: number
+  received?: number
+  size?: number
+  error?: { file: string; url: string; reason: string; dir: string }
+}

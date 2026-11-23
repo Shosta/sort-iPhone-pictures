@@ -3,12 +3,13 @@ import { useState } from 'react'
 import { useT } from '../i18n'
 import type { Prefs } from '../prefs'
 import { themeById } from '../themes'
-import type { TagJob } from '../types'
+import type { AssetsState, TagJob } from '../types'
 import { Switch } from './Preferences'
 import { Thumb } from './Thumb'
 
 interface Props {
   job: TagJob | null
+  assets: AssetsState
   prefs: Prefs
   /** Photos of the last sort, when the panel was opened from its link. */
   scope: string[] | null
@@ -26,7 +27,7 @@ function duration(seconds: number): string {
   return `${Math.floor(seconds / 3600)} h ${Math.round((seconds % 3600) / 60)} min`
 }
 
-export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onStart, onCancel, onClose }: Props): JSX.Element {
+export function TagsPanel({ job, assets, prefs, scope, busy, onChange, onClearScope, onStart, onCancel, onClose }: Props): JSX.Element {
   const t = useT()
   const accent = themeById(prefs.theme).vars.accent
   const [folder, setFolder] = useState(() => (job && !job.files ? job.folder : prefs.destination))
@@ -36,6 +37,20 @@ export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onS
   const elapsed = job ? (performance.now() - job.started) / 1000 : 0
   const remaining = job && job.state === 'running' && job.done >= 3 ? (elapsed / job.done) * (job.total - job.done) : null
   const counts = job ? Object.entries(job.counts).sort((a, b) => b[1] - a[1]) : []
+
+  const [showDetails, setShowDetails] = useState(false)
+  const mb = (bytes: number): string => `${(bytes / 1048576).toFixed(1)} MB`
+  const downloading = assets.state === 'checking' || assets.state === 'downloading'
+  const ready = assets.state === 'ready'
+  const fraction =
+    assets.size && assets.received !== undefined && assets.total
+      ? ((assets.index ?? 1) - 1 + assets.received / assets.size) / assets.total
+      : assets.total
+        ? ((assets.index ?? 1) - 1) / assets.total
+        : 0
+  const diagnostic = assets.error
+    ? [`File: ${assets.error.file}`, `URL: ${assets.error.url || '-'}`, `Reason: ${assets.error.reason}`, `Target folder: ${assets.error.dir}`].join('\n')
+    : ''
 
   const kind = (key: 'tagScenes' | 'tagMoment' | 'tagPeople' | 'tagMeta'): JSX.Element => (
     <label className={`toggle ${running ? 'disabled' : ''}`}>
@@ -55,6 +70,39 @@ export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onS
         onClick={(event) => event.stopPropagation()}
       >
         <h2>🏷️ {t('tags')}</h2>
+
+        {downloading && (
+          <div className="field assets">
+            <div className="progress">
+              <i style={{ width: `${fraction * 100}%` }} />
+            </div>
+            <p className="muted">
+              {t('assets.downloading', { index: assets.index ?? 0, total: assets.total ?? 0, file: assets.file ?? '…' })}
+              {assets.size ? ` · ${mb(assets.received ?? 0)} / ${mb(assets.size)}` : ''}
+              {fraction > 0 ? ` · ${Math.round(fraction * 100)} %` : ''}
+            </p>
+          </div>
+        )}
+        {assets.state === 'error' && assets.error && (
+          <div className="field assets-error">
+            <p>
+              ⚠️ {t('assets.failed')}{' '}
+              <button className="info" aria-expanded={showDetails} aria-label={t('assets.details')} onClick={() => setShowDetails((v) => !v)}>
+                ⓘ
+              </button>
+            </p>
+            {showDetails && <pre className="diagnostic">{diagnostic}</pre>}
+            <p className="hint">{assets.error.reason}</p>
+            <div className="row">
+              <button className="btn" onClick={() => void window.photosort.retryAssets()}>
+                {t('assets.retry')}
+              </button>
+              <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(diagnostic)}>
+                {t('assets.copy')}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="field">
           <label>{t('tags.folder')}</label>
@@ -150,7 +198,7 @@ export function TagsPanel({ job, prefs, scope, busy, onChange, onClearScope, onS
               {t('cancel')}
             </button>
           ) : (
-            <button className="btn primary" disabled={busy || !kinds || (!scope && !folder.trim())} onClick={() => onStart(folder.trim())}>
+            <button className="btn primary" disabled={busy || !ready || !kinds || (!scope && !folder.trim())} onClick={() => onStart(folder.trim())}>
               {t('tags.start')}
             </button>
           )}

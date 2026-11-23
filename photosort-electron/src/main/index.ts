@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, 
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { type AssetsState, assetsComplete, ensureAssets } from './assets'
 
 app.setName('Photosort')
 
@@ -15,8 +16,32 @@ function sidecarPath(): string {
     : join(app.getAppPath(), 'resources', 'bin', name)
 }
 
-function aiDir(): string {
+function bundledAiDir(): string {
   return app.isPackaged ? join(process.resourcesPath, 'ai') : join(app.getAppPath(), 'ai-assets')
+}
+
+// Models bundled with the app win; otherwise they live in (and are downloaded to) userData.
+function aiDir(): string {
+  return assetsComplete(bundledAiDir()) ? bundledAiDir() : join(app.getPath('userData'), 'ai')
+}
+
+let assets: AssetsState = { state: 'checking' }
+let provisioning = false
+
+function setAssets(next: AssetsState): void {
+  assets = next
+  broadcast('assets:state', assets)
+}
+
+async function provisionAssets(): Promise<void> {
+  if (provisioning) return
+  if (assetsComplete(bundledAiDir())) return setAssets({ state: 'ready' })
+  provisioning = true
+  try {
+    await ensureAssets(join(app.getPath('userData'), 'ai'), setAssets)
+  } finally {
+    provisioning = false
+  }
 }
 
 function broadcast(channel: string, payload: unknown): void {
@@ -81,6 +106,9 @@ ipcMain.handle('dialog:pickFolder', async (_event, title: string) => {
 
 ipcMain.handle('shell:reveal', (_event, path: string) => shell.openPath(path))
 
+ipcMain.handle('assets:get', () => assets)
+ipcMain.handle('assets:retry', () => provisionAssets())
+
 ipcMain.handle('app:downloadsDir', () => app.getPath('downloads'))
 
 interface MenuLabels {
@@ -119,10 +147,11 @@ function buildMenu(labels: MenuLabels): void {
 
 ipcMain.on('menu:labels', (_event, labels: MenuLabels) => buildMenu(labels))
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   buildMenu({ preferences: 'Preferences…', tags: 'AI tags…', scrapbook: 'Weekly planner sheet…' })
-  startSidecar()
   createWindow()
+  void provisionAssets()
+  startSidecar()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

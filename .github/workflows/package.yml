@@ -32,7 +32,7 @@ jobs:
             goos: darwin
             goarch: arm64
             builder: --mac --arm64
-          # ONNX Runtime n'est pas publié pour macOS Intel : l'étiquetage IA y est désactivé.
+          # ONNX Runtime n'est pas publié pour macOS Intel : l'étiquetage IA y est indisponible.
           - name: macOS (Intel)
             artifact: macos-x64
             os: macos-15-intel
@@ -84,7 +84,8 @@ jobs:
       - name: Vérifier les types
         run: npm run typecheck
 
-      # Compile le sidecar Go, télécharge les modèles IA (sha256 vérifié) puis construit l'interface.
+      # Compile le sidecar Go puis construit l'interface. Les modèles IA ne sont pas embarqués :
+      # l'application les télécharge au premier lancement (sha256 vérifié).
       - name: Construire le sidecar et l'interface
         run: npm run build
 
