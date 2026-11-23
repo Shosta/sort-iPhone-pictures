@@ -1,0 +1,32 @@
+---
+// Une capture d'écran posée comme un tirage. Sans fichier, un emplacement propre.
+import { Image } from 'astro:assets';
+
+interface Props {
+  name: string;
+  alt: string;
+  caption: string;
+  pending: string;
+  tilt?: number;
+  class?: string;
+}
+const { name, alt, caption, pending, tilt = 0, class: className = '' } = Astro.props;
+
+const modules = import.meta.glob<{ default: ImageMetadata }>('../assets/screenshots/*.{png,jpg,jpeg,webp}', { eager: true });
+const match = Object.entries(modules).find(([path]) => path.split('/').pop()?.replace(/\.[^.]+$/, '') === name);
+const image = match?.[1].default;
+---
+
+<figure class={`print ${className}`} style={`--tilt:${tilt}deg`}>
+  <span class="tape" aria-hidden="true"></span>
+  {
+    image ? (
+      <Image src={image} alt={alt} widths={[480, 800, 1200]} sizes="(min-width: 900px) 40vw, 90vw" format="webp" loading="lazy" />
+    ) : (
+      <div class="print-empty" data-placeholder={name}>
+        <span>{pending}</span>
+      </div>
+    )
+  }
+  <figcaption>{caption}</figcaption>
+</figure>

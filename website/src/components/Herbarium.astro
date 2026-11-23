@@ -1,0 +1,100 @@
+---
+// Plantes séchées dessinées en SVG, très discrètes : elles décorent les marges.
+interface Props {
+  variant: 'fern' | 'ginkgo' | 'oak' | 'grass';
+  class?: string;
+}
+const { variant, class: className = '' } = Astro.props;
+
+const round = (n: number) => Math.round(n * 10) / 10;
+
+function fernLeaflets(length: number, pairs: number) {
+  const items: { x: number; y: number; angle: number; size: number; width: number }[] = [];
+  for (let i = 1; i <= pairs; i += 1) {
+    const t = i / (pairs + 1);
+    const y = -length * t;
+    const size = 70 * Math.sin(Math.PI * Math.min(1, 0.18 + 0.85 * (1 - t))) * (1 - t * 0.55);
+    for (const side of [-1, 1]) {
+      items.push({ x: round(Math.sin(t * 2.2) * -6), y: round(y), angle: side * (62 - t * 24), size: round(size), width: round(size * 0.2) });
+    }
+  }
+  return items;
+}
+
+const fern = fernLeaflets(300, 15);
+const grass = [
+  { d: 'M0 0 C-4 -70 -22 -130 -42 -190', ex: -42, ey: -190, seeds: 7, dir: -1 },
+  { d: 'M0 0 C2 -80 8 -140 22 -196', ex: 22, ey: -196, seeds: 6, dir: 1 },
+  { d: 'M0 0 C8 -60 30 -110 52 -150', ex: 52, ey: -150, seeds: 5, dir: 1 },
+];
+---
+
+{
+  variant === 'fern' && (
+    <svg class={`herb herb--fern ${className}`} viewBox="-90 -330 180 340" aria-hidden="true" focusable="false">
+      <path d="M0 0 C6 -90 -6 -210 0 -312" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+      {fern.map((l) => (
+        <path
+          transform={`translate(${l.x} ${l.y}) rotate(${l.angle - 90})`}
+          d={`M0 0 Q${l.size / 2} ${-l.width} ${l.size} 0 Q${l.size / 2} ${l.width} 0 0Z`}
+          fill="currentColor"
+          fill-opacity=".35"
+          stroke="currentColor"
+          stroke-width="1"
+        />
+      ))}
+    </svg>
+  )
+}
+
+{
+  variant === 'ginkgo' && (
+    <svg class={`herb herb--ginkgo ${className}`} viewBox="-70 -90 140 160" aria-hidden="true" focusable="false">
+      <path d="M0 62 C1 40 0 20 0 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <path
+        d="M0 0 C-20 -10 -56 -30 -54 -62 C-42 -76 -22 -76 -4 -66 L0 -58 L4 -66 C22 -76 42 -76 54 -62 C56 -30 20 -10 0 0Z"
+        fill="currentColor"
+        fill-opacity=".3"
+        stroke="currentColor"
+        stroke-width="1.2"
+      />
+      {[-48, -36, -24, -12, 0, 12, 24, 36, 48].map((x) => (
+        <path d={`M0 0 L${x} ${-60 + Math.abs(x) * 0.1}`} stroke="currentColor" stroke-width=".7" fill="none" />
+      ))}
+    </svg>
+  )
+}
+
+{
+  variant === 'oak' && (
+    <svg class={`herb herb--oak ${className}`} viewBox="-45 -100 90 120" aria-hidden="true" focusable="false">
+      <path d="M0 18 L0 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <path
+        d="M0 0 C-6 -10 -18 -12 -20 -22 C-30 -22 -30 -34 -22 -38 C-32 -44 -24 -56 -14 -54 C-18 -66 -6 -74 0 -86 C6 -74 18 -66 14 -54 C24 -56 32 -44 22 -38 C30 -34 30 -22 20 -22 C18 -12 6 -10 0 0Z"
+        fill="currentColor"
+        fill-opacity=".3"
+        stroke="currentColor"
+        stroke-width="1.2"
+      />
+      <path d="M0 0 L0 -80 M0 -18 L-16 -30 M0 -18 L16 -30 M0 -38 L-18 -48 M0 -38 L18 -48 M0 -56 L-10 -64 M0 -56 L10 -64" stroke="currentColor" stroke-width=".7" fill="none" />
+    </svg>
+  )
+}
+
+{
+  variant === 'grass' && (
+    <svg class={`herb herb--grass ${className}`} viewBox="-70 -210 140 220" aria-hidden="true" focusable="false">
+      {grass.map((stem) => (
+        <g>
+          <path d={stem.d} fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          {Array.from({ length: stem.seeds }, (_, i) => {
+            const t = 0.45 + (i / stem.seeds) * 0.55;
+            const x = round(stem.ex * t);
+            const y = round(stem.ey * t);
+            return <ellipse cx={x + stem.dir * 5} cy={y} rx="2.6" ry="6.5" transform={`rotate(${stem.dir * 28} ${x} ${y})`} fill="currentColor" fill-opacity=".4" stroke="currentColor" stroke-width=".8" />;
+          })}
+        </g>
+      ))}
+    </svg>
+  )
+}

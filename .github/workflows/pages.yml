@@ -1,0 +1,66 @@
+name: Deploy website
+
+# Site de présentation (website/) publié sur GitHub Pages.
+# Réglage unique : Settings > Pages > Build and deployment > Source : GitHub Actions.
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    env:
+      PUBLIC_REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: website/.nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      # Site de projet : https://<compte>.github.io/<depot>/. Un dépôt nommé <compte>.github.io est servi à la racine.
+      - name: Déterminer l'adresse de publication
+        run: |
+          REPO="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          echo "ASTRO_SITE=https://${OWNER}.github.io" >> "$GITHUB_ENV"
+          case "$REPO" in
+            *.github.io) echo "ASTRO_BASE=/" >> "$GITHUB_ENV" ;;
+            *) echo "ASTRO_BASE=/${REPO}" >> "$GITHUB_ENV" ;;
+          esac
+
+      - run: npm ci
+
+      # `npm test` compile le site puis vérifie ancres, ressources et métadonnées.
+      - run: npm test
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

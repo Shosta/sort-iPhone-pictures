@@ -1,0 +1,115 @@
+import type { Copy } from './types';
+
+export const en: Copy = {
+  htmlLang: 'en',
+  ogLocale: 'en_GB',
+  languageName: 'English',
+  meta: {
+    title: 'Photosort — Sort your iPhone photos by date and find them again with tags',
+    description:
+      'Photosort sorts thousands of loose iPhone photos by the date they were taken and adds tags so you can find them again, with no cloud. As a bonus, a scrapbook PDF for your weekly planner. Open source, for macOS, Linux and Windows.',
+  },
+  skip: 'Skip to content',
+  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', remote: 'Remote sort', languages: 'Language' },
+  hero: {
+    eyebrow: 'Open source · local · no account',
+    titleA: 'Thousands of loose iPhone photos,',
+    titleB: 'sorted by date and easy to find.',
+    lead: 'Photosort files your photos by the date they were taken, adds tags so you can find them in a blink, and spots duplicates. It all happens on your own computer, with nothing sent to the cloud. As a bonus, generate in one click a page of your photos to print, cut out and paste into your scrapbooking notebook.',
+    ctaHow: 'See the sorting',
+    ctaDownload: 'Download',
+    note: 'macOS · Linux · Windows — your originals are never modified',
+    sheetAlt: 'Illustration of an A4 scrapbook sheet: photos in different formats, separated by cutting lines.',
+    sheetCaption: 'Bonus · the planner PDF',
+  },
+  stamp: { top: 'PHOTOSORT', main: 'NO CLOUD', bottom: '100% LOCAL' },
+  scrapbook: {
+    eyebrow: 'Then: the scrapbook',
+    title: 'From a sorted folder to a planner page.',
+    lead: 'Once your photos are sorted, the scrapbook is a small bonus. Keep a paper weekly planner? Pick a week in a calendar, tick the photos you want, and Photosort produces a print-ready PDF. All that is left is to cut and paste.',
+    steps: [
+      { title: 'Pick the week', text: 'A Monday-to-Sunday calendar. Days that contain photos are marked.' },
+      { title: 'Tick your photos', text: 'None are ticked at first: you keep only the ones that matter.' },
+      { title: 'Print and cut', text: 'The PDF opens by itself. Print at 100%, follow the lines, paste.' },
+    ],
+    facts: [
+      { label: 'Page', value: 'A4 landscape (A4 portrait and Letter optional)' },
+      { label: 'Size', value: '6.5 cm on the long side, ratio kept' },
+      { label: 'Cutting', value: 'At least 5 mm between photos, thin outline around each' },
+      { label: 'Originals', value: 'never modified, no cropping' },
+    ],
+    note: 'Shortcut: Cmd/Ctrl + P in the app.',
+  },
+  how: {
+    eyebrow: 'The essential: sorting',
+    title: 'From a heap to a readable library.',
+    items: [
+      { title: 'Get your photos', text: 'Transfer the originals from your iPhone to a folder on your computer with your usual tool.' },
+      { title: 'Choose your folders', text: 'One or more source folders, and a separate destination for the sorted library.' },
+      { title: 'Check, then copy', text: 'A preview of the sorting before anything is copied. Photos go into YYYY/YYYY-MM with readable names.' },
+    ],
+    note: 'Transfer and sorting are two separate steps: Photosort does not connect directly to your iPhone.',
+  },
+  features: {
+    eyebrow: 'From the herbarium',
+    title: 'What Photosort can do.',
+    lead: 'Everything happens offline, on your machine.',
+    specimen: 'Specimen',
+    items: [
+      { name: 'The real date', latin: 'Tempus exif', text: 'Sorted by the date the photo was taken (EXIF): a July memory stays in July, even if you copy it in December.' },
+      { name: 'Tags', latin: 'Nota localis', text: 'To find a photo easily: beach, mountain, city, selfie… A local AI writes keywords to .xmp files, plus your own tags.' },
+      { name: 'The place', latin: 'Locus urbis', text: 'A folder per city, and per nearby landmark or museum, from GPS coordinates. No connection needed.' },
+      { name: 'Duplicates', latin: 'Gemini imago', text: 'Duplicates and near-duplicates are spotted, with near-duplicates filed separately.' },
+      { name: 'Preferences', latin: 'Optio', text: 'Interface in French, English or Danish, several themes, an output folder of your choice.' },
+      { name: 'The scrapbook', latin: 'Charta hebdomada', text: 'A weekly PDF to print, cut out and paste into your planner.' },
+    ],
+  },
+  shots: {
+    eyebrow: 'Inside the app',
+    title: 'A quick look.',
+    pending: 'Screenshot coming soon',
+    items: [
+      { key: 'apercu', alt: 'Preview of the sorting before the photos are copied', caption: 'The preview before copying' },
+      { key: 'lieux', alt: 'Photos sorted by city in the library', caption: 'Sorted by place' },
+      { key: 'doublons', alt: 'Duplicates and near-duplicates spotted', caption: 'Duplicates spotted' },
+      { key: 'scrapbook', alt: 'Choosing the week and photos for the scrapbook', caption: 'The weekly scrapbook' },
+    ],
+  },
+  download: {
+    eyebrow: 'Download',
+    title: 'Free, open source, no account.',
+    lead: 'Pick the package for your system in the latest published release.',
+    platforms: [
+      { os: 'macOS', detail: '.dmg disk image, Apple silicon and Intel' },
+      { os: 'Linux', detail: 'AppImage x86_64' },
+      { os: 'Windows', detail: 'Portable .exe, no installation' },
+    ],
+    button: 'Latest release',
+    repoButton: 'View the source code',
+    pendingRepo: 'The repository is not public yet. Download links will appear here as soon as they are available.',
+    unsigned: 'Packages are not signed yet: macOS will ask for confirmation the first time you open the app, and Windows may show a SmartScreen warning.',
+  },
+  limits: {
+    eyebrow: 'In all transparency',
+    title: 'What Photosort does not do (yet).',
+    items: [
+      'No direct import from the iPhone: it works on folders on your computer.',
+      'A photo without an EXIF date is skipped and reported, never filed at random.',
+      'Videos, Live Photos and XMP/AAE files are not handled.',
+      'AI tags are not available on Intel Macs.',
+    ],
+  },
+  faq: {
+    eyebrow: 'Frequently asked questions',
+    title: 'Before you sort.',
+    items: [
+      { q: 'Does Photosort import directly from my iPhone?', a: 'No. First get your photos with your usual transfer tool, keeping the originals and their metadata. Photosort then organises the files already on your computer.' },
+      { q: 'Do my photos leave my computer?', a: 'Never. Sorting, place lookup, duplicate detection and AI tags all run offline, with no account and no server.' },
+      { q: 'Are my originals modified?', a: 'No. Photos are copied into a new library; no existing file is overwritten, moved or renamed.' },
+      { q: 'Which formats are supported?', a: 'Notably JPEG, HEIC/HEIF, PNG, TIFF, AVIF and several RAW formats. Sorting needs a readable shooting date in the EXIF metadata: a photo without one is skipped and reported in the summary.' },
+      { q: 'How does the scrapbook work?', a: 'From the sorted library you pick a week and tick photos. Photosort lays them out on A4 pages with room for cutting, then opens the PDF. Just print at 100%.' },
+      { q: 'Which systems does it run on?', a: 'macOS (Apple silicon and Intel), Linux x86_64 (AppImage) and Windows (portable executable). Packages are unsigned, and AI tags are not available on Intel Macs.' },
+    ],
+  },
+  footer: { tagline: 'Less clutter. More memories.', made: 'Made with ❤️ in Paris by Shosta', license: 'MIT licence' },
+};

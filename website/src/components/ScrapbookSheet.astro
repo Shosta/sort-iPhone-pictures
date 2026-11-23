@@ -1,0 +1,43 @@
+---
+// Planche A4 paysage illustrée : emplacements en mm (marges 10, espace 5), décor sans photo réelle.
+import PhotoScene from './PhotoScene.astro';
+interface Props {
+  caption: string;
+  alt: string;
+}
+const { caption, alt } = Astro.props;
+
+const W = 297;
+const H = 210;
+const DX = 17;
+const DY = 16;
+const cells = [
+  { x: 10, y: 16, w: 49, h: 65, tone: 'a', scene: 'portrait' },
+  { x: 64, y: 16, w: 65, h: 49, tone: 'b', scene: 'mountains' },
+  { x: 134, y: 16, w: 49, h: 65, tone: 'c', scene: 'cat' },
+  { x: 188, y: 16, w: 65, h: 49, tone: 'd', scene: 'beach' },
+  { x: 10, y: 86, w: 65, h: 49, tone: 'e', scene: 'city' },
+  { x: 80, y: 86, w: 49, h: 65, tone: 'f', scene: 'bird' },
+  { x: 134, y: 86, w: 65, h: 49, tone: 'a', scene: 'friends' },
+  { x: 204, y: 86, w: 49, h: 65, tone: 'b', scene: 'forest' },
+];
+const pct = (value: number, total: number) => `${((value / total) * 100).toFixed(3)}%`;
+---
+
+<figure class="sheet" role="img" aria-label={alt}>
+  <span class="tape tape--left" aria-hidden="true"></span>
+  <span class="tape tape--right" aria-hidden="true"></span>
+  <div class="sheet-page" aria-hidden="true">
+    <span class="sheet-head">{caption}</span>
+    {
+      cells.map((cell, index) => (
+        <span
+          class={`cell cell--${cell.tone}`}
+          style={`left:${pct(cell.x + DX, W)};top:${pct(cell.y + DY, H)};width:${pct(cell.w, W)};height:${pct(cell.h, H)};--i:${index}`}
+        >
+          <PhotoScene scene={cell.scene} />
+        </span>
+      ))
+    }
+  </div>
+</figure>

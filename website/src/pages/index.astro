@@ -1,0 +1,31 @@
+---
+import '../styles/global.css';
+import { copies, defaultLang, languages } from '../i18n';
+
+const base = import.meta.env.BASE_URL;
+const home = base.endsWith('/') ? base : `${base}/`;
+---
+
+<!doctype html>
+<html lang={defaultLang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photosort</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href={`${home}favicon-32.png`} type="image/png" sizes="32x32" />
+    {languages.map((l) => <link rel="alternate" hreflang={l} href={`${home}${l}/`} />)}
+    <script is:inline define:vars={{ home, languages, fallback: defaultLang }}>
+      const wanted = (navigator.languages || [navigator.language || '']).map((l) => l.slice(0, 2).toLowerCase());
+      location.replace(`${home}${wanted.find((l) => languages.includes(l)) || fallback}/`);
+    </script>
+  </head>
+  <body class="chooser">
+    <main id="contenu">
+      <h1>Photosort</h1>
+      <ul class="chooser-list">
+        {languages.map((l) => <li><a href={`${home}${l}/`} lang={l} hreflang={l}>{copies[l].languageName}</a></li>)}
+      </ul>
+    </main>
+  </body>
+</html>
