@@ -11,7 +11,7 @@
     "dev": "npm run sidecar && node scripts/rename-dev-electron.mjs && electron-vite dev",
     "build": "npm run sidecar && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test \"src/main/*.test.ts\" \"scripts/*.test.cjs\" \"scripts/*.test.mjs\"",
+    "test": "node --test \"src/main/*.test.ts\" \"src/renderer/*.test.ts\" \"scripts/*.test.cjs\" \"scripts/*.test.mjs\"",
     "checksums": "node scripts/checksums.mjs release",
     "checksums:verify": "node scripts/checksums.mjs release --check",
     "dist": "npm run build && electron-builder && npm run checksums",

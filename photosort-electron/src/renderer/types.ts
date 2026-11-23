@@ -9,7 +9,7 @@ declare global {
 export interface Entry {
   source: string
   target: string
-  metadata: { TakenAt: string; Camera: string }
+  metadata?: { TakenAt: string; Camera: string }
 }
 
 export interface Issue {

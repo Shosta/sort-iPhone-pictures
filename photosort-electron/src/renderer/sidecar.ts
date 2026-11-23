@@ -1,3 +1,5 @@
+import { createPlanAssembler } from './planStream'
+
 type Listener = (event: any) => void
 
 const listeners = new Map<string, Listener>()
@@ -28,7 +30,13 @@ export function request(
 ): { id: string; cancel: () => void } {
   start()
   const id = String(++counter)
+  let plan: ReturnType<typeof createPlanAssembler> | undefined
   listeners.set(id, (event) => {
+    if (event.type === 'planChunk') {
+      ;(plan ??= createPlanAssembler()).add(event)
+      return
+    }
+    if (event.type === 'plan') event = (plan ??= createPlanAssembler()).finish(event)
     if (TERMINAL.has(event.type)) listeners.delete(id)
     listener(event)
   })

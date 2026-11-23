@@ -26,7 +26,15 @@
 // Events:
 //
 //   - plan: status (stage exif|hash|similar with done/total), draft (batches of
-//     entries whose folder is known and of duplicates found so far), then plan.
+//     entries whose folder is known and of duplicates found so far), then the
+//     final plan in pieces: planChunk events (a batch of entries {source,
+//     target}, of skipped {path, reason} or of duplicates, each event well under
+//     a megabyte whatever the size of the library), then plan, which closes the
+//     request. plan carries the destination and counts (entries, skipped,
+//     duplicates) to check that no chunk was lost; the entries, skipped and
+//     duplicates of the plan are the concatenation of the chunks, in order.
+//     Chunk entries leave out the metadata; the full plan stays in the sidecar
+//     for the copy request.
 //
 //   - copy: progress per copied entry, then done.
 //
@@ -422,8 +430,59 @@ func (s *server) plan(ctx context.Context, req request) error {
 	s.lock.Lock()
 	s.plans[req.ID] = plan
 	s.lock.Unlock()
-	s.send(event{"id": req.ID, "type": "plan", "plan": plan})
+	s.sendPlan(req.ID, plan)
 	return nil
+}
+
+// A plan chunk holds at most planChunkEntries items and about planChunkBytes
+// of paths, so no event grows with the library: the renderer parses and
+// assembles small pieces instead of one multi-megabyte line.
+const (
+	planChunkEntries = 2000
+	planChunkBytes   = 256 << 10
+)
+
+// wireEntry is what the renderer needs of a planned photo.
+type wireEntry struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+// inBatches calls emit with consecutive slices of items, each within the plan
+// chunk bounds (weight estimates the encoded size of one item).
+func inBatches[T any](items []T, weight func(T) int, emit func([]T)) {
+	start, size := 0, 0
+	for i, item := range items {
+		size += weight(item)
+		if i+1-start >= planChunkEntries || size >= planChunkBytes {
+			emit(items[start : i+1])
+			start, size = i+1, 0
+		}
+	}
+	if start < len(items) {
+		emit(items[start:])
+	}
+}
+
+func (s *server) sendPlan(id string, plan sorter.Plan) {
+	inBatches(plan.Entries, func(e sorter.Entry) int { return len(e.Source) + len(e.Target) + 32 }, func(batch []sorter.Entry) {
+		wire := make([]wireEntry, len(batch))
+		for i, e := range batch {
+			wire[i] = wireEntry{Source: e.Source, Target: e.Target}
+		}
+		s.send(event{"id": id, "type": "planChunk", "entries": wire})
+	})
+	inBatches(plan.Skipped, func(i sorter.Issue) int { return len(i.Path) + len(i.Reason) + 32 }, func(batch []sorter.Issue) {
+		s.send(event{"id": id, "type": "planChunk", "skipped": batch})
+	})
+	inBatches(plan.Duplicates, func(d sorter.Duplicate) int { return len(d.Path) + len(d.Of) + 48 }, func(batch []sorter.Duplicate) {
+		s.send(event{"id": id, "type": "planChunk", "duplicates": batch})
+	})
+	s.send(event{
+		"id": id, "type": "plan",
+		"plan":   event{"destination": plan.Destination},
+		"counts": event{"entries": len(plan.Entries), "skipped": len(plan.Skipped), "duplicates": len(plan.Duplicates)},
+	})
 }
 
 func (s *server) thumbnail(ctx context.Context, req request) error {
