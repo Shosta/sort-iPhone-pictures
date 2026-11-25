@@ -3,6 +3,7 @@
   "productName": "Photosort",
   "version": "0.1.0",
   "description": "Classement de photos par date EXIF - application Electron avec moteur Go",
+  "homepage": "https://github.com/shosta/sort-iPhone-pictures",
   "main": "out/main/index.js",
   "private": true,
   "scripts": {
