@@ -211,6 +211,8 @@ type server struct {
 	outLock sync.Mutex
 	lock    sync.Mutex
 	plans   map[string]sorter.Plan
+	// devices holds the DCIM side of the plans made from a mounted device.
+	devices map[string]devicePlan
 	cancels map[string]context.CancelFunc
 	thumbs  chan struct{}
 	// busy counts running plans and copies; busySlots limits thumbnails meanwhile.
@@ -243,6 +245,7 @@ func newServer(out io.Writer) *server {
 	return &server{
 		out:       out,
 		plans:     map[string]sorter.Plan{},
+		devices:   map[string]devicePlan{},
 		cancels:   map[string]context.CancelFunc{},
 		gates:     map[string]*gate{},
 		thumbs:    make(chan struct{}, runtime.NumCPU()),
@@ -331,6 +334,12 @@ func (s *server) run(ctx context.Context, req request) error {
 		s.lock.Unlock()
 		if !ok {
 			return errors.New("unknown plan")
+		}
+		s.lock.Lock()
+		device, isDevice := s.devices[req.PlanID]
+		s.lock.Unlock()
+		if isDevice {
+			return s.deviceCopy(ctx, req, plan, device)
 		}
 		if req.Remote != nil {
 			return s.remoteCopy(ctx, req, plan)
@@ -479,7 +488,18 @@ func (s *server) plan(ctx context.Context, req request) error {
 		}
 		defer cleanup()
 	}
-	plan, err := engine.Plan(ctx, req.Sources, req.Destination)
+	sources := req.Sources
+	var device *devicePlan
+	if req.DevicePath != "" {
+		var err error
+		if device, err = s.devicePlan(ctx, req, &engine); err != nil {
+			close(stop)
+			<-stopped
+			return err
+		}
+		sources = []string{device.canon}
+	}
+	plan, err := engine.Plan(ctx, sources, req.Destination)
 	close(stop)
 	<-stopped
 	if err != nil {
@@ -488,6 +508,10 @@ func (s *server) plan(ctx context.Context, req request) error {
 	flush()
 	s.lock.Lock()
 	s.plans[req.ID] = plan
+	if device != nil {
+		device.req = req
+		s.devices[req.ID] = *device
+	}
 	s.lock.Unlock()
 	s.sendPlan(req.ID, plan)
 	return nil

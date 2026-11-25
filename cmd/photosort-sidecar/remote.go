@@ -62,7 +62,9 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 // remoteBatch makes remoteSend quiet: no per-photo "progress" nor final "done"
 // event (a DCIM import sends many batches under one request id); each step
 // name is handed to onPhase instead.
-type remoteBatch struct{ onPhase func(name string) }
+type remoteBatch struct {
+	onPhase func(name string, extra ...any)
+}
 
 func (s *server) remoteSend(ctx context.Context, req request, plan sorter.Plan, batch *remoteBatch) (res remote.Result, err error) {
 	cfg := *req.Remote
@@ -78,7 +80,7 @@ func (s *server) remoteSend(ctx context.Context, req request, plan sorter.Plan, 
 	}()
 	phase := func(name string, extra ...any) {
 		if batch != nil {
-			batch.onPhase(name)
+			batch.onPhase(name, extra...)
 			return
 		}
 		e := event{"id": req.ID, "type": "remotePhase", "phase": name}

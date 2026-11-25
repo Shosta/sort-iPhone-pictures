@@ -133,7 +133,7 @@ renderer (React, src/renderer)  ──window.photosort (preload)──►  main 
 | `src/renderer/i18n.tsx` | **all UI strings** `fr` / `en-GB` / `da` (`Key = keyof typeof fr`; add a key to all three) |
 | `src/renderer/themes.ts` | 8 themes → CSS vars |
 | `src/renderer/types.ts` | shared TS types (`Plan`, `Entry`, `TagJob`, `Scrap*`, `Year*`, `Travel*`…) + `window.photosort` typing |
-| `src/renderer/components/` | `Preferences`, `TagsPanel`, `ScrapbookPanel` (+`Calendar`), `YearMapPanel`, `TravelMapPanel`, `RemotePanel`, `DropZone`, `ImportCard` (DCIM import: polls `importDetect` every 3 s, replaces DropZone while a device is present or the manual "import from a device" link is open), `IssueList`, `Thumb`, `VirtualGrid`, `Flights`, `Select`, `Flag` |
+| `src/renderer/components/` | `Preferences`, `TagsPanel`, `ScrapbookPanel` (+`Calendar`), `YearMapPanel`, `TravelMapPanel`, `RemotePanel`, `DropZone`, `ImportCard` (DCIM *source picker*: polls `importDetect` every 3 s, replaces DropZone while a device is present or the manual link is open; reports `{devicePath, deviceId, mode, from, to}` to `App`, no action button; portal `⋯` menu), `IssueList`, `Thumb`, `VirtualGrid`, `Flights`, `Select`, `Flag` |
 | `scripts/` | `build-sidecar.mjs` (go build, CGO, GOOS/GOARCH), `fetch-ai-assets.mjs`, `checksums.mjs`, `audit-gate.mjs`, `after-pack.cjs` (Linux launcher), `rename-dev-electron.mjs` |
 | `electron-builder.yml` | dmg / portable exe / AppImage+deb; macOS signing+notarization only when secrets present |
 
@@ -203,6 +203,8 @@ Rejected: watched folder, native USB/libimobiledevice import (superseded by the 
 ### Import from a mounted DCIM volume (iPhone, SD card, camera) — IMPLEMENTED (design record)
 
 Implemented in `internal/devimport`, `cmd/photosort-sidecar/import.go`, `components/ImportCard.tsx`. NAS destination supported via `remoteSend`.
+
+**DCIM = a source of the normal Analyze/Sort flow** (user feedback 4): `ImportCard` only picks the volume and mode. The usual **Analyser** sends `plan` with `devicePath/deviceId/mode/from/to` (sidecar `devicePlan`: filter by mode/period + journal for "new" + photo extensions, EXIF read read-only from the device via `Engine.Include`; plan sources are `<canonical DCIM>/<rel>` so thumbnails and pending-list matching work). The usual **Trier / Simuler** sends `copy` with that `planId`: `deviceCopy` → `runImport` (200 MiB transit batches, size check, pause/resume on disconnect or network cut, journal only after verified delivery — never in dry run, transit cleanup, local or NAS via `remoteSend`). Events: `progress` (entry.source = device path), `importProgress/importPaused/importResumed`, final `done` (NAS summary fields included). Dedupe/similar/blurry grouping is therefore per batch. The legacy `importRun` op remains for tests.
 
 - **Source**: Linux detects an already-mounted `DCIM` (GVFS `/run/user/<uid>/gvfs/afc:host=<UDID>`, `/media`, `/run/media`); also watches for plug-in after launch. No mounting/pairing in the app; help message if nothing found ("unlock the iPhone, tap Trust"). macOS/Windows: pick the source manually; batch-copy code stays platform-neutral.
 - **Read-only**: never modify/delete anything on the device.

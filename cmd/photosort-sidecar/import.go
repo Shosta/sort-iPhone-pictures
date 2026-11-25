@@ -201,17 +201,99 @@ type staged struct {
 
 type File = devimport.File
 
-// importRun copies the device photos in batches (about 200 MB) and sorts each
-// into the destination while the next one is copied. A file counts as
-// delivered, and enters the journal, only once its sorted copy is verified.
+// devicePlan is the DCIM side of a plan made from a mounted device: the files
+// the analysis kept, so that the sort copies exactly what the user saw.
+type devicePlan struct {
+	req      request
+	dcim, id string
+	// canon is the canonical DCIM folder: the plan's sources are paths below it.
+	canon string
+	files []File
+	from  time.Time
+	to    time.Time
+}
+
+// devicePlan lists the photos a request selects on its device (mode, period,
+// journal) and restricts the engine to them. The device is only read.
+func (s *server) devicePlan(ctx context.Context, req request, engine *sorter.Engine) (*devicePlan, error) {
+	dcim, id, err := importSource(req)
+	if err != nil {
+		return nil, err
+	}
+	from, to, err := importRange(req)
+	if err != nil {
+		return nil, err
+	}
+	var journal *devimport.Journal
+	if req.Mode == importModeNew {
+		if journal, err = s.openJournal(id); err != nil {
+			return nil, err
+		}
+	}
+	scan, err := devimport.ScanDCIM(ctx, dcim)
+	if err != nil {
+		return nil, err
+	}
+	canon, err := filepath.EvalSymlinks(dcim)
+	if err != nil {
+		return nil, err
+	}
+	if canon, err = filepath.Abs(canon); err != nil {
+		return nil, err
+	}
+	files := scan.Filter(journal, from, to)
+	keep := make(map[string]bool, len(files))
+	for _, f := range files {
+		keep[filepath.Join(canon, f.Rel)] = true
+	}
+	engine.Include = func(path string) bool { return keep[path] }
+	engine.TakenFrom, engine.TakenTo = from, to
+	return &devicePlan{dcim: dcim, id: id, canon: canon, files: files, from: from, to: to}, nil
+}
+
+// deviceCopy is the "sort" step of a plan made from a device: the planned
+// photos go through the import pipeline (batches in the local transit folder,
+// then the local or NAS destination), reported like a regular copy.
+func (s *server) deviceCopy(ctx context.Context, req request, plan sorter.Plan, dp devicePlan) error {
+	planned := make(map[string]bool, len(plan.Entries)+len(plan.Duplicates))
+	for _, e := range plan.Entries {
+		planned[e.Source] = true
+	}
+	for _, d := range plan.Duplicates {
+		planned[d.Path] = true
+	}
+	var files []File
+	for _, f := range dp.files {
+		if planned[filepath.Join(dp.canon, f.Rel)] {
+			files = append(files, f)
+		}
+	}
+	run := dp.req
+	run.ID, run.Op = req.ID, "copy"
+	run.Remote, run.DryRun, run.RemoteNoDedupe, run.RemoteRefresh = req.Remote, req.DryRun, req.RemoteNoDedupe, req.RemoteRefresh
+	run.Destination = plan.Destination
+	if run.Remote != nil {
+		run.Destination = ""
+	}
+	return s.runImport(ctx, run, importJob{dcim: dp.dcim, id: dp.id, files: files, from: dp.from, to: dp.to, canon: dp.canon, device: true, planned: len(plan.Entries)})
+}
+
+// importJob is what runImport moves: the photos to copy and how to report them.
+type importJob struct {
+	dcim, id string
+	files    []File
+	videos   int
+	from, to time.Time
+	// device marks a run driven by a regular "copy": each delivered photo is
+	// reported as a "progress" event (under its path on the device, canon) and
+	// the run ends with "done".
+	device  bool
+	canon   string
+	planned int
+}
+
+// importRun copies the photos a request selects and sorts them (see runImport).
 func (s *server) importRun(ctx context.Context, req request) error {
-	if !s.importing.CompareAndSwap(false, true) {
-		return errors.New("an import is already running")
-	}
-	defer s.importing.Store(false)
-	if req.Destination == "" && req.Remote == nil {
-		return errors.New("no destination")
-	}
 	dcim, id, err := importSource(req)
 	if err != nil {
 		return err
@@ -220,22 +302,42 @@ func (s *server) importRun(ctx context.Context, req request) error {
 	if err != nil {
 		return err
 	}
-	journal, err := s.openJournal(id)
-	if err != nil {
-		return err
+	var filter *devimport.Journal
+	if req.Mode == importModeNew {
+		if filter, err = s.openJournal(id); err != nil {
+			return err
+		}
 	}
 	scan, err := devimport.ScanDCIM(ctx, dcim)
 	if err != nil {
 		return err
 	}
-	filter := journal
-	if req.Mode != importModeNew {
-		filter = nil
+	return s.runImport(ctx, req, importJob{dcim: dcim, id: id, files: scan.Filter(filter, from, to), videos: scan.Videos, from: from, to: to})
+}
+
+// runImport copies the device photos in batches (about 200 MB) and sorts each
+// into the destination while the next one is copied. A file counts as
+// delivered, and enters the journal, only once its sorted copy is verified.
+func (s *server) runImport(ctx context.Context, req request, job importJob) error {
+	if !s.importing.CompareAndSwap(false, true) {
+		return errors.New("an import is already running")
 	}
-	files := scan.Filter(filter, from, to)
+	defer s.importing.Store(false)
+	if req.Destination == "" && req.Remote == nil {
+		return errors.New("no destination")
+	}
+	dcim, id, files, from, to := job.dcim, job.id, job.files, job.from, job.to
+	journal, err := s.openJournal(id)
+	if err != nil {
+		return err
+	}
 	total := len(files)
 	if total == 0 {
-		s.send(event{"id": req.ID, "type": "importDone", "imported": 0, "duplicates": 0, "videos": scan.Videos, "filtered": 0, "skipped": 0, "total": 0})
+		if job.device {
+			s.send(event{"id": req.ID, "type": "done", "copied": 0, "total": 0, "remote": req.Remote != nil, "dryRun": req.DryRun})
+			return nil
+		}
+		s.send(event{"id": req.ID, "type": "importDone", "imported": 0, "duplicates": 0, "videos": job.videos, "filtered": 0, "skipped": 0, "total": 0})
 		return nil
 	}
 	batches := devimport.Batches(files, devimport.BatchBytes)
@@ -329,6 +431,8 @@ func (s *server) importRun(ctx context.Context, req request) error {
 	}()
 
 	var imported, duplicates, filtered, skipped int
+	var sent remote.Result
+	sentCount := 0
 	consume := func() error {
 		for st := range queue {
 			if err := g.wait(runCtx); err != nil {
@@ -362,9 +466,27 @@ func (s *server) importRun(ctx context.Context, req request) error {
 			}
 			undelivered := map[string]bool{}
 			if req.Remote != nil {
-				if undelivered, err = s.deliverRemote(runCtx, g, req, plan, func(name string) { progress("send", st.n, name) }); err != nil {
+				onPhase := func(name string, extra ...any) {
+					progress("send", st.n, name)
+					if job.device && len(extra) > 0 {
+						e := event{"id": req.ID, "type": "remotePhase", "phase": name}
+						for i := 0; i+1 < len(extra); i += 2 {
+							e[extra[i].(string)] = extra[i+1]
+						}
+						s.send(e)
+					}
+				}
+				var res remote.Result
+				if res, undelivered, err = s.deliverRemote(runCtx, g, req, plan, onPhase); err != nil {
 					return err
 				}
+				sentCount += len(res.Sent)
+				sent.SentBytes += res.SentBytes
+				sent.Existing += res.Existing
+				sent.Tags += res.Tags
+				sent.TagsExisting += res.TagsExisting
+				sent.Mismatched = append(sent.Mismatched, res.Mismatched...)
+				sent.Warnings = append(sent.Warnings, res.Warnings...)
 			} else {
 				report, err := sorter.Copy(runCtx, plan)
 				if err != nil {
@@ -390,6 +512,13 @@ func (s *server) importRun(ctx context.Context, req request) error {
 				if undelivered[entry.Target] {
 					continue
 				}
+				if job.device && !req.DryRun {
+					if rel, err := filepath.Rel(canon, entry.Source); err == nil {
+						shown := entry
+						shown.Source = filepath.Join(job.canon, rel)
+						s.send(event{"id": req.ID, "type": "progress", "entry": shown, "total": job.planned})
+					}
+				}
 				if req.Remote == nil {
 					info, err := os.Stat(filepath.Join(plan.Destination, entry.Target))
 					src, srcErr := os.Stat(entry.Source)
@@ -402,8 +531,10 @@ func (s *server) importRun(ctx context.Context, req request) error {
 			for _, dup := range plan.Duplicates {
 				mark(dup.Path)
 			}
-			if err := journal.Add(done); err != nil {
-				return err
+			if !req.DryRun {
+				if err := journal.Add(done); err != nil {
+					return err
+				}
 			}
 			os.RemoveAll(st.root)
 			imported += len(plan.Entries)
@@ -432,7 +563,21 @@ func (s *server) importRun(ctx context.Context, req request) error {
 		}
 		return err
 	}
-	s.send(event{"id": req.ID, "type": "importDone", "imported": imported, "duplicates": duplicates, "videos": scan.Videos,
+	if job.device {
+		done := event{"id": req.ID, "type": "done", "copied": imported, "total": job.planned, "remote": req.Remote != nil, "dryRun": req.DryRun}
+		if req.Remote != nil {
+			mismatched := sent.Mismatched
+			if len(mismatched) > 20 {
+				mismatched = mismatched[:20]
+			}
+			done["sent"], done["sentBytes"], done["existing"] = sentCount, sent.SentBytes, sent.Existing
+			done["mismatched"], done["mismatchedSample"], done["warnings"] = len(sent.Mismatched), mismatched, sent.Warnings
+			done["tags"], done["tagsExisting"], done["url"] = sent.Tags, sent.TagsExisting, req.Remote.URL()
+		}
+		s.send(done)
+		return nil
+	}
+	s.send(event{"id": req.ID, "type": "importDone", "imported": imported, "duplicates": duplicates, "videos": job.videos,
 		"filtered": filtered, "skipped": skipped, "total": total, "elapsedMs": time.Since(started).Milliseconds()})
 	return nil
 }
@@ -471,10 +616,10 @@ func transientRemote(kind remote.Kind) bool {
 // cut pauses the import and retries the batch (rsync never rewrites what is
 // already there); nothing is journaled until this returns. The result lists the
 // targets the NAS holds with different content, which are not counted as delivered.
-func (s *server) deliverRemote(ctx context.Context, g *gate, req request, plan sorter.Plan, onPhase func(string)) (map[string]bool, error) {
+func (s *server) deliverRemote(ctx context.Context, g *gate, req request, plan sorter.Plan, onPhase func(string, ...any)) (remote.Result, map[string]bool, error) {
 	for {
 		if err := g.wait(ctx); err != nil {
-			return nil, err
+			return remote.Result{}, nil, err
 		}
 		res, err := s.remoteSend(ctx, req, plan, &remoteBatch{onPhase: onPhase})
 		if err == nil {
@@ -482,18 +627,18 @@ func (s *server) deliverRemote(ctx context.Context, g *gate, req request, plan s
 			for _, target := range res.Mismatched {
 				bad[target] = true
 			}
-			return bad, nil
+			return res, bad, nil
 		}
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return remote.Result{}, nil, ctx.Err()
 		}
 		if kind, _, ok := remote.KindOf(err); !ok || !transientRemote(kind) {
-			return nil, err
+			return remote.Result{}, nil, err
 		}
 		s.send(event{"id": req.ID, "type": "importPaused", "reason": "network"})
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return remote.Result{}, nil, ctx.Err()
 		case <-time.After(networkRetry):
 		}
 		s.send(event{"id": req.ID, "type": "importResumed", "reason": "reconnected"})

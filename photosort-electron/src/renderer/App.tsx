@@ -2,7 +2,7 @@ import confetti from 'canvas-confetti'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DropZone } from './components/DropZone'
-import { ImportCard } from './components/ImportCard'
+import { ImportCard, type DcimSource } from './components/ImportCard'
 import { Flights, type Flight } from './components/Flights'
 import { Preferences } from './components/Preferences'
 import { RemotePanel } from './components/RemotePanel'
@@ -170,6 +170,15 @@ interface RemoteState {
   dryRun?: boolean
 }
 
+function importStatusText(t: Translate, info: { phase: 'copy' | 'sort' | 'send'; batch: number; batches: number; paused?: string } | null, done: number, total: number): string {
+  if (info?.paused === 'disconnected') return t('import.disconnected')
+  if (info?.paused === 'network') return t('import.network')
+  if (info?.paused) return t('import.paused')
+  if (!info) return t('import.counting')
+  const phase = t(info.phase === 'copy' ? 'import.phase.copy' : info.phase === 'send' ? 'import.phase.send' : 'import.phase.sort')
+  return `${phase} · ${t('import.batch', { n: info.batch, total: info.batches })} · ${t('status.copying', { done, total })}`
+}
+
 function elapsedText(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
@@ -267,7 +276,11 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importVisible, setImportVisible] = useState(false)
-  const [importing, setImporting] = useState(false)
+  const [dcim, setDcim] = useState<DcimSource | null>(null)
+  const [importInfo, setImportInfo] = useState<{ phase: 'copy' | 'sort' | 'send'; batch: number; batches: number; paused?: string } | null>(null)
+  const dcimKey = useRef('')
+  const resetRef = useRef<() => void>(() => {})
+  const phaseRef = useRef<string>('idle')
   const [showSkipped, setShowSkipped] = useState(false)
   const [tagJob, setTagJob] = useState<TagJob | null>(null)
   const running = useRef<{ cancel: () => void } | null>(null)
@@ -469,11 +482,21 @@ export function App(): JSX.Element {
     setPhase('idle')
   }, [])
 
+  const onSource = useCallback((source: DcimSource | null) => {
+    const key = source ? `${source.devicePath}|${source.mode}|${source.mode === 'period' ? `${source.from}|${source.to}` : ''}` : ''
+    setDcim(source)
+    if (key !== dcimKey.current) {
+      dcimKey.current = key
+      if (phaseRef.current !== 'analyzing' && phaseRef.current !== 'copying') resetRef.current()
+    }
+  }, [])
+
   const analyze = (): void => {
     resetResults()
     setPhase('analyzing')
     setStage(null)
-    const planRequest = request({ op: 'plan', sources, destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, remoteNoDedupe: remote ? !prefs.remoteDedupe : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
+    const fromDevice = importVisible && dcim !== null
+    const planRequest = request({ op: 'plan', ...(fromDevice ? { devicePath: dcim.devicePath, deviceId: dcim.deviceId, mode: dcim.mode, from: dcim.from, to: dcim.to } : {}), sources: fromDevice ? [] : sources, destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, remoteNoDedupe: remote ? !prefs.remoteDedupe : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
       if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
       else if (event.type === 'draft') {
         const entries: Entry[] = event.entries ?? []
@@ -504,8 +527,10 @@ export function App(): JSX.Element {
     if (!plan) return
     // OK runs the sort and the send; Cancel launches nothing (the user can start the simulation themselves).
     if (remote && !simulate && !prefs.remoteUsed.includes(remoteLabel(prefs)) && !window.confirm(t('remote.firstTime'))) return
+    const fromDevice = importVisible && dcim !== null
     dryRun.current = simulate
-    setRemoteState(remote ? { phase: 'connect', dryRun: simulate } : null)
+    setImportInfo(null)
+    setRemoteState(remote && !fromDevice ? { phase: 'connect', dryRun: simulate } : null)
     setElapsed(0)
     setError(null)
     setResumable(false)
@@ -520,6 +545,16 @@ export function App(): JSX.Element {
       if (event.type === 'progress') {
         buffer.current.push(event.entry)
         copiedTargets.current.push(`${plan.destination}/${event.entry.target}`)
+      } else if (event.type === 'importProgress') {
+        setImportInfo({ phase: event.phase, batch: event.batch, batches: event.batches })
+      } else if (event.type === 'importPaused') {
+        setImportInfo((info) => ({ phase: info?.phase ?? 'copy', batch: info?.batch ?? 1, batches: info?.batches ?? 1, paused: event.reason }))
+      } else if (event.type === 'importResumed') {
+        setImportInfo((info) => info && { ...info, paused: undefined })
+      } else if (event.type === 'remotePhase' && fromDevice) {
+        if (event.legacy !== undefined) setRemoteState((state) => ({ ...(state ?? {}), legacy: !!event.legacy }))
+      } else if (event.type === 'remoteProgress' && fromDevice) {
+        // Per-batch transfer detail is summarised by importProgress.
       } else if (event.type === 'remotePhase') {
         setRemoteState((state) => ({
           ...(state ?? {}),
@@ -591,20 +626,23 @@ export function App(): JSX.Element {
   )
   const planFolders = useMemo(() => (plan ? sortedFolders(groupByFolder(plan.entries)) : null), [plan])
   const folders = planFolders ?? draftFolders
-  const busy = phase === 'analyzing' || phase === 'copying' || importing
+  const busy = phase === 'analyzing' || phase === 'copying'
+  const fromDevice = importVisible && dcim !== null
   const tagging = tagJob?.state === 'loading' || tagJob?.state === 'running'
   const busyEnded = useRef(0)
   const wasBusy = useRef(false)
   if (wasBusy.current && !busy) busyEnded.current = performance.now()
   wasBusy.current = busy
   const cleanable = !!plan || !!error || sources.length > 0
-  const canAnalyze = !busy && sources.length > 0 && (remote ? remoteReady(prefs) : !!destination.trim())
+  resetRef.current = resetResults
+  phaseRef.current = phase
+  const canAnalyze = !busy && (fromDevice || sources.length > 0) && (remote ? remoteReady(prefs) : !!destination.trim())
   const canSort = !busy && !tagging && phase === 'ready' && entries.length > 0
   const deep = skipDuplicates || groupSimilar || groupBlurry
   const progress =
     phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copiedCount / entries.length : 0) : 0
 
-  const sending = remote && phase === 'copying'
+  const sending = remote && phase === 'copying' && !fromDevice
   useEffect(() => {
     if (!sending) return
     const timer = setInterval(() => setElapsed((value) => value + 1), 1000)
@@ -687,15 +725,12 @@ export function App(): JSX.Element {
             />
           )}
           <ImportCard
-            options={{ destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }}
-            blocked={remote ? (remoteReady(prefs) ? null : t('import.noRemote')) : !destination.trim() ? t('import.noDest') : null}
             locale={prefs.language}
             disabled={phase === 'analyzing' || phase === 'copying'}
             open={importOpen}
             onClose={() => setImportOpen(false)}
             onVisible={setImportVisible}
-            onRunning={setImporting}
-            onFinished={resetResults}
+            onSource={onSource}
           />
           </div>
           <div className="glass panel grow list">
@@ -809,7 +844,9 @@ export function App(): JSX.Element {
                 : phase === 'analyzing'
                   ? analysisStatus(t, stage)
                   : phase === 'copying'
-                    ? remote
+                    ? fromDevice
+                      ? importStatusText(t, importInfo, copiedCount, entries.length)
+                      : remote
                       ? `${remotePhaseText(t, remoteState, copiedCount, entries.length)} · ${elapsedText(elapsed)}`
                       : t('status.copying', { done: copiedCount, total: entries.length })
                     : phase === 'done'

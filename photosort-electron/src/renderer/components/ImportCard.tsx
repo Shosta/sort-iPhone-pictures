@@ -1,7 +1,6 @@
-import { useCallback, useId, useLayoutEffect, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useT, type Translate } from '../i18n'
-import { remoteErrorText } from '../remote'
+import { useT } from '../i18n'
 import { request } from '../sidecar'
 
 export interface ImportDevice {
@@ -10,37 +9,28 @@ export interface ImportDevice {
   path: string
 }
 
-export interface ImportSortOptions {
-  destination: string
-  remote?: Record<string, unknown>
-  remoteNoDedupe?: boolean
-  byLocation: boolean
-  landmarks: boolean
-  dedupe: boolean
-  similar: boolean
-  dateFallback: boolean
-  screenshots: boolean
-  blurry: boolean
+export type DcimMode = 'all' | 'new' | 'period'
+
+/** Source reported to the parent: the card only picks a DCIM volume and a mode. */
+export interface DcimSource {
+  deviceId: string
+  devicePath: string
+  name: string
+  mode: DcimMode
+  from: string
+  to: string
 }
 
 interface Props {
-  options: ImportSortOptions
-  /** Why importing is not possible right now (NAS destination, no destination), or null. */
-  blocked: string | null
-  /** Parent is busy with a regular plan/copy. */
+  /** Parent is busy (analysing / sorting): the source is frozen. */
   disabled: boolean
   open: boolean
   onClose: () => void
   /** True while the card replaces the drop zone. */
   onVisible: (visible: boolean) => void
-  /** True while an import is running (locks the rest of the UI). */
-  onRunning: (running: boolean) => void
-  onFinished: () => void
+  onSource: (source: DcimSource | null) => void
   locale: string
 }
-
-type Mode = 'all' | 'new' | 'period'
-type Stage = 'ready' | 'running' | 'done'
 
 interface Scan {
   count: number
@@ -49,35 +39,8 @@ interface Scan {
   to: string
 }
 
-interface Progress {
-  phase: 'copy' | 'sort' | 'send'
-  batch: number
-  batches: number
-  copied: number
-  done: number
-  total: number
-  elapsedMs: number
-}
-
-interface Summary {
-  imported: number
-  duplicates: number
-  videos: number
-}
-
 const POLL_MS = 3000
 
-function clock(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function errorText(t: Translate, event: { code?: string; detail?: string; message?: string; resumable?: boolean }): string {
-  if (event.code === 'lowDisk') return t('import.err.lowDisk')
-  if (event.code === 'noDevice') return t('import.err.noDevice')
-  if (event.code === 'copy') return t('import.err.copy', { detail: event.detail ?? '' })
-  return remoteErrorText(t, event)
-}
 
 function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
@@ -158,39 +121,98 @@ function Frame({ title, footer, children }: { title: string; footer: string; chi
   )
 }
 
-export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished, locale }: Props): JSX.Element | null {
+
+/** Overflow menu rendered in a portal, anchored under its button. */
+function MoreMenu({ label, items }: { label: string; items: { label: string; onClick: () => void }[] }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ right: number; top: number } | null>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  const pop = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !btn.current) return
+    const a = btn.current.getBoundingClientRect()
+    setPos({ right: Math.max(8, window.innerWidth - a.right), top: a.bottom + 6 })
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: Event): void => {
+      if (event.target instanceof Node && (pop.current?.contains(event.target) || btn.current?.contains(event.target))) return
+      setOpen(false)
+    }
+    const key = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        btn.current?.focus()
+      }
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', key)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', key)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  return (
+    <>
+      <button ref={btn} className="btn ghost import-more-btn" aria-haspopup="menu" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen((v) => !v)}>
+        ⋯
+      </button>
+      {open &&
+        createPortal(
+          <div ref={pop} className="import-menu" role="menu" style={{ right: pos?.right ?? 8, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}>
+            {items.map((item) => (
+              <button key={item.label} role="menuitem" autoFocus={items[0] === item} onClick={() => (setOpen(false), item.onClick())}>
+                {item.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
+  )
+}
+
+export function ImportCard({ disabled, open, onClose, onVisible, onSource, locale }: Props): JSX.Element | null {
   const t = useT()
   const [devices, setDevices] = useState<ImportDevice[]>([])
   const [manual, setManual] = useState<ImportDevice | null>(null)
-  const [mode, setMode] = useState<Mode>('new')
+  const [dismissed, setDismissed] = useState<string | null>(null)
+  const [mode, setMode] = useState<DcimMode>('new')
   const year = new Date().getFullYear()
   const [from, setFrom] = useState(`${year}-01-01`)
   const [to, setTo] = useState(`${year}-12-31`)
   const [scan, setScan] = useState<Scan | null>(null)
-  const [stage, setStage] = useState<Stage>('ready')
-  const [progress, setProgress] = useState<Progress | null>(null)
-  const [paused, setPaused] = useState<string | null>(null)
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [menu, setMenu] = useState(false)
-  const job = useRef<{ id: string; cancel: () => void } | null>(null)
+  const [rescan, setRescan] = useState(0)
+  const frozen = useRef(disabled)
+  frozen.current = disabled
 
-  const device = devices[0] ?? manual
+  const detected = devices.find((d) => d.id !== dismissed) ?? null
+  const device = manual ?? detected
   const deviceId = device?.id
   const devicePath = device?.path
-  const running = stage === 'running'
-  const visible = running || stage === 'done' || device !== null || open
+  const deviceName = device?.name
+  const visible = device !== null || open
   const badRange = mode === 'period' && from > to
 
   useEffect(() => onVisible(visible), [visible, onVisible])
-  useEffect(() => onRunning(running), [running, onRunning])
 
   useEffect(() => {
-    if (running || stage === 'done') return
+    onSource(devicePath === undefined ? null : { deviceId: deviceId ?? '', devicePath, name: deviceName ?? '', mode, from, to })
+  }, [deviceId, devicePath, deviceName, mode, from, to, onSource])
+
+  // The device list is not refreshed while the parent works, so a cable
+  // glitch mid-sort does not drop the plan (the engine pauses by itself).
+  useEffect(() => {
     let live = true
     const poll = (): void => {
+      if (frozen.current) return
       request({ op: 'importDetect' }, (event) => {
-        if (live && event.type === 'importDevices') setDevices(event.devices ?? [])
+        if (live && !frozen.current && event.type === 'importDevices') setDevices(event.devices ?? [])
       })
     }
     poll()
@@ -199,62 +221,24 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
       live = false
       clearInterval(timer)
     }
-  }, [running, stage])
+  }, [])
 
   useEffect(() => {
-    if (devicePath === undefined || stage !== 'ready' || badRange) {
+    if (devicePath === undefined || badRange) {
       setScan(null)
       return
     }
+    if (disabled) return
     let live = true
     setScan(null)
     const run = request({ op: 'importScan', deviceId: deviceId ?? '', devicePath, mode, from, to }, (event) => {
-      if (!live) return
-      if (event.type === 'importScan') setScan({ count: event.count, videos: event.videos, from: event.from, to: event.to })
+      if (live && event.type === 'importScan') setScan({ count: event.count, videos: event.videos, from: event.from, to: event.to })
     })
     return () => {
       live = false
       run.cancel()
     }
-  }, [deviceId, devicePath, mode, from, to, stage, badRange])
-
-  useEffect(() => () => job.current?.cancel(), [])
-
-  const start = useCallback(
-    (runMode: Mode) => {
-      if (!device) return
-      setError(null)
-      setPaused(null)
-      setSummary(null)
-      setProgress(null)
-      setStage('running')
-      job.current = request(
-        { op: 'importRun', deviceId: device.id, devicePath: device.path, mode: runMode, from, to, ...options },
-        (event) => {
-          if (event.type === 'importProgress') setProgress(event)
-          else if (event.type === 'importPaused') setPaused(event.reason ?? 'manual')
-          else if (event.type === 'importResumed') setPaused(null)
-          else if (event.type === 'importDone') {
-            setSummary({ imported: event.imported, duplicates: event.duplicates, videos: event.videos })
-            setStage('done')
-            job.current = null
-            onFinished()
-          } else if (event.type === 'error') {
-            job.current = null
-            setStage('ready')
-            if (!event.cancelled) setError(errorText(t, event))
-            onFinished()
-          }
-        }
-      )
-    },
-    [device, from, to, options, onFinished, t]
-  )
-
-  const control = (action: 'pause' | 'resume'): void => {
-    if (!job.current) return
-    window.photosort.send({ op: 'importControl', id: `ctl-${Date.now()}`, target: job.current.id, action })
-  }
+  }, [deviceId, devicePath, mode, from, to, badRange, disabled, rescan])
 
   const pick = async (): Promise<void> => {
     const [folder] = await window.photosort.pickFolders(t('import.pickTitle'))
@@ -263,13 +247,18 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
 
   const forget = (): void => {
     if (!device) return
-    setMenu(false)
-    request({ op: 'importForget', deviceId: device.id, devicePath: device.path }, () => setScan(null))
+    request({ op: 'importForget', deviceId: device.id, devicePath: device.path }, () => setRescan((n) => n + 1))
+  }
+
+  const goBack = (): void => {
+    setManual(null)
+    if (detected) setDismissed(detected.id)
+    onClose()
   }
 
   if (!visible) return null
 
-  const modeLine = (value: Mode): string =>
+  const modeLine = (value: DcimMode): string =>
     value === 'new'
       ? t('import.foot.new')
       : value === 'all'
@@ -279,60 +268,11 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
           : t('import.foot.period', { from: localDate(from, locale), to: localDate(to, locale) })
 
   const back = (
-    <button className="link card-link" onClick={() => (setManual(null), onClose())}>
+    <button className="link card-link" disabled={disabled} onClick={goBack}>
       <span className="card-link-icon" aria-hidden="true">📂</span>
       {t('import.back')}
     </button>
   )
-
-  if (running) {
-    const total = progress?.total || scan?.count || 0
-    const done = progress ? (progress.copied + progress.done) / Math.max(1, 2 * total) : 0
-    return (
-      <Frame title={t('import.title')} footer={modeLine(mode)}>
-        <p className="drop-title">{device?.name ?? t('import.title')}</p>
-        <p className="import-phase" aria-live="polite">
-          {paused === 'disconnected'
-            ? t('import.disconnected')
-            : paused === 'network'
-              ? t('import.network')
-            : paused
-              ? t('import.paused')
-              : progress
-                ? `${t(progress.phase === 'copy' ? 'import.phase.copy' : progress.phase === 'send' ? 'import.phase.send' : 'import.phase.sort')} · ${t('import.batch', { n: progress.batch, total: progress.batches })}`
-                : t('import.counting')}
-        </p>
-        <div className={`progress import-bar${progress ? '' : ' indeterminate'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(done * 100)}>
-          <i style={{ width: `${Math.round(done * 100)}%` }} />
-        </div>
-        <p className="import-meta">{progress ? `${t('import.progress', { done: progress.done, total })} · ${clock(progress.elapsedMs)}` : ''}</p>
-        <div className="import-actions">
-          {paused !== 'disconnected' && paused !== 'network' && (
-            <button className="btn ghost" onClick={() => control(paused ? 'resume' : 'pause')}>
-              {paused ? t('import.resume') : t('import.pause')}
-            </button>
-          )}
-          <button className="btn danger" onClick={() => job.current?.cancel()}>
-            {t('import.cancel')}
-          </button>
-        </div>
-      </Frame>
-    )
-  }
-
-  if (stage === 'done' && summary) {
-    return (
-      <Frame title={t('import.done.title')} footer={modeLine(mode)}>
-        <p className="drop-title">✅ {t('import.done.title')}</p>
-        <p className="import-count" role="status">{t('import.done.summary', { ...summary })}</p>
-        <div className="import-actions">
-          <button className="btn primary" autoFocus onClick={() => setStage('ready')}>
-            {t('import.done.ok')}
-          </button>
-        </div>
-      </Frame>
-    )
-  }
 
   if (!device) {
     return (
@@ -351,7 +291,6 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
     )
   }
 
-  // Only real preconditions disable the button; the live count never does.
   const zero = scan !== null && scan.count === 0
   const countText = !scan
     ? badRange
@@ -362,17 +301,16 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
       : scan.count === 1
         ? t('import.count.one', { from: localDate(scan.from, locale) })
         : t('import.count', { n: scan.count, from: localDate(scan.from, locale), to: localDate(scan.to, locale) })
-  const reason = disabled ? null : (blocked ?? (badRange ? t('import.badRange') : null))
-  const cannot = disabled || !!blocked || badRange
-  const modes: Mode[] = ['all', 'new', 'period']
+  const modes: DcimMode[] = ['all', 'new', 'period']
+  const isFolder = manual !== null
 
   return (
-    <Frame title={device.name} footer={modeLine(mode)}>
-      <p className="drop-title">{t(devices[0] ? 'import.ready' : 'import.ready.folder', { name: device.name })}</p>
-      {!devices[0] && <p className="import-help" title={device.path}>{device.name}</p>}
+    <Frame title={isFolder ? t('import.ready.folder') : device.name} footer={modeLine(mode)}>
+      <p className="drop-title">{isFolder ? t('import.ready.folder') : device.name}</p>
+      {isFolder && <p className="import-help" title={device.path}>{device.name}</p>}
       <div className="import-modes" role="radiogroup" aria-label={t('import.mode')}>
         {modes.map((value) => (
-          <button key={value} role="radio" aria-checked={mode === value} className={`seg${mode === value ? ' on' : ''}`} onClick={() => setMode(value)}>
+          <button key={value} role="radio" aria-checked={mode === value} disabled={disabled} className={`seg${mode === value ? ' on' : ''}`} onClick={() => setMode(value)}>
             {t(`import.mode.${value}` as const)}
           </button>
         ))}
@@ -381,11 +319,11 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         <div className="import-period">
           <label>
             {t('import.from')}
-            <input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} />
+            <input type="date" value={from} max={to} disabled={disabled} onChange={(event) => setFrom(event.target.value)} />
           </label>
           <label>
             {t('import.to')}
-            <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
+            <input type="date" value={to} min={from} disabled={disabled} onChange={(event) => setTo(event.target.value)} />
           </label>
         </div>
       )}
@@ -394,31 +332,14 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         {scan && scan.videos > 0 && <span className="import-videos"> · {t('import.videos', { n: scan.videos })}</span>}
       </p>
       <div className="import-actions">
-        <button className="btn hot" disabled={cannot} onClick={() => start(mode)}>
-          {t('import.start')}
-        </button>
-        <div className="import-more">
-          <button className="btn ghost" aria-haspopup="menu" aria-expanded={menu} aria-label={t('import.more')} title={t('import.more')} onClick={() => setMenu((value) => !value)}>
-            ⋯
-          </button>
-          {menu && (
-            <div className="import-menu glass" role="menu">
-              <button role="menuitem" disabled={cannot} onClick={() => (setMenu(false), setMode('all'), start('all'))}>
-                {t('import.reimport')}
-              </button>
-              <button role="menuitem" onClick={forget}>
-                {t('import.forget')}
-              </button>
-            </div>
-          )}
-        </div>
+        <MoreMenu
+          label={t('import.more')}
+          items={[
+            { label: t('import.reimport'), onClick: () => setMode('all') },
+            { label: t('import.forget'), onClick: forget }
+          ]}
+        />
       </div>
-      {(reason || error) && (
-        <p className="import-error" role="alert">
-          {error ?? reason}
-        </p>
-      )}
-
       {back}
     </Frame>
   )

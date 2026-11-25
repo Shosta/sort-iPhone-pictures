@@ -94,6 +94,8 @@ type Engine struct {
 	// whose capture date (after DateFallback) lies in the range. With a range,
 	// photos without a usable date are left out.
 	TakenFrom, TakenTo time.Time
+	// Include, when set, restricts the walk to the files it accepts (the canonical path).
+	Include func(path string) bool
 	// ScreenshotFolder files screenshots under ScreenshotsFolder instead of
 	// the regular year/month tree.
 	ScreenshotFolder bool
@@ -162,7 +164,7 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 				plan.Skipped = append(plan.Skipped, Issue{path, "symbolic link ignored"})
 				return nil
 			}
-			if !item.IsDir() && item.Type().IsRegular() && supported(path) {
+			if !item.IsDir() && item.Type().IsRegular() && supported(path) && (engine.Include == nil || engine.Include(path)) {
 				paths[path] = struct{}{}
 			}
 			return nil

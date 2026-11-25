@@ -297,7 +297,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .import-error { margin: 0; color: #fca5a5; }
 .import-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .import-more { position: relative; }
-.import-menu { position: absolute; right: 0; bottom: 100%; margin-bottom: 4px; display: flex; flex-direction: column; min-width: 200px; padding: 4px; z-index: 5; }
+.import-menu { position: fixed; display: flex; flex-direction: column; min-width: 200px; padding: 4px; z-index: 1000; background: var(--surface-raised); border: 1px solid rgba(255,255,255,0.18); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); }
 .import-menu button { background: none; border: 0; color: var(--text); text-align: left; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
 .import-menu button:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 .import-menu button:disabled { opacity: 0.4; cursor: default; }
