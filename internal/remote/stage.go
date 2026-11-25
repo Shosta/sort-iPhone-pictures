@@ -61,6 +61,7 @@ func Stage(root string, items []Item) ([]Item, error) {
 			}
 		}
 		item.Size = info.Size()
+		item.ModTime = info.ModTime()
 		staged = append(staged, item)
 	}
 	return staged, nil
@@ -83,12 +84,17 @@ type Options struct {
 	DryRun     bool
 	OnSent     func(Item)
 	OnProgress func(Progress)
+	// OnPhase reports "prepare", "send" and "verify" as they begin.
+	OnPhase func(string)
 }
 
 // Send stages the items under stageRoot, uploads them with the transport and
 // removes the staged tree, whatever the outcome. Interrupted uploads are
 // resumed by calling Send again with the same items.
 func Send(ctx context.Context, t Transport, cfg Config, stageRoot string, items []Item, opts Options) (Result, error) {
+	if opts.OnPhase != nil {
+		opts.OnPhase("prepare")
+	}
 	staged, err := Stage(stageRoot, items)
 	defer Unstage(stageRoot)
 	if err != nil {
@@ -97,5 +103,5 @@ func Send(ctx context.Context, t Transport, cfg Config, stageRoot string, items 
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	return t.Upload(ctx, cfg, Job{Dir: stageRoot, Items: staged, DryRun: opts.DryRun, OnSent: opts.OnSent, OnProgress: opts.OnProgress})
+	return t.Upload(ctx, cfg, Job{Dir: stageRoot, Items: staged, DryRun: opts.DryRun, OnSent: opts.OnSent, OnProgress: opts.OnProgress, OnPhase: opts.OnPhase})
 }

@@ -83,14 +83,16 @@
 //     then a scratch folder, "destination" is ignored. protocol is daemon
 //     (module + password) or ssh (key authentication); checksum verifies the
 //     files already on the NAS. copy streams progress per photo, remoteProgress
-//     (percent, bytes, rate, eta, done, total), then done (sent, sentBytes,
+//     (percent, bytes, rate, eta, done, total, file) and remotePhase (phase:
+//     connect, library [files], dedupe, prepare, send [total, dryRun], verify,
+//     index; connect also says tool, legacy), then done (sent, sentBytes,
 //     existing, mismatched, mismatchedSample, warnings, dryRun). With dryRun
 //     true nothing is sent and done only reports what would be. remoteTest
 //     lists the destination: remoteTest (ok, entries, sample, pathMissing, tool,
 //     warnings). Remote errors carry code (auth, module, denied, refused, host,
-//     unreachable, hostKey, interrupted, diskFull, permission, path,
+//     unreachable, timeout (rsync silent for 2 minutes), hostKey, interrupted, diskFull, permission, path,
 //     remoteRsync, rsyncMissing, protocol, config, unknown), detail and
-//     resumable; running copy again resumes an interrupted upload.
+//     resumable and legacyRsync (openrsync in use); running copy again resumes an interrupted upload.
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -163,6 +165,10 @@ type request struct {
 	Lang         string         `json:"lang"`
 	Remote       *remote.Config `json:"remote"`
 	DryRun       bool           `json:"dryRun"`
+	// RemoteDir is the folder to browse (remoteList), relative to the module.
+	RemoteDir      string `json:"remoteDir"`
+	RemoteRefresh  bool   `json:"remoteRefresh"`
+	RemoteNoDedupe bool   `json:"remoteNoDedupe"`
 }
 
 type event map[string]any
@@ -190,7 +196,9 @@ type server struct {
 	cache     *thumbCache
 	measurer  scrapbook.Measurer
 	transport remote.Transport
-	wg        sync.WaitGroup
+	// remoteCache overrides where the remote library listing is cached.
+	remoteCache string
+	wg          sync.WaitGroup
 }
 
 func main() {
@@ -268,6 +276,10 @@ func (s *server) handle(parent context.Context, req request) {
 			e := event{"id": req.ID, "type": "error", "message": err.Error(), "cancelled": errors.Is(err, context.Canceled)}
 			if kind, detail, ok := remote.KindOf(err); ok {
 				e["code"], e["detail"], e["resumable"] = string(kind), detail, kind.Resumable()
+				var remoteErr *remote.Error
+				if errors.As(err, &remoteErr) && remoteErr.Legacy {
+					e["legacyRsync"] = true
+				}
 			}
 			s.send(e)
 		}
@@ -300,6 +312,8 @@ func (s *server) run(ctx context.Context, req request) error {
 		s.send(event{"id": req.ID, "type": "done", "copied": report.Copied, "total": total})
 	case "remoteTest":
 		return s.remoteTest(ctx, req)
+	case "remoteList":
+		return s.remoteList(ctx, req)
 	case "thumbnail":
 		return s.thumbnail(ctx, req)
 	case "tag":

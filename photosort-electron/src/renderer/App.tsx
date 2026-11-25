@@ -13,7 +13,7 @@ import { Thumb } from './components/Thumb'
 import { VirtualGrid } from './components/VirtualGrid'
 import { IssueList } from './components/IssueList'
 import { I18nContext, makeTranslate, type Translate } from './i18n'
-import { remoteConfig, remoteLabel, remoteReady, usePrefs } from './prefs'
+import { remoteConfig, remoteFolder, remoteLabel, remoteReady, usePrefs } from './prefs'
 import { remoteErrorText } from './remote'
 import { applyTheme, themeById } from './themes'
 import { cachedThumbnail, onFatal, request } from './sidecar'
@@ -147,24 +147,56 @@ interface RemoteSummary {
   existing?: number
   mismatched?: number
   mismatchedSample?: string[]
+  alreadyTotal?: number
+  tags?: number
   warnings?: string[]
 }
 interface RemoteProgress {
   percent?: number
   rate?: string
   eta?: string
+  done?: number
+  total?: number
+  file?: string
 }
 interface RemoteState {
   progress?: RemoteProgress
   summary?: RemoteSummary
+  phase?: string
+  files?: number
+  total?: number
+  legacy?: boolean
+  dryRun?: boolean
 }
 
-function remoteProgressText(t: Translate, progress: RemoteProgress): string {
-  return t('remote.status.progress', {
-    percent: Math.round(progress.percent ?? 0),
-    rate: progress.rate ? ` — ${progress.rate}` : '',
-    eta: progress.eta ? t('remote.status.eta', { eta: progress.eta }) : ''
-  })
+function elapsedText(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+/** What the NAS transfer is doing right now, in plain words (never empty). */
+function remotePhaseText(t: Translate, state: RemoteState | null, copied: number, total: number): string {
+  switch (state?.phase) {
+    case 'library':
+      return state.files ? t('remote.phase.library.files', { n: state.files }) : t('remote.phase.library')
+    case 'dedupe':
+      return t('remote.phase.dedupe')
+    case 'prepare':
+      return t('remote.phase.prepare')
+    case 'verify':
+      return t('remote.phase.verify')
+    case 'index':
+      return t('remote.phase.index')
+    case 'send': {
+      const progress = state.progress
+      const done = Math.max(progress?.done ?? 0, copied)
+      const count = t(state.dryRun ? 'remote.phase.simulate' : 'remote.phase.send', { done, total: progress?.total || state.total || total })
+      const rate = progress?.rate ? ` — ${progress.rate}` : ''
+      const eta = progress?.eta ? t('remote.status.eta', { eta: progress.eta }) : ''
+      return `${count}${rate}${eta}${progress?.file ? ` — ${progress.file}` : ''}`
+    }
+    default:
+      return t('remote.phase.connect')
+  }
 }
 
 export function App(): JSX.Element {
@@ -178,6 +210,7 @@ export function App(): JSX.Element {
   // The NAS password lives in memory only (and in the system keychain when asked).
   const [remotePassword, setRemotePassword] = useState('')
   const [remoteState, setRemoteState] = useState<RemoteState | null>(null)
+  const [elapsed, setElapsed] = useState(0)
   const [resumable, setResumable] = useState(false)
   const dryRun = useRef(false)
   const [showScrapbook, setShowScrapbook] = useState(false)
@@ -465,8 +498,11 @@ export function App(): JSX.Element {
 
   const sort = (simulate = false): void => {
     if (!plan) return
+    // OK runs the sort and the send; Cancel launches nothing (the user can start the simulation themselves).
+    if (remote && !simulate && !prefs.remoteUsed.includes(remoteLabel(prefs)) && !window.confirm(t('remote.firstTime'))) return
     dryRun.current = simulate
-    setRemoteState(null)
+    setRemoteState(remote ? { phase: 'connect', dryRun: simulate } : null)
+    setElapsed(0)
     setError(null)
     setResumable(false)
     setPhase('copying')
@@ -476,14 +512,26 @@ export function App(): JSX.Element {
     copiedTargets.current = []
     finishing.current = null
     credit.current = 0
-    running.current = request({ op: 'copy', planId: planId.current, ...(remote ? { remote: remoteConfig(prefs, remotePassword), dryRun: simulate } : {}) }, (event) => {
+    running.current = request({ op: 'copy', planId: planId.current, ...(remote ? { remote: remoteConfig(prefs, remotePassword), dryRun: simulate, remoteNoDedupe: !prefs.remoteDedupe, remoteRefresh: simulate } : {}) }, (event) => {
       if (event.type === 'progress') {
         buffer.current.push(event.entry)
         copiedTargets.current.push(`${plan.destination}/${event.entry.target}`)
+      } else if (event.type === 'remotePhase') {
+        setRemoteState((state) => ({
+          ...(state ?? {}),
+          phase: event.phase,
+          ...(event.files !== undefined ? { files: event.files } : {}),
+          ...(event.phase === 'send' ? { total: event.photos ?? event.total, dryRun: !!event.dryRun } : {}),
+          ...(event.legacy !== undefined ? { legacy: !!event.legacy } : {})
+        }))
       } else if (event.type === 'remoteProgress') {
         setRemoteState((state) => ({ ...(state ?? {}), progress: event }))
       } else if (event.type === 'done') {
-        if (event.remote) setRemoteState({ summary: event })
+        if (event.remote) {
+          setRemoteState((state) => ({ legacy: state?.legacy, summary: event }))
+          const label = remoteLabel(prefs)
+          if (!event.dryRun && !prefs.remoteUsed.includes(label)) updatePrefs({ remoteUsed: [...prefs.remoteUsed, label] })
+        }
         // The tick finishes once every copied photo has been displayed.
         finishing.current = 'done'
       } else if (event.type === 'error') {
@@ -491,6 +539,7 @@ export function App(): JSX.Element {
         setPhase('ready')
         if (!event.cancelled) {
           setError(remote ? remoteErrorText(t, event) : event.message)
+          if (remote && event.legacyRsync) setRemoteState((state) => ({ ...(state ?? {}), legacy: true }))
           setResumable(!!event.resumable)
         }
       }
@@ -550,6 +599,17 @@ export function App(): JSX.Element {
   const deep = skipDuplicates || groupSimilar || groupBlurry
   const progress =
     phase === 'analyzing' ? analysisProgress(stage, deep) : phase === 'copying' || phase === 'done' ? (entries.length ? copiedCount / entries.length : 0) : 0
+
+  const sending = remote && phase === 'copying'
+  useEffect(() => {
+    if (!sending) return
+    const timer = setInterval(() => setElapsed((value) => value + 1), 1000)
+    return () => clearInterval(timer)
+  }, [sending])
+  const remoteTotal = remoteState?.progress?.total || remoteState?.total || 0
+  const remoteDone = Math.max(remoteState?.progress?.done ?? 0, copiedCount)
+  const indeterminate = sending && !(remoteState?.phase === 'send' && remoteTotal > 0)
+  const barProgress = sending && !indeterminate ? Math.min(1, remoteDone / remoteTotal) : progress
 
   const animation = animationBudget(entries.length)
   budget.current = animation
@@ -635,12 +695,15 @@ export function App(): JSX.Element {
           <div className="glass destination">
             <label>{t('destination')}</label>
             {remote ? (
+              <>
               <div className="row">
                 <input value={remoteLabel(prefs)} readOnly disabled={busy} title={remoteLabel(prefs)} />
                 <button className="btn ghost" disabled={busy} onClick={() => setShowRemote(true)}>
                   {t('remote.change')}
                 </button>
               </div>
+              <p className="remote-folder-line">{remoteFolder(prefs) ? t('remote.folderLine', { path: remoteFolder(prefs) }) : `⚠️ ${t('remote.folderLine.none')}`}</p>
+              </>
             ) : (
             <div className="row">
               <input
@@ -717,8 +780,8 @@ export function App(): JSX.Element {
       <Flights flights={flights} onDone={removeFlight} />
 
       <footer className="actionbar glass">
-        <div className="progress">
-          <motion.i animate={{ width: `${progress * 100}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} />
+        <div className={`progress${indeterminate ? ' indeterminate' : ''}`} role="progressbar" aria-busy={sending}>
+          <motion.i animate={{ width: indeterminate ? '35%' : `${barProgress * 100}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} />
         </div>
         <div className="status">
           <AnimatePresence mode="wait">
@@ -728,9 +791,9 @@ export function App(): JSX.Element {
                 : phase === 'analyzing'
                   ? analysisStatus(t, stage)
                   : phase === 'copying'
-                    ? remote && remoteState?.progress
-                      ? remoteProgressText(t, remoteState.progress)
-                      : t(remote ? 'remote.status.sending' : 'status.copying', { done: copiedCount, total: entries.length })
+                    ? remote
+                      ? `${remotePhaseText(t, remoteState, copiedCount, entries.length)} · ${elapsedText(elapsed)}`
+                      : t('status.copying', { done: copiedCount, total: entries.length })
                     : phase === 'done'
                       ? remote && remoteState?.summary
                         ? t('remote.status.done', { n: copiedCount, sent: remoteState.summary.sent ?? 0, existing: remoteState.summary.existing ?? 0 })
@@ -742,7 +805,10 @@ export function App(): JSX.Element {
                         : t('status.idle')}
             </motion.span>
           </AnimatePresence>
-          {remoteState?.summary?.warnings?.includes('legacyRsync') && <span className="remote-warn">{t('remote.warn.legacyRsync')}</span>}
+          {(remoteState?.legacy || remoteState?.summary?.warnings?.includes('legacyRsync')) && <span className="remote-warn">{t('remote.warn.legacyRsync')}</span>}
+          {remoteState?.summary?.warnings?.includes('libraryTimeout') && <span className="remote-warn">{t('remote.warn.libraryTimeout')}</span>}
+          {(remoteState?.summary?.alreadyTotal ?? 0) > 0 && <span className="remote-warn">{t('remote.status.already', { n: remoteState?.summary?.alreadyTotal ?? 0 })}</span>}
+          {(remoteState?.summary?.tags ?? 0) > 0 && <span className="remote-warn">{t('remote.status.tags', { n: remoteState?.summary?.tags ?? 0 })}</span>}
           {(remoteState?.summary?.mismatched ?? 0) > 0 && (
             <span className="remote-warn">
               {t('remote.warn.mismatch', { n: remoteState?.summary?.mismatched ?? 0, sample: (remoteState?.summary?.mismatchedSample ?? [])[0] ?? '' })}

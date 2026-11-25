@@ -33,16 +33,20 @@ body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; }
 .step.on { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; }
 
 .glass { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
-.columns { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.column { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.columns { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 14px; }
+.column { display: contents; }
+.column:first-child > .top { grid-column: 1; grid-row: 1; }
+.column:first-child > .panel { grid-column: 1; grid-row: 2; }
+.column:last-child > .top { grid-column: 2; grid-row: 1; }
+.column:last-child > .panel { grid-column: 2; grid-row: 2; }
 .panel { padding: 16px; overflow-y: auto; }
 .grow { flex: 1; min-height: 0; }
 .panel h2 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .panel h2 em { font-style: normal; color: var(--text); margin-left: 6px; font-variant-numeric: tabular-nums; }
 
-.top { height: 232px; flex: none; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.top { min-height: 232px; display: flex; flex-direction: column; gap: 14px; }
 .top > .toggle { flex: none; }
-.top > .destination { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.top > .destination { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
 .dropzone { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding: 14px 18px; text-align: center; border-style: dashed; border-width: 2px; border-color: rgba(255,255,255,0.18); transition: border-color 0.2s, background 0.2s; }
 .dropzone.hover { border-color: var(--accent); background: rgba(var(--accent-rgb),0.15); }
 .drop-icon { font-size: 28px; flex: none; will-change: transform; animation: float 3s ease-in-out infinite; transition: transform 0.2s; }
@@ -251,7 +255,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .assets-error p { margin: 0 0 6px; }
 .assets-error .info { background: none; border: 0; color: inherit; cursor: pointer; font-size: 15px; padding: 0 2px; opacity: 0.85; }
 .assets-error .diagnostic { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); font-size: 12px; white-space: pre-wrap; word-break: break-all; user-select: text; }
-.remote-link { align-self: flex-start; margin-top: 6px; padding: 0; }
+.remote-link { align-self: flex-start; margin-top: 2px; padding: 0; }
 .remote-panel { max-height: 94vh; overflow-y: auto; }
 .remote-fields { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .remote-fields:disabled { opacity: 0.5; }
@@ -264,3 +268,17 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .remote-test.ok { color: #6ee7a0; }
 .remote-test.error { color: #ff8b8b; }
 .remote-warn { color: #ffcf6b; font-size: 12px; }
+
+.remote-browser { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.06); }
+.remote-browser ul { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; display: grid; gap: 2px; }
+.remote-browser li button { width: 100%; text-align: left; }
+
+.remote-chosen { display: grid; gap: 2px; margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: rgba(110, 231, 160, 0.1); border: 1px solid rgba(110, 231, 160, 0.35); }
+.remote-chosen span { font-size: 12px; opacity: 0.75; }
+.remote-chosen strong { word-break: break-all; }
+.remote-chosen.empty { background: rgba(255, 200, 100, 0.08); border-color: rgba(255, 200, 100, 0.35); }
+.remote-folder-line { margin: 0; font-size: 12px; opacity: 0.85; overflow-wrap: anywhere; }
+
+.progress.indeterminate i { animation: indeterminate 1.4s ease-in-out infinite; }
+@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .progress.indeterminate i { animation: none; width: 100% !important; opacity: 0.5; } }

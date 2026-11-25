@@ -161,6 +161,14 @@ const d = n.why.diagram;
         </ul>
       </section>
 
+      <section class="section guide-section shell" id="dossier" aria-labelledby="library-title">
+        <h2 id="library-title">{n.library.title}</h2>
+        <p class="lead">{n.library.lead}</p>
+        <ul class="cards">
+          {n.library.items.map((item) => <li><h3>{item.title}</h3><p>{item.text}</p></li>)}
+        </ul>
+      </section>
+
       <section class="section guide-section shell" id="depannage" aria-labelledby="trouble-title">
         <h2 id="trouble-title">{n.trouble.title}</h2>
         <p class="lead">{n.trouble.lead}</p>

@@ -43,6 +43,33 @@ Le decodage HEIC/AVIF utilise une bibliotheque locale si disponible, sinon un
 decodeur WASM embarque, sans televersement ni outil externe obligatoire.
 Le depot externe de dossiers doit encore etre verifie manuellement sur Linux.
 
+## Tri distant vers un NAS (rsync)
+
+L'application Electron peut envoyer le tri directement vers un NAS (QNAP, etc.)
+via rsync, sans copie intermediaire. Ouvrir « Destination distante (NAS) » puis
+cocher l'envoi vers un NAS. Les champs :
+
+- **Protocole** : `daemon` (serveur rsync du NAS, port 873, mot de passe) ou `SSH`.
+- **Hote, port, utilisateur** : adresse du NAS et compte rsync.
+- **Dossier partage du NAS (module rsync)** : le *nom du partage* defini sur le
+  NAS (QNAP : Services reseau > Serveur Rsync). Ce n'est pas un chemin : c'est
+  le point d'entree, qui pointe vers un dossier reel du NAS (ex. `Photos`).
+  Laisse vide, le bouton « Parcourir… » liste les modules disponibles.
+- **Dossier ou ranger les photos, dans ce partage** (facultatif) : sous-dossier
+  de la bibliotheque, ex. `Bibliotheque`. Les photos arrivent dans
+  `module/dossier/2026/2026-10/...`. Vide = racine du module. En SSH, c'est le
+  chemin complet sur le NAS.
+- **Parcourir…** : navigue dans les dossiers du NAS niveau par niveau ;
+  « Choisir ce dossier » remplit le champ.
+- **Mot de passe** : saisi a chaque fois, ou memorise dans le trousseau du systeme.
+- **Verifier l'integrite (checksum)** et **Ne pas renvoyer les photos deja
+  presentes** (par chemin, nom+taille+date ou contenu SHA-256).
+
+Conseil QNAP : creer un module qui ne pointe que vers le dossier de la
+bibliotheque photo, pas vers un volume entier. Photosort n'ecrit que dans le
+dossier choisi et n'efface jamais rien (ni `--delete`, ni `--remove-source-files`).
+`Tester la connexion` puis `Simuler l'envoi` permettent de verifier avant l'envoi.
+
 ## Applications Distribuables
 
 Les taches VS Code `Photosort: build macOS (.app)` et

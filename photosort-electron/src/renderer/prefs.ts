@@ -40,6 +40,9 @@ export interface Prefs {
   remotePath: string
   remoteKeyFile: string
   remoteChecksum: boolean
+  remoteDedupe: boolean
+  // Destinations already sent to; the first send to a new one proposes a simulation.
+  remoteUsed: string[]
   // true: password kept in the system keychain; false: asked again each session.
   remoteRemember: boolean
   language: Language
@@ -95,6 +98,8 @@ function load(): Prefs {
     remotePath: '',
     remoteKeyFile: '',
     remoteChecksum: false,
+    remoteDedupe: true,
+    remoteUsed: [],
     remoteRemember: false,
     language: detectLanguage(),
     theme: 'aurora'
@@ -137,6 +142,13 @@ export function remoteConfig(prefs: Prefs, password: string): Record<string, unk
 export function remoteReady(prefs: Prefs): boolean {
   if (!prefs.remoteHost.trim()) return false
   return prefs.remoteProtocol === 'daemon' ? !!prefs.remoteModule.trim() : !!prefs.remotePath.trim()
+}
+
+/** Short, readable destination folder: "module/folder" (daemon) or the remote path (SSH). Empty when none chosen. */
+export function remoteFolder(prefs: Prefs): string {
+  const path = prefs.remotePath.trim().replace(/^\/+|\/+$/g, '')
+  if (prefs.remoteProtocol === 'daemon') return [prefs.remoteModule.trim(), path].filter(Boolean).join('/')
+  return path
 }
 
 export function remoteLabel(prefs: Prefs): string {

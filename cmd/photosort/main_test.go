@@ -61,6 +61,18 @@ type fakeTransport struct {
 	calls  int
 }
 
+func (x *fakeTransport) List(context.Context, remote.Config, string) (remote.Listing, error) {
+	return remote.Listing{}, nil
+}
+
+func (x *fakeTransport) ListTree(context.Context, remote.Config) ([]remote.RemoteFile, error) {
+	return nil, nil
+}
+
+func (x *fakeTransport) FetchIndex(context.Context, remote.Config) ([]byte, error) { return nil, nil }
+
+func (x *fakeTransport) StoreIndex(context.Context, remote.Config, []byte) error { return nil }
+
 func (f *fakeTransport) Name() string { return "fake" }
 
 func (f *fakeTransport) Test(_ context.Context, cfg remote.Config) (remote.TestResult, error) {

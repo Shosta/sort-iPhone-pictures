@@ -62,6 +62,7 @@ export const fr: Copy = {
       { name: 'Les doublons', latin: 'Gemini imago', text: 'Doublons et quasi-doublons repérés, les quasi-doublons étant rangés à part.' },
       { name: 'Les préférences', latin: 'Optio', text: 'Interface en français, anglais ou danois, plusieurs thèmes, dossier de sortie au choix.' },
       { name: 'Le scrapbook', latin: 'Charta hebdomada', text: 'Un PDF hebdomadaire à imprimer, découper et coller dans le semainier.' },
+      { name: 'Le disque réseau', latin: 'Nas remotus', text: 'Envoi direct vers le disque réseau de la maison (QNAP…) via rsync : vous choisissez le dossier partagé (module) puis le sous-dossier de la bibliothèque, sans doublons ni suppression. Voir le guide « Tri distant ».' },
     ],
   },
   shots: {

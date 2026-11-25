@@ -19,11 +19,13 @@ const (
 	KindRefused     Kind = "refused"
 	KindHost        Kind = "host"
 	KindUnreachable Kind = "unreachable"
+	KindTimeout     Kind = "timeout"
 	KindHostKey     Kind = "hostKey"
 	KindInterrupted Kind = "interrupted"
 	KindDiskFull    Kind = "diskFull"
 	KindPermission  Kind = "permission"
 	KindPath        Kind = "path"
+	KindMkpath      Kind = "mkpath"
 	KindRemoteTool  Kind = "remoteRsync"
 	KindProtocol    Kind = "protocol"
 	KindUnknown     Kind = "unknown"
@@ -32,7 +34,7 @@ const (
 // Resumable reports whether running the upload again continues where it stopped.
 func (k Kind) Resumable() bool {
 	switch k {
-	case KindRefused, KindHost, KindUnreachable, KindInterrupted, KindUnknown:
+	case KindRefused, KindHost, KindUnreachable, KindTimeout, KindInterrupted, KindUnknown:
 		return true
 	}
 	return false
@@ -43,6 +45,8 @@ func (k Kind) Resumable() bool {
 type Error struct {
 	Kind   Kind
 	Detail string
+	// Legacy is set when the failing rsync is Apple's openrsync (or too old).
+	Legacy bool
 }
 
 func (e *Error) Error() string {

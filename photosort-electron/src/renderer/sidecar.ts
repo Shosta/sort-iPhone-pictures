@@ -7,7 +7,7 @@ let counter = 0
 let started = false
 let fatal: Listener | null = null
 
-const TERMINAL = new Set(['plan', 'done', 'error', 'thumbnail', 'weekDays', 'photos', 'layout', 'yearMapYears', 'places', 'trips', 'trip', 'remoteTest'])
+const TERMINAL = new Set(['plan', 'done', 'error', 'thumbnail', 'weekDays', 'photos', 'layout', 'yearMapYears', 'places', 'trips', 'trip', 'remoteTest', 'remoteList'])
 
 function start(): void {
   if (started) return

@@ -16,7 +16,22 @@ type recordingTransport struct {
 	dryRun   bool
 	existing string
 	err      error
+	listErr  error
 }
+
+func (x *recordingTransport) List(context.Context, remote.Config, string) (remote.Listing, error) {
+	return remote.Listing{}, nil
+}
+
+func (x *recordingTransport) ListTree(context.Context, remote.Config) ([]remote.RemoteFile, error) {
+	return nil, x.listErr
+}
+
+func (x *recordingTransport) FetchIndex(context.Context, remote.Config) ([]byte, error) {
+	return nil, nil
+}
+
+func (x *recordingTransport) StoreIndex(context.Context, remote.Config, []byte) error { return nil }
 
 func (r *recordingTransport) Name() string { return "recording" }
 
@@ -49,6 +64,7 @@ func TestRemoteSortStagesAndSends(t *testing.T) {
 	srv := newServer(&out)
 	transport := &recordingTransport{}
 	srv.transport = transport
+	srv.remoteCache = t.TempDir()
 	cfg := &remote.Config{Protocol: remote.Daemon, Host: "nas", Module: "photos", Password: "pw"}
 	ctx := context.Background()
 
@@ -71,7 +87,11 @@ func TestRemoteSortStagesAndSends(t *testing.T) {
 	out.Reset()
 	srv.handle(ctx, request{ID: "2", Op: "copy", PlanID: "1", Remote: cfg})
 	srv.wg.Wait()
-	got := events(t, &out, "2")
+	all := events(t, &out, "2")
+	if all[0]["type"] != "remotePhase" || all[0]["phase"] != "connect" {
+		t.Fatalf("first event must announce the connection: %v", all)
+	}
+	got := withoutPhases(all)
 	last := got[len(got)-1]
 	if last["type"] != "done" || last["remote"] != true || last["sent"] != float64(1) || len(transport.staged) != 1 {
 		t.Fatalf("events %v staged %v", got, transport.staged)
@@ -89,7 +109,7 @@ func TestRemoteSortStagesAndSends(t *testing.T) {
 	out.Reset()
 	srv.handle(ctx, request{ID: "3", Op: "copy", PlanID: "1", Remote: cfg, DryRun: true})
 	srv.wg.Wait()
-	got = events(t, &out, "3")
+	got = withoutPhases(events(t, &out, "3"))
 	if !transport.dryRun || len(got) != 1 || got[0]["type"] != "done" || got[0]["dryRun"] != true {
 		t.Fatalf("dry run events %v", got)
 	}
@@ -99,10 +119,42 @@ func TestRemoteErrorsCarryACode(t *testing.T) {
 	var out bytes.Buffer
 	srv := newServer(&out)
 	srv.transport = &recordingTransport{err: &remote.Error{Kind: remote.KindAuth, Detail: "auth failed"}}
+	srv.remoteCache = t.TempDir()
 	srv.handle(context.Background(), request{ID: "1", Op: "remoteTest", Remote: &remote.Config{Host: "nas", Module: "m"}})
 	srv.wg.Wait()
 	got := events(t, &out, "1")
 	if len(got) != 1 || got[0]["type"] != "error" || got[0]["code"] != "auth" || got[0]["resumable"] != false {
+		t.Fatalf("events %v", got)
+	}
+}
+
+func withoutPhases(list []map[string]any) []map[string]any {
+	var out []map[string]any
+	for _, e := range list {
+		if e["type"] != "remotePhase" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func TestRemoteSortContinuesWhenTheLibraryListingTimesOut(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "source")
+	writeJPEG(t, filepath.Join(source, "a.jpg"))
+	var out bytes.Buffer
+	srv := newServer(&out)
+	srv.transport = &recordingTransport{listErr: &remote.Error{Kind: remote.KindTimeout}}
+	srv.remoteCache = t.TempDir()
+	cfg := &remote.Config{Protocol: remote.Daemon, Host: "nas", Module: "photos", Password: "pw"}
+	ctx := context.Background()
+	srv.handle(ctx, request{ID: "1", Op: "plan", Sources: []string{source}, Remote: cfg})
+	srv.wg.Wait()
+	srv.handle(ctx, request{ID: "2", Op: "copy", PlanID: "1", Remote: cfg})
+	srv.wg.Wait()
+	got := events(t, &out, "2")
+	last := got[len(got)-1]
+	warnings, _ := last["warnings"].([]any)
+	if last["type"] != "done" || last["sent"] != float64(1) || len(warnings) != 1 || warnings[0] != "libraryTimeout" {
 		t.Fatalf("events %v", got)
 	}
 }
