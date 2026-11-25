@@ -263,7 +263,7 @@ Chaque photo garde sa forme, sans recadrage : son grand côté fait 6,5 cm (port
 
 ## Import depuis un iPhone, une carte SD ou un appareil photo
 
-Sous Linux, Photosort détecte seul un volume monté contenant un dossier `DCIM` (iPhone via GVFS : déverrouillez-le et touchez « Se fier à cet ordinateur »). Sous macOS et Windows, choisissez le dossier `DCIM` à la main. Modes : **Tout**, **Nouveau** (par défaut, grâce à un journal par appareil dans `~/.config/photosort/imports/`) ou **Période**. Les photos (HEIC, JPG, PNG, DNG) sont copiées par lots d'environ 200 Mo dans un dossier temporaire privé, triées, puis le lot est supprimé ; l'appareil n'est jamais modifié. Un appareil débranché met l'import en pause, il reprend au rebranchement. Cet import écrit dans un dossier local (pas encore vers le NAS).
+Sous Linux, Photosort détecte seul un volume monté contenant un dossier `DCIM` (iPhone via GVFS : déverrouillez-le et touchez « Se fier à cet ordinateur »). Sous macOS et Windows, choisissez le dossier `DCIM` à la main. Modes : **Tout**, **Nouveau** (par défaut, grâce à un journal par appareil dans `~/.config/photosort/imports/`) ou **Période**. Les photos (HEIC, JPG, PNG, DNG) sont copiées par lots d'environ 200 Mo dans un dossier temporaire privé, triées, puis le lot est supprimé ; l'appareil n'est jamais modifié. Un appareil débranché met l'import en pause, il reprend au rebranchement. L’import fonctionne aussi vers le NAS (envoi rsync lot par lot).
 
 ## Performances et fluidité
 

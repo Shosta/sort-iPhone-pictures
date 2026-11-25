@@ -101,7 +101,7 @@ Terminal events (renderer drops its listener): see `TERMINAL` in `renderer/sidec
 ### Other `internal/*` quick facts
 
 - `sorter.Engine.TakenFrom/TakenTo` (inclusive, zero = unbounded) filter by capture date; undated photos are excluded when a range is set; counted in `Plan.Filtered`.
-- `internal/devimport`: photo ext heic/jpg/jpeg/png/dng (videos only counted); journal `~/.config/photosort/imports/<id>.json` keyed `rel|size|mtime`; transit `os.TempDir()/photosort-<user>` (0700, owner-checked, no symlinks) with `UserCacheDir/photosort/import` fallback. Read-only on the device. v1 imports to a LOCAL destination only (UI disables it with the NAS destination).
+- `internal/devimport`: photo ext heic/jpg/jpeg/png/dng (videos only counted); journal `~/.config/photosort/imports/<id>.json` keyed `rel|size|mtime`; transit `os.TempDir()/photosort-<user>` (0700, owner-checked, no symlinks) with `UserCacheDir/photosort/import` fallback. Read-only on the device. Local or NAS destination: with `remote` set, each sorted batch goes through `remoteSend` (quiet mode of `remoteCopy`) and is journaled only after rsync succeeds; network cuts emit `importPaused{reason:network}` and retry.
 
 - `tagger`: `New(dir, Options)`, `Tags(Photo)`, `Close`, `FindAssets` (dir → `$PHOTOSORT_AI_DIR` → `ai/` next to exe), `XMP/WriteXMP`.
   Models: `places.onnx`, `categories.txt`, `yunet.onnx` + ONNX Runtime lib. Tag constants (mostly French labels) live in `tagger.go` (People/Portrait/Groupe), `scene.go`, `sun.go`, `meta.go`.
@@ -202,7 +202,7 @@ Rejected: watched folder, native USB/libimobiledevice import (superseded by the 
 
 ### Import from a mounted DCIM volume (iPhone, SD card, camera) — IMPLEMENTED (design record)
 
-Implemented in `internal/devimport`, `cmd/photosort-sidecar/import.go`, `components/ImportCard.tsx`. Deviation from the design: local destination only (NAS later).
+Implemented in `internal/devimport`, `cmd/photosort-sidecar/import.go`, `components/ImportCard.tsx`. NAS destination supported via `remoteSend`.
 
 - **Source**: Linux detects an already-mounted `DCIM` (GVFS `/run/user/<uid>/gvfs/afc:host=<UDID>`, `/media`, `/run/media`); also watches for plug-in after launch. No mounting/pairing in the app; help message if nothing found ("unlock the iPhone, tap Trust"). macOS/Windows: pick the source manually; batch-copy code stays platform-neutral.
 - **Read-only**: never modify/delete anything on the device.

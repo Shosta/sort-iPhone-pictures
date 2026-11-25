@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"sort-iphone-pictures/internal/devimport"
+	"sort-iphone-pictures/internal/remote"
 	"sort-iphone-pictures/sorter"
 )
 
@@ -208,7 +209,7 @@ func (s *server) importRun(ctx context.Context, req request) error {
 		return errors.New("an import is already running")
 	}
 	defer s.importing.Store(false)
-	if req.Destination == "" {
+	if req.Destination == "" && req.Remote == nil {
 		return errors.New("no destination")
 	}
 	dcim, id, err := importSource(req)
@@ -337,6 +338,7 @@ func (s *server) importRun(ctx context.Context, req request) error {
 			if err != nil {
 				return err
 			}
+			batchReq := req
 			engine := sorter.Engine{
 				ByLocation: req.ByLocation, Landmarks: req.Landmarks, SkipDuplicates: req.Dedupe, GroupSimilar: req.Similar,
 				DateFallback: req.DateFallback, ScreenshotFolder: req.Screenshots, GroupBlurry: req.Blurry,
@@ -344,16 +346,33 @@ func (s *server) importRun(ctx context.Context, req request) error {
 				Progress: func(stage string, _, _ int) { progress("sort", st.n, stage) },
 			}
 			progress("sort", st.n, "exif")
-			plan, err := engine.Plan(runCtx, []string{canon}, req.Destination)
+			dest := req.Destination
+			if req.Remote != nil {
+				// The engine plans against a scratch folder; rsync sends from links to the transit copies.
+				var cleanup func()
+				if cleanup, err = prepareRemotePlan(&batchReq); err != nil {
+					return err
+				}
+				defer cleanup()
+				dest = batchReq.Destination
+			}
+			plan, err := engine.Plan(runCtx, []string{canon}, dest)
 			if err != nil {
 				return err
 			}
-			report, err := sorter.Copy(runCtx, plan)
-			if err != nil {
-				return err
-			}
-			if report.Copied != len(plan.Entries) {
-				return fmt.Errorf("batch %d: %d of %d photos sorted", st.n+1, report.Copied, len(plan.Entries))
+			undelivered := map[string]bool{}
+			if req.Remote != nil {
+				if undelivered, err = s.deliverRemote(runCtx, g, req, plan, func(name string) { progress("send", st.n, name) }); err != nil {
+					return err
+				}
+			} else {
+				report, err := sorter.Copy(runCtx, plan)
+				if err != nil {
+					return err
+				}
+				if report.Copied != len(plan.Entries) {
+					return fmt.Errorf("batch %d: %d of %d photos sorted", st.n+1, report.Copied, len(plan.Entries))
+				}
 			}
 			byRel := make(map[string]File, len(st.files))
 			for _, f := range st.files {
@@ -368,10 +387,15 @@ func (s *server) importRun(ctx context.Context, req request) error {
 				}
 			}
 			for _, entry := range plan.Entries {
-				info, err := os.Stat(filepath.Join(plan.Destination, entry.Target))
-				src, srcErr := os.Stat(entry.Source)
-				if err != nil || srcErr != nil || info.Size() != src.Size() {
-					return fmt.Errorf("batch %d: %s was not delivered", st.n+1, entry.Target)
+				if undelivered[entry.Target] {
+					continue
+				}
+				if req.Remote == nil {
+					info, err := os.Stat(filepath.Join(plan.Destination, entry.Target))
+					src, srcErr := os.Stat(entry.Source)
+					if err != nil || srcErr != nil || info.Size() != src.Size() {
+						return fmt.Errorf("batch %d: %s was not delivered", st.n+1, entry.Target)
+					}
 				}
 				mark(entry.Source)
 			}
@@ -432,5 +456,46 @@ func (s *server) waitForDevice(ctx context.Context, id, old string) (string, err
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
+	}
+}
+
+// networkRetry is how long an import waits before retrying a batch after the
+// NAS became unreachable.
+var networkRetry = 5 * time.Second
+
+func transientRemote(kind remote.Kind) bool {
+	return kind == remote.KindUnreachable || kind == remote.KindTimeout || kind == remote.KindInterrupted
+}
+
+// deliverRemote sends one sorted batch through the regular NAS path. A network
+// cut pauses the import and retries the batch (rsync never rewrites what is
+// already there); nothing is journaled until this returns. The result lists the
+// targets the NAS holds with different content, which are not counted as delivered.
+func (s *server) deliverRemote(ctx context.Context, g *gate, req request, plan sorter.Plan, onPhase func(string)) (map[string]bool, error) {
+	for {
+		if err := g.wait(ctx); err != nil {
+			return nil, err
+		}
+		res, err := s.remoteSend(ctx, req, plan, &remoteBatch{onPhase: onPhase})
+		if err == nil {
+			bad := map[string]bool{}
+			for _, target := range res.Mismatched {
+				bad[target] = true
+			}
+			return bad, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if kind, _, ok := remote.KindOf(err); !ok || !transientRemote(kind) {
+			return nil, err
+		}
+		s.send(event{"id": req.ID, "type": "importPaused", "reason": "network"})
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(networkRetry):
+		}
+		s.send(event{"id": req.ID, "type": "importResumed", "reason": "reconnected"})
 	}
 }

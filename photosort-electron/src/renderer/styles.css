@@ -316,3 +316,9 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .card-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; line-height: 1.2; }
 .card-link-icon { font-size: 15px; line-height: 1; }
 .import-open { margin-top: 0; }
+.top.with-import .destination { justify-content: flex-start; }
+.top.with-import .import-card { max-height: 330px; }
+.import-card .drop-icon { font-size: 24px; }
+.import-card .card-body { gap: 6px; padding: 12px 18px; }
+.import-period label { flex-direction: row; align-items: center; gap: 6px; }
+.import-card .import-help { margin: 0; }

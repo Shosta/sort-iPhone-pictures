@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"sort-iphone-pictures/internal/remote"
 )
 
 func lastEvent(t *testing.T, out *bytes.Buffer, id, kind string) map[string]any {
@@ -82,5 +85,96 @@ func TestImportRunJournalsAndSkipsNew(t *testing.T) {
 	srv.wg.Wait()
 	if scan := lastEvent(t, &out, "s2", "importScan"); scan["count"] != float64(2) {
 		t.Fatalf("forgotten device must list everything: %v", scan)
+	}
+}
+
+// flakyTransport is a fake rsync: the first Upload fails like a network cut
+// after sending nothing, the next ones deliver.
+type flakyTransport struct {
+	recordingTransport
+	failures int
+	failWith error
+	calls    int
+}
+
+func (f *flakyTransport) Upload(ctx context.Context, cfg remote.Config, job remote.Job) (remote.Result, error) {
+	f.calls++
+	if f.failures > 0 {
+		f.failures--
+		return remote.Result{}, f.failWith
+	}
+	return f.recordingTransport.Upload(ctx, cfg, job)
+}
+
+func importToNAS(t *testing.T, transport remote.Transport) (*server, *bytes.Buffer, request, string) {
+	t.Helper()
+	base := t.TempDir()
+	dcim := filepath.Join(base, "DCIM")
+	writeJPEG(t, filepath.Join(dcim, "100APPLE", "IMG_0001.JPG"))
+	writeJPEG(t, filepath.Join(dcim, "100APPLE", "IMG_0002.JPG"))
+	var out bytes.Buffer
+	srv := newServer(&out)
+	srv.journalDir = filepath.Join(base, "journal")
+	srv.transport = transport
+	srv.remoteCache = t.TempDir()
+	cfg := &remote.Config{Protocol: remote.Daemon, Host: "nas", Module: "photos", Password: "pw"}
+	return srv, &out, request{ID: "r", Op: "importRun", DevicePath: dcim, DeviceID: "dev", Mode: importModeNew, Remote: cfg}, dcim
+}
+
+func TestImportToNASJournalsAfterDelivery(t *testing.T) {
+	transport := &flakyTransport{}
+	srv, out, run, dcim := importToNAS(t, transport)
+	ctx := context.Background()
+	srv.handle(ctx, run)
+	srv.wg.Wait()
+	done := lastEvent(t, out, "r", "importDone")
+	if done["imported"] != float64(2) || len(transport.staged) != 2 {
+		t.Fatalf("done %v staged %v", done, transport.staged)
+	}
+	for _, e := range events(t, out, "r") {
+		if e["type"] == "done" || e["type"] == "progress" {
+			t.Fatalf("a batch must not emit %v", e["type"])
+		}
+	}
+	srv.handle(ctx, request{ID: "s", Op: "importScan", DevicePath: dcim, DeviceID: "dev", Mode: importModeNew})
+	srv.wg.Wait()
+	if scan := lastEvent(t, out, "s", "importScan"); scan["count"] != float64(0) {
+		t.Fatalf("delivered photos must be journaled: %v", scan)
+	}
+}
+
+func TestImportToNASNetworkCutPausesAndResumes(t *testing.T) {
+	networkRetry = 10 * time.Millisecond
+	defer func() { networkRetry = 5 * time.Second }()
+	transport := &flakyTransport{failures: 1, failWith: &remote.Error{Kind: remote.KindUnreachable}}
+	srv, out, run, _ := importToNAS(t, transport)
+	srv.handle(context.Background(), run)
+	srv.wg.Wait()
+	var paused, resumed bool
+	for _, e := range events(t, out, "r") {
+		paused = paused || (e["type"] == "importPaused" && e["reason"] == "network")
+		resumed = resumed || e["type"] == "importResumed"
+	}
+	if !paused || !resumed || transport.calls != 2 {
+		t.Fatalf("paused %v resumed %v calls %d", paused, resumed, transport.calls)
+	}
+	if done := lastEvent(t, out, "r", "importDone"); done["imported"] != float64(2) {
+		t.Fatalf("done %v", done)
+	}
+}
+
+func TestImportToNASFailureLeavesJournalEmpty(t *testing.T) {
+	transport := &flakyTransport{failures: 1, failWith: &remote.Error{Kind: remote.KindAuth, Detail: "denied"}}
+	srv, out, run, dcim := importToNAS(t, transport)
+	ctx := context.Background()
+	srv.handle(ctx, run)
+	srv.wg.Wait()
+	if e := lastEvent(t, out, "r", "error"); e["code"] != "auth" {
+		t.Fatalf("error %v", e)
+	}
+	srv.handle(ctx, request{ID: "s", Op: "importScan", DevicePath: dcim, DeviceID: "dev", Mode: importModeNew})
+	srv.wg.Wait()
+	if scan := lastEvent(t, out, "s", "importScan"); scan["count"] != float64(2) {
+		t.Fatalf("nothing may be journaled before delivery: %v", scan)
 	}
 }

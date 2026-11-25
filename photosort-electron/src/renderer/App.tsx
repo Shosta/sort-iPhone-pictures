@@ -473,7 +473,7 @@ export function App(): JSX.Element {
     resetResults()
     setPhase('analyzing')
     setStage(null)
-    const planRequest = request({ op: 'plan', sources, destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
+    const planRequest = request({ op: 'plan', sources, destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, remoteNoDedupe: remote ? !prefs.remoteDedupe : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }, (event) => {
       if (event.type === 'status') setStage({ name: event.stage, done: event.done, total: event.total })
       else if (event.type === 'draft') {
         const entries: Entry[] = event.entries ?? []
@@ -673,7 +673,7 @@ export function App(): JSX.Element {
 
       <main className="columns">
         <section className="column">
-          <div className="top">
+          <div className={`top${importVisible ? ' with-import' : ''}`}>
           {!importVisible && (
             <DropZone
               sources={sources}
@@ -687,16 +687,15 @@ export function App(): JSX.Element {
             />
           )}
           <ImportCard
-            options={{ destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }}
-            blocked={remote ? t('import.nas') : !destination.trim() ? t('import.noDest') : null}
+            options={{ destination: remote ? '' : destination, remote: remote ? remoteConfig(prefs, remotePassword) : undefined, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }}
+            blocked={remote ? (remoteReady(prefs) ? null : t('import.noRemote')) : !destination.trim() ? t('import.noDest') : null}
+            locale={prefs.language}
             disabled={phase === 'analyzing' || phase === 'copying'}
             open={importOpen}
             onClose={() => setImportOpen(false)}
             onVisible={setImportVisible}
             onRunning={setImporting}
             onFinished={resetResults}
-            nas={remote}
-            onUseLocal={() => (updatePrefs({ remoteEnabled: false }), resetResults())}
           />
           </div>
           <div className="glass panel grow list">

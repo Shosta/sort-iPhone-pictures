@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useT, type Translate } from '../i18n'
+import { remoteErrorText } from '../remote'
 import { request } from '../sidecar'
 
 export interface ImportDevice {
@@ -10,6 +11,8 @@ export interface ImportDevice {
 
 export interface ImportSortOptions {
   destination: string
+  remote?: Record<string, unknown>
+  remoteNoDedupe?: boolean
   byLocation: boolean
   landmarks: boolean
   dedupe: boolean
@@ -32,9 +35,7 @@ interface Props {
   /** True while an import is running (locks the rest of the UI). */
   onRunning: (running: boolean) => void
   onFinished: () => void
-  /** Switch the destination back from the NAS to a local folder. */
-  onUseLocal?: () => void
-  nas: boolean
+  locale: string
 }
 
 type Mode = 'all' | 'new' | 'period'
@@ -48,7 +49,7 @@ interface Scan {
 }
 
 interface Progress {
-  phase: 'copy' | 'sort'
+  phase: 'copy' | 'sort' | 'send'
   batch: number
   batches: number
   copied: number
@@ -70,11 +71,16 @@ function clock(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-function errorText(t: Translate, event: { code?: string; detail?: string; message?: string }): string {
+function errorText(t: Translate, event: { code?: string; detail?: string; message?: string; resumable?: boolean }): string {
   if (event.code === 'lowDisk') return t('import.err.lowDisk')
   if (event.code === 'noDevice') return t('import.err.noDevice')
   if (event.code === 'copy') return t('import.err.copy', { detail: event.detail ?? '' })
-  return event.message ?? ''
+  return remoteErrorText(t, event)
+}
+
+function localDate(iso: string, locale: string): string {
+  const day = new Date(`${iso.slice(0, 10)}T00:00:00`)
+  return Number.isNaN(day.getTime()) ? iso : day.toLocaleDateString(locale)
 }
 
 function baseName(path: string): string {
@@ -95,7 +101,7 @@ function Frame({ title, footer, children }: { title: string; footer: string; chi
   )
 }
 
-export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished, onUseLocal, nas }: Props): JSX.Element | null {
+export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished, locale }: Props): JSX.Element | null {
   const t = useT()
   const [devices, setDevices] = useState<ImportDevice[]>([])
   const [manual, setManual] = useState<ImportDevice | null>(null)
@@ -213,7 +219,7 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         ? t('import.foot.all')
         : badRange
           ? t('import.badRange')
-          : t('import.foot.period', { from, to })
+          : t('import.foot.period', { from: localDate(from, locale), to: localDate(to, locale) })
 
   const back = (
     <button className="link card-link" onClick={() => (setManual(null), onClose())}>
@@ -231,10 +237,12 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         <p className="import-phase" aria-live="polite">
           {paused === 'disconnected'
             ? t('import.disconnected')
+            : paused === 'network'
+              ? t('import.network')
             : paused
               ? t('import.paused')
               : progress
-                ? `${t(progress.phase === 'copy' ? 'import.phase.copy' : 'import.phase.sort')} · ${t('import.batch', { n: progress.batch, total: progress.batches })}`
+                ? `${t(progress.phase === 'copy' ? 'import.phase.copy' : progress.phase === 'send' ? 'import.phase.send' : 'import.phase.sort')} · ${t('import.batch', { n: progress.batch, total: progress.batches })}`
                 : t('import.counting')}
         </p>
         <div className={`progress import-bar${progress ? '' : ' indeterminate'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(done * 100)}>
@@ -242,7 +250,7 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         </div>
         <p className="import-meta">{progress ? `${t('import.progress', { done: progress.done, total })} · ${clock(progress.elapsedMs)}` : ''}</p>
         <div className="import-actions">
-          {paused !== 'disconnected' && (
+          {paused !== 'disconnected' && paused !== 'network' && (
             <button className="btn ghost" onClick={() => control(paused ? 'resume' : 'pause')}>
               {paused ? t('import.resume') : t('import.pause')}
             </button>
@@ -293,15 +301,16 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
     : zero
       ? t(mode === 'new' ? 'import.zero.new' : mode === 'period' ? 'import.zero.period' : 'import.zero.all')
       : scan.count === 1
-        ? t('import.count.one', { from: scan.from.slice(0, 10) })
-        : t('import.count', { n: scan.count, from: scan.from.slice(0, 10), to: scan.to.slice(0, 10) })
+        ? t('import.count.one', { from: localDate(scan.from, locale) })
+        : t('import.count', { n: scan.count, from: localDate(scan.from, locale), to: localDate(scan.to, locale) })
   const reason = disabled ? null : (blocked ?? (badRange ? t('import.badRange') : null))
   const cannot = disabled || !!blocked || badRange
   const modes: Mode[] = ['all', 'new', 'period']
 
   return (
     <Frame title={device.name} footer={modeLine(mode)}>
-      <p className="drop-title">{t('import.ready', { name: device.name })}</p>
+      <p className="drop-title">{t(devices[0] ? 'import.ready' : 'import.ready.folder', { name: device.name })}</p>
+      {!devices[0] && <p className="import-help" title={device.path}>{device.name}</p>}
       <div className="import-modes" role="radiogroup" aria-label={t('import.mode')}>
         {modes.map((value) => (
           <button key={value} role="radio" aria-checked={mode === value} className={`seg${mode === value ? ' on' : ''}`} onClick={() => setMode(value)}>
@@ -350,11 +359,7 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
           {error ?? reason}
         </p>
       )}
-      {nas && !error && onUseLocal && (
-        <button className="btn ghost" onClick={onUseLocal}>
-          {t('import.useLocal')}
-        </button>
-      )}
+
       {back}
     </Frame>
   )

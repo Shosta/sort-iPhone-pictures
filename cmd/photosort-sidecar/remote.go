@@ -54,10 +54,20 @@ func (s *server) remoteTest(ctx context.Context, req request) error {
 // remoteCopy sends the plan to the NAS. It reports each step ("remotePhase":
 // connect, library, dedupe, prepare, send, verify, index) so the UI never has
 // to guess what is going on.
-func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) (err error) {
+func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) error {
+	_, err := s.remoteSend(ctx, req, plan, nil)
+	return err
+}
+
+// remoteBatch makes remoteSend quiet: no per-photo "progress" nor final "done"
+// event (a DCIM import sends many batches under one request id); each step
+// name is handed to onPhase instead.
+type remoteBatch struct{ onPhase func(name string) }
+
+func (s *server) remoteSend(ctx context.Context, req request, plan sorter.Plan, batch *remoteBatch) (res remote.Result, err error) {
 	cfg := *req.Remote
 	if err := cfg.Validate(); err != nil {
-		return err
+		return res, err
 	}
 	legacy := false
 	defer func() {
@@ -67,6 +77,10 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 		}
 	}()
 	phase := func(name string, extra ...any) {
+		if batch != nil {
+			batch.onPhase(name)
+			return
+		}
 		e := event{"id": req.ID, "type": "remotePhase", "phase": name}
 		for i := 0; i+1 < len(extra); i += 2 {
 			e[extra[i].(string)] = extra[i+1]
@@ -77,7 +91,7 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 	if info, ok := s.transport.(remote.ToolInfo); ok {
 		tool, err := info.Tool(ctx)
 		if err != nil {
-			return err
+			return res, err
 		}
 		legacy = tool.Legacy()
 		phase("connect", "tool", tool.Path, "version", tool.Version, "legacy", legacy, "openrsync", tool.OpenRsync)
@@ -126,7 +140,7 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 			lib = remote.Library{}
 		}
 		if err != nil {
-			return err
+			return res, err
 		}
 		phase("dedupe", "total", total)
 		report = remote.Dedupe(items, lib)
@@ -167,14 +181,16 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 			reported[item.Target] = true
 			sentItems = append(sentItems, item)
 			lock.Unlock()
-			s.send(event{"id": req.ID, "type": "progress", "entry": entries[item.Target], "total": total})
+			if batch == nil {
+				s.send(event{"id": req.ID, "type": "progress", "entry": entries[item.Target], "total": total})
+			}
 		}
 	}
 	result, err := remote.Send(ctx, s.transport, cfg, plan.Destination, toSend, opts)
 	if err != nil {
-		return err
+		return result, err
 	}
-	if !req.DryRun {
+	if !req.DryRun && batch == nil {
 		// What was already on the NAS counts as sorted too.
 		for _, entry := range plan.Entries {
 			lock.Lock()
@@ -205,12 +221,15 @@ func (s *server) remoteCopy(ctx context.Context, req request, plan sorter.Plan) 
 	if len(mismatched) > 20 {
 		mismatched = mismatched[:20]
 	}
+	if batch != nil {
+		return result, nil
+	}
 	s.send(event{"id": req.ID, "type": "done", "copied": total, "total": total, "remote": true, "dryRun": result.DryRun,
 		"sent": len(result.Sent), "sentBytes": result.SentBytes, "existing": result.Existing,
 		"mismatched": len(result.Mismatched), "mismatchedSample": mismatched, "warnings": result.Warnings, "url": cfg.URL(),
 		"alreadyPath": report.Count(remote.ReasonPath), "alreadySame": report.Count(remote.ReasonSame), "alreadyIndex": report.Count(remote.ReasonIndex),
 		"alreadyTotal": len(report.Skipped), "toSend": len(report.ToSend), "tags": result.Tags, "tagsExisting": result.TagsExisting})
-	return nil
+	return result, nil
 }
 
 func (s *server) remoteList(ctx context.Context, req request) error {
