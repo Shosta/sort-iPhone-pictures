@@ -65,6 +65,8 @@ type Progress struct {
 	ETA     string  `json:"eta,omitempty"`
 	Done    int     `json:"done"`
 	Total   int     `json:"total"`
+	// File is the last photo rsync reported.
+	File string `json:"file,omitempty"`
 }
 
 // Job is a staged tree ready to upload.
@@ -77,6 +79,8 @@ type Job struct {
 	// OnSent is called when an item has been sent (or, for a dry run, would be).
 	OnSent     func(Item)
 	OnProgress func(Progress)
+	// OnPhase reports the steps of the upload ("send", "verify").
+	OnPhase func(string)
 }
 
 // Result summarises an upload.

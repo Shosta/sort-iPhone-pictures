@@ -166,6 +166,9 @@ func (r Rsync) ListTree(ctx context.Context, cfg Config) ([]RemoteFile, error) {
 	err = r.run(ctx, tool.Path, append(args, destination(cfg)), cfg.Password, func(line string) {
 		if entry, ok := parseList(line); ok && !entry.dir && !hiddenName(entry.name) {
 			files = append(files, RemoteFile{Path: normalize(entry.name), Size: entry.size, ModTime: entry.modTime})
+			if len(files)%200 == 0 {
+				notify(ctx, Activity{Files: len(files)})
+			}
 		}
 	})
 	if kind, _, ok := KindOf(err); ok && kind == KindPath {

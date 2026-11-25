@@ -75,14 +75,16 @@
 //     then a scratch folder, "destination" is ignored. protocol is daemon
 //     (module + password) or ssh (key authentication); checksum verifies the
 //     files already on the NAS. copy streams progress per photo, remoteProgress
-//     (percent, bytes, rate, eta, done, total), then done (sent, sentBytes,
+//     (percent, bytes, rate, eta, done, total, file) and remotePhase (phase:
+//     connect, library [files], dedupe, prepare, send [total, dryRun], verify,
+//     index; connect also says tool, legacy), then done (sent, sentBytes,
 //     existing, mismatched, mismatchedSample, warnings, dryRun). With dryRun
 //     true nothing is sent and done only reports what would be. remoteTest
 //     lists the destination: remoteTest (ok, entries, sample, pathMissing, tool,
 //     warnings). Remote errors carry code (auth, module, denied, refused, host,
-//     unreachable, hostKey, interrupted, diskFull, permission, path,
+//     unreachable, timeout (rsync silent for 2 minutes), hostKey, interrupted, diskFull, permission, path,
 //     remoteRsync, rsyncMissing, protocol, config, unknown), detail and
-//     resumable; running copy again resumes an interrupted upload.
+//     resumable and legacyRsync (openrsync in use); running copy again resumes an interrupted upload.
 //
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
@@ -266,6 +268,10 @@ func (s *server) handle(parent context.Context, req request) {
 			e := event{"id": req.ID, "type": "error", "message": err.Error(), "cancelled": errors.Is(err, context.Canceled)}
 			if kind, detail, ok := remote.KindOf(err); ok {
 				e["code"], e["detail"], e["resumable"] = string(kind), detail, kind.Resumable()
+				var remoteErr *remote.Error
+				if errors.As(err, &remoteErr) && remoteErr.Legacy {
+					e["legacyRsync"] = true
+				}
 			}
 			s.send(e)
 		}

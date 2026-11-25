@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseURL(t *testing.T) {
@@ -109,6 +111,7 @@ func fakeRsync(t *testing.T) string {
 	script := `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "rsync  version ${FAKE_VERSION:-3.2.7}  protocol version 31"; exit 0; fi
 echo "$@" >> "$FAKE_LOG"
+if [ -n "$FAKE_HANG" ]; then sleep 30; exit 0; fi
 for a in "$@"; do
   case "$a" in
     --password-file=*) f="${a#--password-file=}"; cat "$f" > "$FAKE_PW"; ls -l "$f" | cut -c1-10 > "$FAKE_PERMS";;
@@ -327,5 +330,58 @@ func TestRealRsyncFollowsLinksAndKeepsExisting(t *testing.T) {
 	}
 	if !slices.Contains(sent, "2024/Montréal/IMG.jpg") || slices.Contains(sent, "2024/Montréal/OLD.jpg") {
 		t.Errorf("reported names = %q", sent)
+	}
+}
+
+func TestStuckRsyncTimesOutInsteadOfFreezing(t *testing.T) {
+	fake := fakeRsync(t)
+	t.Setenv("FAKE_HANG", "1")
+	start := time.Now()
+	_, err := Send(context.Background(), Rsync{Path: fake, Idle: 300 * time.Millisecond}, daemonConfig(), filepath.Join(t.TempDir(), "stage"), testItems(t), Options{})
+	if kind, _, ok := KindOf(err); !ok || kind != KindTimeout {
+		t.Fatalf("err = %v, want timeout", err)
+	}
+	if !KindTimeout.Resumable() || time.Since(start) > 10*time.Second {
+		t.Fatalf("timeout must be resumable and prompt (took %v)", time.Since(start))
+	}
+}
+
+func TestUploadReportsPhasesAndEveryFileEvenInDryRun(t *testing.T) {
+	fake := fakeRsync(t)
+	t.Setenv("FAKE_SENT", "2024/a.jpg\n2024/b.jpg")
+	for _, dry := range []bool{false, true} {
+		var phases []string
+		var last Progress
+		_, err := Send(context.Background(), Rsync{Path: fake}, daemonConfig(), filepath.Join(t.TempDir(), "stage"), testItems(t), Options{
+			DryRun:     dry,
+			OnPhase:    func(p string) { phases = append(phases, p) },
+			OnProgress: func(p Progress) { last = p },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(phases, []string{"prepare", "send"}) {
+			t.Fatalf("dry=%v phases = %v", dry, phases)
+		}
+		// A real send ends on rsync's overall progress line; a simulation has
+		// no such line, so it reports file by file.
+		if dry && (last.Done != 2 || last.File != "2024/b.jpg" || last.Total != 3) {
+			t.Fatalf("dry=%v last progress = %+v", dry, last)
+		}
+	}
+}
+
+func TestLibraryListingReportsActivity(t *testing.T) {
+	fake := fakeRsync(t)
+	var lines []string
+	for i := 0; i < 450; i++ {
+		lines = append(lines, "-rw-r--r--            5 2024/01/02 10:00:00 2024/p"+strconv.Itoa(i)+".jpg")
+	}
+	t.Setenv("FAKE_LIST", strings.Join(lines, "\n"))
+	var seen []int
+	ctx := WithActivity(context.Background(), func(a Activity) { seen = append(seen, a.Files) })
+	files, err := Rsync{Path: fake}.ListTree(ctx, daemonConfig())
+	if err != nil || len(files) != 450 || !slices.Equal(seen, []int{200, 400}) {
+		t.Fatalf("files=%d err=%v seen=%v", len(files), err, seen)
 	}
 }

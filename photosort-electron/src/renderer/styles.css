@@ -278,3 +278,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .remote-chosen strong { word-break: break-all; }
 .remote-chosen.empty { background: rgba(255, 200, 100, 0.08); border-color: rgba(255, 200, 100, 0.35); }
 .remote-folder-line { margin: 0; font-size: 12px; opacity: 0.85; overflow-wrap: anywhere; }
+
+.progress.indeterminate i { animation: indeterminate 1.4s ease-in-out infinite; }
+@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .progress.indeterminate i { animation: none; width: 100% !important; opacity: 0.5; } }

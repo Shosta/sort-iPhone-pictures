@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -99,7 +100,25 @@ func FindRsync(ctx context.Context) (Tool, error) {
 type Rsync struct {
 	// Path forces an executable (tests); empty means FindRsync.
 	Path string
+	// Idle is how long rsync may stay completely silent before it is
+	// considered stuck; zero means DefaultIdle.
+	Idle time.Duration
 }
+
+// DefaultIdle bounds the silence of a running rsync. Uploads print progress
+// every second or so, so a minute or two without any output means the NAS (or
+// the connection) is stuck.
+const DefaultIdle = 2 * time.Minute
+
+func (r Rsync) idle() time.Duration {
+	if r.Idle > 0 {
+		return r.Idle
+	}
+	return DefaultIdle
+}
+
+// Tool implements ToolInfo.
+func (r Rsync) Tool(ctx context.Context) (Tool, error) { return r.tool(ctx) }
 
 func (r Rsync) Name() string { return "rsync" }
 
@@ -260,6 +279,10 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 	}
 	seen := map[string]bool{}
 	var bytesDone int64
+	var lastRate, lastFile string
+	if job.OnPhase != nil {
+		job.OnPhase("send")
+	}
 	emit := func(p Progress) {
 		if job.OnProgress != nil {
 			p.Total = photos
@@ -280,16 +303,20 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 				if job.OnSent != nil {
 					job.OnSent(item)
 				}
-				if !tool.Info2 {
-					emit(Progress{Done: len(result.Sent), Bytes: bytesDone, Percent: 100 * float64(len(result.Sent)) / float64(max(1, photos))})
+				lastFile = item.Target
+				if !tool.Info2 || job.DryRun {
+					emit(Progress{Done: len(result.Sent), Bytes: bytesDone, Rate: lastRate, File: lastFile, Percent: 100 * float64(len(result.Sent)) / float64(max(1, photos))})
 				}
 			}
 			return
 		}
-		if match := progressPattern.FindStringSubmatch(line); match != nil && tool.Info2 && !job.DryRun {
-			percent, _ := strconv.ParseFloat(match[2], 64)
-			done, _ := strconv.ParseInt(strings.NewReplacer(",", "", ".", "").Replace(match[1]), 10, 64)
-			emit(Progress{Percent: percent, Bytes: done, Rate: match[3], ETA: match[4], Done: len(result.Sent)})
+		if match := progressPattern.FindStringSubmatch(line); match != nil && !job.DryRun {
+			lastRate = match[3]
+			if tool.Info2 {
+				percent, _ := strconv.ParseFloat(match[2], 64)
+				done, _ := strconv.ParseInt(strings.NewReplacer(",", "", ".", "").Replace(match[1]), 10, 64)
+				emit(Progress{Percent: percent, Bytes: done, Rate: match[3], ETA: match[4], Done: len(result.Sent), File: lastFile})
+			}
 		}
 	})
 	if err != nil {
@@ -298,6 +325,9 @@ func (r Rsync) Upload(ctx context.Context, cfg Config, job Job) (Result, error) 
 	result.Existing = photos - len(result.Sent)
 	result.TagsExisting = tags - result.Tags
 	if cfg.Checksum && !job.DryRun {
+		if job.OnPhase != nil {
+			job.OnPhase("verify")
+		}
 		mismatched, err := r.verify(ctx, tool, cfg, job, conn, dest, byName)
 		if err != nil {
 			return result, err
@@ -387,32 +417,62 @@ func listedName(line string) string {
 }
 
 // run executes rsync, feeding every output line (split on \n and \r) to onLine.
+// A run that prints nothing for the idle limit is killed and reported as a
+// timeout, so a stuck NAS never leaves the caller waiting forever.
 func (r Rsync) run(ctx context.Context, binary string, args []string, password string, onLine func(string)) error {
 	if err := checkArgs(args); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, binary, args...)
 	cmd.Stdin = nil
 	cmd.WaitDelay = 5 * time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	stderr := &tailBuffer{limit: 8 << 10}
+	var last atomic.Int64
+	last.Store(time.Now().UnixNano())
+	stderr := &tailBuffer{limit: 8 << 10, onWrite: func() { last.Store(time.Now().UnixNano()) }}
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return &Error{Kind: KindNotFound, Detail: Scrub(err.Error(), password)}
 	}
+	var stuck atomic.Bool
+	idle := r.idle()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		tick := time.NewTicker(max(idle/20, 10*time.Millisecond))
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				if time.Since(time.Unix(0, last.Load())) > idle {
+					stuck.Store(true)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	scanner.Split(splitLines)
 	for scanner.Scan() {
+		last.Store(time.Now().UnixNano())
 		if line := scanner.Text(); line != "" {
 			onLine(line)
 		}
 	}
 	io.Copy(io.Discard, stdout)
 	waitErr := cmd.Wait()
+	if stuck.Load() && ctx.Err() == nil {
+		return &Error{Kind: KindTimeout, Detail: "no answer for " + idle.Round(time.Second).String()}
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -444,11 +504,15 @@ func splitLines(data []byte, atEOF bool) (int, []byte, error) {
 
 // tailBuffer keeps the last bytes written to it.
 type tailBuffer struct {
-	limit int
-	data  []byte
+	limit   int
+	data    []byte
+	onWrite func()
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
+	if b.onWrite != nil {
+		b.onWrite()
+	}
 	b.data = append(b.data, p...)
 	if len(b.data) > b.limit {
 		b.data = b.data[len(b.data)-b.limit:]
