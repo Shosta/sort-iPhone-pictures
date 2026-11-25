@@ -314,7 +314,8 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .card-body .chips { flex: 0 1 auto; margin-top: 0; }
 .card-foot { height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0 18px; text-align: center; }
 .card-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; line-height: 1.2; }
-.card-link-icon { font-size: 15px; line-height: 1; }
+.card-link-icon { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+.card-body > .card-link { margin-top: auto; height: 24px; flex: none; }
 .import-open { margin-top: 0; }
 .top.with-import .destination { justify-content: flex-start; }
 .top.with-import .import-card { max-height: 330px; }
