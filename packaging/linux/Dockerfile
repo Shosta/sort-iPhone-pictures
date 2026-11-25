@@ -7,8 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dev xorg-dev libxkbcommon-dev libayatana-appindicator3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-ARG LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+# Release figee de linuxdeploy (plus de « continuous » mutable) ; l'empreinte est
+# verifiee apres telechargement. Pour changer de version, mettre a jour les deux ARG.
+ARG LINUXDEPLOY_VERSION=1-alpha-20251107-1
+ARG LINUXDEPLOY_SHA256=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+ARG LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-x86_64.AppImage
 RUN curl --fail --location --retry 3 "$LINUXDEPLOY_URL" -o /tmp/linuxdeploy.AppImage \
+    && echo "${LINUXDEPLOY_SHA256}  /tmp/linuxdeploy.AppImage" | sha256sum --check --strict - \
     && chmod +x /tmp/linuxdeploy.AppImage \
     && cd /opt \
     && /tmp/linuxdeploy.AppImage --appimage-extract \
