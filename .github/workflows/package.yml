@@ -144,28 +144,54 @@ jobs:
         run: npm run build
 
       # Signature uniquement sur un tag et si les secrets existent ; sinon installeur non signé, sans échec.
-      # Seuls des booléens sont lus ici, jamais la valeur des secrets.
+      # Les variables de signature ne sont exportées (GITHUB_ENV) que si elles sont non vides : electron-builder
+      # traite un CSC_LINK défini mais vide comme un chemin de fichier (le répertoire courant) et échoue.
+      # Les valeurs ne sont jamais affichées.
       - name: Déterminer la signature
         id: signing
         env:
           IS_TAG: ${{ github.ref_type == 'tag' }}
-          MAC_CERT: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' }}
-          MAC_NOTARIZE: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
-          WIN_CERT: ${{ secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' }}
+          IN_CSC_LINK: ${{ github.ref_type == 'tag' && secrets.CSC_LINK || '' }}
+          IN_CSC_KEY_PASSWORD: ${{ github.ref_type == 'tag' && secrets.CSC_KEY_PASSWORD || '' }}
+          IN_APPLE_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_ID || '' }}
+          IN_APPLE_APP_SPECIFIC_PASSWORD: ${{ github.ref_type == 'tag' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          IN_APPLE_TEAM_ID: ${{ github.ref_type == 'tag' && secrets.APPLE_TEAM_ID || '' }}
+          IN_WIN_CSC_LINK: ${{ github.ref_type == 'tag' && secrets.WIN_CSC_LINK || '' }}
+          IN_WIN_CSC_KEY_PASSWORD: ${{ github.ref_type == 'tag' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
         run: |
+          # export_secret NOM VALEUR : masque la valeur puis l'exporte aux étapes suivantes (format multiligne).
+          export_secret() {
+            local line delim="ghadelim_${RANDOM}${RANDOM}${RANDOM}"
+            while IFS= read -r line || [ -n "$line" ]; do
+              [ -n "$line" ] && echo "::add-mask::$line"
+            done <<< "$2"
+            { echo "$1<<$delim"; printf '%s\n' "$2"; echo "$delim"; } >> "$GITHUB_ENV"
+          }
+
           mac=false; notarize=false; win=false
           if [ "$IS_TAG" = true ]; then
-            if [ "$GOOS" = darwin ] && [ "$MAC_CERT" = true ]; then
+            if [ "$GOOS" = darwin ] && [ -n "$IN_CSC_LINK" ] && [ -n "$IN_CSC_KEY_PASSWORD" ]; then
               mac=true
-              if [ "$MAC_NOTARIZE" = true ]; then
+              export_secret CSC_LINK "$IN_CSC_LINK"
+              export_secret CSC_KEY_PASSWORD "$IN_CSC_KEY_PASSWORD"
+              if [ -n "$IN_APPLE_ID" ] && [ -n "$IN_APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$IN_APPLE_TEAM_ID" ]; then
                 notarize=true
+                export_secret APPLE_ID "$IN_APPLE_ID"
+                export_secret APPLE_APP_SPECIFIC_PASSWORD "$IN_APPLE_APP_SPECIFIC_PASSWORD"
+                export_secret APPLE_TEAM_ID "$IN_APPLE_TEAM_ID"
               else
                 echo "::warning::Certificat macOS présent mais identifiants de notarisation absents (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) : l'installeur sera signé mais pas notarisé (Gatekeeper le bloquera)."
               fi
             fi
-            if [ "$GOOS" = windows ] && [ "$WIN_CERT" = true ]; then
+            if [ "$GOOS" = windows ] && [ -n "$IN_WIN_CSC_LINK" ] && [ -n "$IN_WIN_CSC_KEY_PASSWORD" ]; then
               win=true
+              export_secret WIN_CSC_LINK "$IN_WIN_CSC_LINK"
+              export_secret WIN_CSC_KEY_PASSWORD "$IN_WIN_CSC_KEY_PASSWORD"
             fi
+          fi
+          # Sans certificat macOS, inutile de chercher une identité dans le trousseau.
+          if [ "$GOOS" = darwin ] && [ "$mac" != true ]; then
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
           fi
           {
             echo "mac=$mac"
@@ -179,14 +205,6 @@ jobs:
         env:
           BUILDER: ${{ matrix.builder }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ steps.signing.outputs.mac == 'true' }}
-          CSC_LINK: ${{ steps.signing.outputs.mac == 'true' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ steps.signing.outputs.mac == 'true' && secrets.CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ steps.signing.outputs.notarize == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ steps.signing.outputs.notarize == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ steps.signing.outputs.notarize == 'true' && secrets.APPLE_TEAM_ID || '' }}
-          WIN_CSC_LINK: ${{ steps.signing.outputs.win == 'true' && secrets.WIN_CSC_LINK || '' }}
-          WIN_CSC_KEY_PASSWORD: ${{ steps.signing.outputs.win == 'true' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
         run: |
           read -ra args <<< "$BUILDER"
           if [ -n "$VERSION" ]; then

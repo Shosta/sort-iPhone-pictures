@@ -74,6 +74,10 @@ temps de démarrage (aucun benchmark n'existe dans le dépôt).
   les fichiers d'une release existante.
 - **Manuel** : *Actions* > *Package Photosort* > *Run workflow* (artefacts seulement,
   sauf depuis un tag).
+- **Un job macOS reste en file puis est annulé** (« The job was not acquired by Runner of
+  type hosted… », annotation « capacity constraints ») : c'est une saturation des runners
+  macOS Apple Silicon de GitHub, pas une erreur du workflow. Relancer avec *Re-run failed
+  jobs* ; la release d'un tag ne part que quand les quatre plateformes sont construites.
 
 Les installeurs non signés : macOS demande une validation (clic droit > Ouvrir, ou
 `xattr -cr /Applications/Photosort.app`) et Windows affiche SmartScreen
@@ -95,6 +99,11 @@ configuration est prête (`electron-builder.yml`, `build/entitlements.mac*.plist
 mais elle ne s'active qu'avec des identifiants que le dépôt ne contient pas.
 Sans eux, `electron-builder` produit un installeur non signé (`CSC_IDENTITY_AUTO_DISCOVERY=false`
 en local ; le workflow ne le force à `false` que lorsque le certificat macOS est absent).
+Attention : une variable `CSC_LINK` *définie mais vide* fait échouer `electron-builder` sur
+macOS (`… not a file` : la chaîne vide est résolue comme le répertoire courant). Le
+workflow n'exporte donc `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_*` et `WIN_CSC_*` (via
+`GITHUB_ENV`, valeurs masquées) que si le secret existe et n'est pas vide ; en local,
+laisser ces variables non définies (`unset CSC_LINK`) plutôt que vides.
 
 **Secrets GitHub** (*Settings > Secrets and variables > Actions*). Ils ne sont lus que
 sur un tag `v*` ; tous sont optionnels, et leur absence donne un paquet non signé sans
