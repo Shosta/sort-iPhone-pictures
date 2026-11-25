@@ -1,4 +1,5 @@
-import { useCallback, useId, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useT, type Translate } from '../i18n'
 import { remoteErrorText } from '../remote'
 import { request } from '../sidecar'
@@ -81,11 +82,26 @@ function errorText(t: Translate, event: { code?: string; detail?: string; messag
 function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   const [hover, setHover] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number; below: boolean } | null>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  const pop = useRef<HTMLSpanElement>(null)
   const id = useId()
   const shown = open || hover
+
+  useLayoutEffect(() => {
+    if (!shown || !btn.current || !pop.current) return setPos(null)
+    const a = btn.current.getBoundingClientRect()
+    const w = pop.current.offsetWidth
+    const h = pop.current.offsetHeight
+    const below = a.top - h - 10 < 8
+    const left = Math.min(Math.max(a.left + a.width / 2 - w / 2, 8), window.innerWidth - w - 8)
+    setPos({ left, top: below ? a.bottom + 8 : a.top - h - 8, below })
+  }, [shown, text])
+
   return (
     <span className="info-tip" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <button
+        ref={btn}
         type="button"
         className="info-tip-btn"
         aria-label={text}
@@ -102,11 +118,19 @@ function InfoTip({ text }: { text: string }) {
       >
         i
       </button>
-      {shown && (
-        <span id={id} role="tooltip" className="info-tip-pop">
-          {text}
-        </span>
-      )}
+      {shown &&
+        createPortal(
+          <span
+            ref={pop}
+            id={id}
+            role="tooltip"
+            className="info-tip-pop"
+            style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+          >
+            {text}
+          </span>,
+          document.body
+        )}
     </span>
   )
 }
