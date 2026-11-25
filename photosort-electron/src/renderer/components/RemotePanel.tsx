@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { useT } from '../i18n'
-import { type Prefs, remoteConfig, remoteReady } from '../prefs'
+import { type Prefs, remoteConfig, remoteFolder, remoteReady } from '../prefs'
 import { request } from '../sidecar'
 import { themeById } from '../themes'
 import { remoteErrorText } from '../remote'
