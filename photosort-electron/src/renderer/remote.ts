@@ -9,6 +9,7 @@ interface RemoteErrorEvent {
 
 /** A remote error in plain language, with the technical detail appended when there is one. */
 export function remoteErrorText(t: Translate, event: RemoteErrorEvent): string {
+  if (event.code === 'internal') return t('error.internal')
   if (!event.code) return event.message ?? ''
   const key = `remote.err.${event.code}` as Key
   let text = t(key)

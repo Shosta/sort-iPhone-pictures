@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -148,5 +148,32 @@ describe('isSecretAccount', () => {
   it('accepts user@host:module and rejects dangerous keys', () => {
     assert.equal(isSecretAccount('remi@nas.local:photos'), true)
     for (const value of ['', '__proto__', 'constructor', 'a\nb', 'x'.repeat(257), 42, null]) assert.equal(isSecretAccount(value), false, String(value))
+  })
+})
+
+describe('allow-list stays in sync with the engine and the renderer', () => {
+  const root = join(process.cwd(), '..')
+  const renderer = join(process.cwd(), 'src', 'renderer')
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []))
+
+  it('accepts every op the renderer sends', () => {
+    const ops = new Set<string>()
+    for (const file of walk(renderer)) for (const m of readFileSync(file, 'utf8').matchAll(/\bop: '([a-zA-Z]+)'/g)) ops.add(m[1])
+    assert.ok(ops.size > 10)
+    for (const op of ops) assert.equal(validateSidecarRequest({ id: '1', op }).ok, true, op)
+  })
+
+  it('accepts every request field the engine understands', () => {
+    const source = readFileSync(join(root, 'cmd', 'photosort-sidecar', 'main.go'), 'utf8')
+    const block = source.slice(source.indexOf('type request struct'), source.indexOf('\n}\n', source.indexOf('type request struct')))
+    const types: Record<string, unknown> = { string: 'x', bool: true, int: 1, float64: 1, '[]string': ['x'], '[]map[string]any': [{ a: 1 }], '*remote.Config': { host: 'h' } }
+    const names = [...block.matchAll(/^\s*\w+\s+(\S+)\s+`json:"(\w+)"/gm)]
+    assert.ok(names.length > 30)
+    for (const [, type, name] of names) {
+      if (name === 'id' || name === 'op' || name === 'aiDir') continue
+      const value = types[type] ?? (type.startsWith('[]') ? [] : 'x')
+      assert.equal(validateSidecarRequest({ id: '1', op: 'plan', [name]: value }).ok, true, name)
+    }
   })
 })

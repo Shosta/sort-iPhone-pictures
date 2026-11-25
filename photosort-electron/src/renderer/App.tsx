@@ -577,7 +577,7 @@ export function App(): JSX.Element {
         finishing.current = 'error'
         setPhase('ready')
         if (!event.cancelled) {
-          setError(remote ? remoteErrorText(t, event) : event.message)
+          setError(event.code === 'internal' || remote ? remoteErrorText(t, event) : event.message)
           if (remote && event.legacyRsync) setRemoteState((state) => ({ ...(state ?? {}), legacy: true }))
           setResumable(!!event.resumable)
         }

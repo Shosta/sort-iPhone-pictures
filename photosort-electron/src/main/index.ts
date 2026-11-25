@@ -166,7 +166,7 @@ onApp('sidecar:send', (event, request: unknown) => {
   const verdict = validateSidecarRequest(request)
   if (!verdict.ok) {
     console.warn('[security] requete moteur refusee:', verdict.reason)
-    event.sender.send('sidecar:event', { id: requestId(request), type: 'error', message: `Requete refusee: ${verdict.reason}` })
+    event.sender.send('sidecar:event', { id: requestId(request), type: 'error', code: 'internal', message: 'internal error' })
     return
   }
   sidecar?.stdin.write(verdict.line + '\n')
