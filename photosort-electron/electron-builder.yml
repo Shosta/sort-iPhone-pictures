@@ -31,5 +31,5 @@ linux:
   target: [AppImage, deb]
   category: Graphics
   # Le .deb exige un mainteneur (et un homepage, lu dans package.json).
-  maintainer: Shosta <remi.lavedrine@outlook.com>
+  maintainer: Shosta <contact@wildnsecure.com>
   synopsis: Classement de photos par date EXIF
