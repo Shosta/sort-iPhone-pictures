@@ -184,3 +184,13 @@ CI (`.github/workflows/ci.yml`, all actions pinned by SHA): jobs `go` (build, ve
 - Docs under `docs/superpowers/` are design history; the NAS "docker server" plan is **deferred** (no code).
 - Repo git branches of interest: `main`, `feat/website`, `feat/nas-qnap-remote` (NAS work), several session branches.
 - Test files: Go `*_test.go` beside code (+ `internal/*/testdata`); Electron `src/main/*.test.ts`, `src/renderer/*.test.ts`, `scripts/*.test.{cjs,mjs}` (run with `node --test`, no framework); website `tests/site.test.mjs`.
+
+## 9. Backlog (ideas not started)
+
+Agreed order of interest; none is implemented.
+
+1. **Configurable folder tree** — let the user choose the destination layout with a template (`{year}`, `{month}`, `{day}`, `{city}`, `{country}`, `{device}`) and presets (`Year/Month`, `Year/Month-Day`, `Year/Place`, `Year/Event`, flat). Live preview on a sample photo; same rule for local sort and NAS upload; fallback folders for undated/unlocated photos. Offline geocoding already supplies place variables. Touch `sorter/sorter.go` (path builder), sidecar request + `guards.ts` `FIELDS`, `prefs.ts`, `i18n.tsx`, `internal/remote` staging.
+2. Incremental sort (skip already-sorted files), Live Photos pairing, dry-run report / rollback, events, timezone handling, filters, renaming, conversion, profiles, licence/Pro.
+3. Fallback: SMB track for the NAS (`docs/nas-qnap.md`).
+
+Rejected: iPhone USB import, watched folder.
