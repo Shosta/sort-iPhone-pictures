@@ -58,9 +58,10 @@ Le stage final exporte seulement `dist/linux/Photosort-x86_64.AppImage`.
 Les couches Docker sont conservees pour accelerer les builds suivants.
 
 `linuxdeploy` rassemble les bibliotheques redistribuables et cree l'AppImage.
-L'outil provient de la release officielle `continuous` de linuxdeploy ; celle-ci
-est evolutive, donc le build n'est pas strictement reproductible. L'argument
-Docker `LINUXDEPLOY_URL` permet de choisir une autre release. Le packaging extrait
+Le Dockerfile telecharge une release figee (`LINUXDEPLOY_VERSION`) et verifie son
+empreinte SHA-256 (`LINUXDEPLOY_SHA256`) avant de l'executer ; pour changer de
+version, mettre a jour ces deux arguments (`--build-arg`), l'empreinte etant
+celle de `linuxdeploy-x86_64.AppImage` publiee sur la page de la release. Le packaging extrait
 les outils AppImage sans FUSE et verifie que l'artefact contient son lanceur et
 le binaire Photosort. Il n'execute pas de session graphique Linux.
 

@@ -26,36 +26,60 @@ compilé pour l'OS courant ; pour une autre cible, définir `GOOS`/`GOARCH`
 (`scripts/build-sidecar.mjs`). Les installeurs sont à générer sur chaque OS
 (voir « Packaging via GitHub Actions »).
 
-## Packaging via GitHub Actions
+## GitHub Actions : CI, paquets et releases
 
-Le workflow `.github/workflows/package.yml` (« Package Photosort ») construit
-les installeurs sur des runners GitHub, un par cible :
+Trois workflows dans `.github/workflows/` (actions épinglées par SHA, permissions
+minimales par job, aucun secret exposé aux PR ; `dependabot.yml` propose les mises
+à jour des épinglages).
 
-| Cible | Runner | Fichier produit |
+| Workflow | Déclencheurs | Rôle |
+| --- | --- | --- |
+| `ci.yml` « CI » | PR, lundi 05:17 UTC, manuel, appelé par `package.yml` | contrôles de qualité, sécurité et performance (ci-dessous) |
+| `package.yml` « Package Photosort » | push sur `main`, tag `v*`, manuel | CI puis installeurs, `SHA256SUMS`, release |
+| `pages.yml` | push sur `main` touchant `website/` | publie le site |
+
+**CI (`ci.yml`).** `go build/vet/test` et `govulncheck` ; `tsc`, `npm test` et
+`npm audit` côté Electron ; `npm audit --omit=dev` et tests du site ; `actionlint`
+sur les workflows. Le contrôle d'audit npm (`npm run audit:gate`) échoue pour toute
+vulnérabilité de **production** et pour **Electron** (qui est une devDependency, donc
+invisible à `--omit=dev`) à partir de « moderate » ; les avis sur l'outillage de build
+(electron-builder, vite…) sont affichés en avertissement sans bloquer.
+Garde-fou performance : les tests de structure qui bornent la mémoire (budget des
+décodages HEIC/AVIF, plan envoyé au sidecar par morceaux) tournent dans un job
+dédié, sans seuil de temps (seulement un délai global généreux) pour ne pas être
+instables. Ce qui n'est **pas** mesuré : débit de tri, consommation mémoire réelle,
+temps de démarrage (aucun benchmark n'existe dans le dépôt).
+
+**Paquets (`package.yml`).** Rien n'est construit si la CI échoue.
+
+| Cible | Runner | Fichiers produits |
 | --- | --- | --- |
 | macOS Apple Silicon | `macos-15` | `Photosort-<version>-mac-arm64.dmg` |
 | macOS Intel | `macos-15-intel` | `Photosort-<version>-mac-x64.dmg` |
-| Linux x64 | `ubuntu-22.04` | `Photosort-<version>-linux-x86_64.AppImage` |
-| Windows x64 | `windows-latest` | `Photosort-<version>-win-x64.exe` (portable : un seul .exe, sans installation) |
+| Linux x64 | `ubuntu-22.04` | `Photosort-<version>-linux-x86_64.AppImage`, `Photosort-<version>-linux-amd64.deb` |
+| Windows x64 | `windows-latest` | `Photosort-<version>-win-x64.exe` (portable : un seul .exe) |
 
-Déclenchement (le fichier doit être présent sur la branche par défaut du dépôt GitHub pour apparaître dans l'onglet *Actions*) :
+- **Push sur `main`** : paquets non signés, en *Artifacts* du run (30 jours), avec la
+  version de `package.json`. Les changements limités à `docs/`, aux `.md`, à `website/`
+  ou à `pages.yml`/`dependabot.yml` ne déclenchent rien.
+- **Tag `vX.Y.Z` ou `vX.Y.Z-rc.1` sur un commit de `main`** :
+  `git tag v1.2.3 && git push origin v1.2.3`. Le tag doit être du SemVer strict (sans
+  `+build`) et pointer sur un commit de `main`, sinon le workflow échoue avant de
+  consommer des minutes de runner. **La version de l'application est celle du tag**
+  (`electron-builder -c.extraMetadata.version=…`) : `package.json` n'a pas besoin
+  d'être modifié avant de taguer. Un tag avec `-` (`-rc.1`, `-beta.2`) publie une
+  *pré-version* GitHub. Les paquets sont signés si les secrets ci-dessous existent,
+  puis `SHA256SUMS` est généré, vérifié (`--check`) et publié avec la release (notes
+  générées). Relancer le workflow sur le tag (*Run workflow*, ref = le tag) remplace
+  les fichiers d'une release existante.
+- **Manuel** : *Actions* > *Package Photosort* > *Run workflow* (artefacts seulement,
+  sauf depuis un tag).
 
-- **Merge sur `main`** : construit les paquets, téléchargeables dans les
-  *Artifacts* du run (30 jours). Les modifications limitées à `docs/` ou aux
-  fichiers `.md` ne déclenchent rien.
-- **Tag `v<version>` sur un commit de `main`** : construit les paquets puis
-  publie une release GitHub (notes générées) contenant les quatre fichiers.
-  `git tag v0.1.0 && git push origin v0.1.0`. Le tag doit être égal à `v` +
-  la version de `package.json`, sinon la release échoue.
-- **Manuel** : onglet *Actions* > *Package Photosort* > *Run workflow*
-  (artefacts uniquement), ou `gh workflow run package.yml --ref <branche>`.
-
-Le numéro de version des fichiers vient de `package.json`. Les installeurs ne
-sont pas signés : macOS demande une validation (clic droit > Ouvrir, ou
+Les installeurs non signés : macOS demande une validation (clic droit > Ouvrir, ou
 `xattr -cr /Applications/Photosort.app`) et Windows affiche SmartScreen
 (« Informations complémentaires > Exécuter quand même »). L'AppImage doit être
-rendue exécutable (`chmod +x`). Sur macOS Intel, ONNX Runtime n'existe pas :
-les tags IA y sont désactivés.
+rendue exécutable (`chmod +x`) ; le `.deb` s'installe avec `sudo apt install ./Photosort-<version>-linux-amd64.deb`.
+Sur macOS Intel, ONNX Runtime n'existe pas : les tags IA y sont désactivés.
 
 Derrière un proxy d'entreprise, si `npm install` échoue avec
 `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` : `NODE_OPTIONS=--use-system-ca npm install`.
@@ -69,8 +93,21 @@ l'exporter pour `npm run dev`. Aucun droit administrateur n'est nécessaire
 Les installeurs publiés doivent être signés, et les macOS notarisés. La
 configuration est prête (`electron-builder.yml`, `build/entitlements.mac*.plist`),
 mais elle ne s'active qu'avec des identifiants que le dépôt ne contient pas.
-Sans eux, `electron-builder` produit un installeur non signé (avec
-`CSC_IDENTITY_AUTO_DISCOVERY=false`, comme dans le workflow actuel).
+Sans eux, `electron-builder` produit un installeur non signé (`CSC_IDENTITY_AUTO_DISCOVERY=false`
+en local ; le workflow ne le force à `false` que lorsque le certificat macOS est absent).
+
+**Secrets GitHub** (*Settings > Secrets and variables > Actions*). Ils ne sont lus que
+sur un tag `v*` ; tous sont optionnels, et leur absence donne un paquet non signé sans
+faire échouer le workflow :
+
+| Secret | Contenu | Effet |
+| --- | --- | --- |
+| `CSC_LINK`, `CSC_KEY_PASSWORD` | certificat « Developer ID Application » `.p12` (base64) et son mot de passe | signature macOS (vérifiée par `codesign` dans le job) |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | compte Apple Developer, mot de passe d'app, identifiant d'équipe | notarisation macOS (vérifiée par `spctl` et `stapler`) |
+| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | certificat Authenticode `.pfx` (base64) et son mot de passe | signature Windows (vérifiée par `Get-AuthenticodeSignature`) |
+
+La clé d'API App Store Connect (`APPLE_API_KEY`…) n'est pas branchée dans le workflow
+(elle suppose un fichier `.p8` sur le runner) ; seule la voie Apple ID l'est.
 
 **macOS (runtime durci + notarisation).** Fournir à `electron-builder`, en
 variables d'environnement :
@@ -111,12 +148,8 @@ sha256sum -c SHA256SUMS --ignore-missing       # Linux
 Get-FileHash .\Photosort-<version>-win-x64.exe -Algorithm SHA256   # Windows (comparer à SHA256SUMS)
 ```
 
-Le workflow `.github/workflows/package.yml` appelle `electron-builder`
-directement : pour que la release publie la signature et les empreintes, il
-reste à (1) fournir les secrets ci-dessus aux jobs, (2) retirer
-`CSC_IDENTITY_AUTO_DISCOVERY: 'false'` des jobs signés, (3) lancer
-`node scripts/checksums.mjs dist` avant `gh release create` et joindre
-`dist/SHA256SUMS`.
+Le job `release` de `package.yml` exécute `node scripts/checksums.mjs dist` puis
+`--check` avant de publier, et joint `SHA256SUMS` à la release.
 
 ## Architecture
 
@@ -238,6 +271,8 @@ Chaque photo garde sa forme, sans recadrage : son grand côté fait 6,5 cm (port
 ## Limites
 
 - Copie uniquement, aucun original modifié (comportement du moteur Go).
-- Les installeurs ne sont pas encore signés ni notarisés tant que les identifiants
-  de la section « Signature, notarisation et empreintes » ne sont pas fournis.
-- Tests automatisés : `npm test` (validations IPC, lanceur Linux, empreintes) ; la CI ne fait que packager et vérifier les types.
+- Les installeurs ne sont signés et notarisés que si les secrets de la section
+  « Signature, notarisation et empreintes » sont configurés sur GitHub.
+- Tests automatisés : `npm test` (validations IPC, lanceur Linux, empreintes, audit npm,
+  plan par morceaux) ; la CI exécute en plus les tests Go, `govulncheck` et les gardes
+  de performance (voir « GitHub Actions »).
