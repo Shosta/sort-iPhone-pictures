@@ -322,3 +322,7 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .import-card .card-body { gap: 6px; padding: 12px 18px; }
 .import-period label { flex-direction: row; align-items: center; gap: 6px; }
 .import-card .import-help { margin: 0; }
+.info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.info-tip-btn { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid currentColor; background: transparent; color: inherit; font: italic 600 11px/1 serif; cursor: help; opacity: .7; }
+.info-tip-btn:hover, .info-tip-btn:focus-visible { opacity: 1; }
+.info-tip-pop { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); width: 240px; max-width: 70vw; padding: 8px 10px; border-radius: 8px; background: rgba(20, 22, 28, .96); color: #fff; font: 400 12px/1.4 inherit; text-align: left; z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.35); }

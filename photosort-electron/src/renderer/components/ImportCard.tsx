@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useT, type Translate } from '../i18n'
 import { remoteErrorText } from '../remote'
 import { request } from '../sidecar'
@@ -76,6 +76,39 @@ function errorText(t: Translate, event: { code?: string; detail?: string; messag
   if (event.code === 'noDevice') return t('import.err.noDevice')
   if (event.code === 'copy') return t('import.err.copy', { detail: event.detail ?? '' })
   return remoteErrorText(t, event)
+}
+
+function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const [hover, setHover] = useState(false)
+  const id = useId()
+  const shown = open || hover
+  return (
+    <span className="info-tip" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <button
+        type="button"
+        className="info-tip-btn"
+        aria-label={text}
+        aria-describedby={shown ? id : undefined}
+        onClick={() => setOpen((v) => !v)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setHover(false)
+            e.stopPropagation()
+          }
+        }}
+      >
+        i
+      </button>
+      {shown && (
+        <span id={id} role="tooltip" className="info-tip-pop">
+          {text}
+        </span>
+      )}
+    </span>
+  )
 }
 
 function localDate(iso: string, locale: string): string {
@@ -280,8 +313,10 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
   if (!device) {
     return (
       <Frame title={t('import.none.title')} footer={t('import.foot.none')}>
-        <p className="drop-title">{t('import.none.title')}</p>
-        <p className="import-help">{t('import.none.help')}</p>
+        <p className="drop-title">
+          {t('import.none.title')}
+          <InfoTip text={t('import.none.help')} />
+        </p>
         <div className="import-actions">
           <button className="btn ghost" disabled={disabled} onClick={() => void pick()}>
             {t('import.pickFolder')}
