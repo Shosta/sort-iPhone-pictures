@@ -76,6 +76,7 @@ export function RemotePanel({ prefs, busy, password, onPassword, onChange, onClo
       }
     })
   }
+  const folder = remoteFolder(prefs)
   const atModules = daemon && !prefs.remoteModule.trim()
   const enter = (dir: Dir): void => {
     if (dir.module) {
@@ -154,9 +155,13 @@ export function RemotePanel({ prefs, busy, password, onPassword, onChange, onClo
               placeholder={daemon ? '' : t('remote.path.ssh.placeholder')}
               onChange={(event) => edit({ remotePath: event.target.value })}
             />
+            <div className={`remote-chosen${folder ? '' : ' empty'}`}>
+              <span>{t('remote.chosen')}</span>
+              <strong>{folder ? `📁 ${folder}` : t('remote.chosen.none')}</strong>
+            </div>
             <div className="row">
               <button className="btn ghost" type="button" disabled={!prefs.remoteHost.trim()} onClick={() => openBrowse(prefs.remotePath.trim().replace(/^\/+|\/+$/g, ''))}>
-                📁 {t('remote.browse')}
+                📁 {t(folder ? 'remote.change.folder' : 'remote.browse')}
               </button>
             </div>
             {browse && (

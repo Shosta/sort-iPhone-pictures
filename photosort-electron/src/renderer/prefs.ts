@@ -144,6 +144,13 @@ export function remoteReady(prefs: Prefs): boolean {
   return prefs.remoteProtocol === 'daemon' ? !!prefs.remoteModule.trim() : !!prefs.remotePath.trim()
 }
 
+/** Short, readable destination folder: "module/folder" (daemon) or the remote path (SSH). Empty when none chosen. */
+export function remoteFolder(prefs: Prefs): string {
+  const path = prefs.remotePath.trim().replace(/^\/+|\/+$/g, '')
+  if (prefs.remoteProtocol === 'daemon') return [prefs.remoteModule.trim(), path].filter(Boolean).join('/')
+  return path
+}
+
 export function remoteLabel(prefs: Prefs): string {
   const user = prefs.remoteUser.trim() ? `${prefs.remoteUser.trim()}@` : ''
   const port = prefs.remotePort.trim() ? `:${prefs.remotePort.trim()}` : ''

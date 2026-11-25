@@ -13,7 +13,7 @@ import { Thumb } from './components/Thumb'
 import { VirtualGrid } from './components/VirtualGrid'
 import { IssueList } from './components/IssueList'
 import { I18nContext, makeTranslate, type Translate } from './i18n'
-import { remoteConfig, remoteLabel, remoteReady, usePrefs } from './prefs'
+import { remoteConfig, remoteFolder, remoteLabel, remoteReady, usePrefs } from './prefs'
 import { remoteErrorText } from './remote'
 import { applyTheme, themeById } from './themes'
 import { cachedThumbnail, onFatal, request } from './sidecar'
@@ -642,12 +642,15 @@ export function App(): JSX.Element {
           <div className="glass destination">
             <label>{t('destination')}</label>
             {remote ? (
+              <>
               <div className="row">
                 <input value={remoteLabel(prefs)} readOnly disabled={busy} title={remoteLabel(prefs)} />
                 <button className="btn ghost" disabled={busy} onClick={() => setShowRemote(true)}>
                   {t('remote.change')}
                 </button>
               </div>
+              <p className="remote-folder-line">{remoteFolder(prefs) ? t('remote.folderLine', { path: remoteFolder(prefs) }) : `⚠️ ${t('remote.folderLine.none')}`}</p>
+              </>
             ) : (
             <div className="row">
               <input
