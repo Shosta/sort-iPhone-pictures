@@ -302,3 +302,9 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .import-menu button:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 .import-menu button:disabled { opacity: 0.4; cursor: default; }
 .import-open { margin-top: 6px; flex: none; }
+.card-foot { margin: auto 0 0; padding-top: 8px; width: 100%; flex: none; border-top: 1px solid rgba(255,255,255,0.1); color: var(--muted); font-size: 12px; }
+.import-card { gap: 8px; align-items: center; }
+.import-card .import-actions, .import-card .import-period, .import-card .import-modes { justify-content: center; }
+.import-card .import-modes { width: 100%; max-width: 320px; }
+.import-bar { width: 100%; max-width: 320px; }
+.import-open { margin-top: 8px; }

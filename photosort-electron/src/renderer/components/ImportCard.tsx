@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useT, type Translate } from '../i18n'
 import { request } from '../sidecar'
 
@@ -79,6 +79,17 @@ function baseName(path: string): string {
   return parts[parts.length - 1] ?? path
 }
 
+/** Same frame as the folder drop zone: icon, text, actions, then a footer line. */
+function Frame({ title, footer, children }: { title: string; footer: string; children: ReactNode }): JSX.Element {
+  return (
+    <div className="dropzone glass import-card" role="region" aria-label={title}>
+      <div className="drop-icon" aria-hidden="true">📱</div>
+      {children}
+      <p className="card-foot">{footer}</p>
+    </div>
+  )
+}
+
 export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished }: Props): JSX.Element | null {
   const t = useT()
   const [devices, setDevices] = useState<ImportDevice[]>([])
@@ -97,6 +108,8 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
   const job = useRef<{ id: string; cancel: () => void } | null>(null)
 
   const device = devices[0] ?? manual
+  const deviceId = device?.id
+  const devicePath = device?.path
   const running = stage === 'running'
   const visible = running || stage === 'done' || device !== null || open
   const badRange = mode === 'period' && from > to
@@ -121,13 +134,13 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
   }, [running, stage])
 
   useEffect(() => {
-    if (!device || stage !== 'ready' || badRange) {
+    if (devicePath === undefined || stage !== 'ready' || badRange) {
       setScan(null)
       return
     }
     let live = true
     setScan(null)
-    const run = request({ op: 'importScan', deviceId: device.id, devicePath: device.path, mode, from, to }, (event) => {
+    const run = request({ op: 'importScan', deviceId: deviceId ?? '', devicePath, mode, from, to }, (event) => {
       if (!live) return
       if (event.type === 'importScan') setScan({ count: event.count, videos: event.videos, from: event.from, to: event.to })
     })
@@ -135,7 +148,7 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
       live = false
       run.cancel()
     }
-  }, [device?.id, device?.path, mode, from, to, stage, badRange])
+  }, [deviceId, devicePath, mode, from, to, stage, badRange])
 
   useEffect(() => () => job.current?.cancel(), [])
 
@@ -188,6 +201,15 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
 
   if (!visible) return null
 
+  const modeLine = (value: Mode): string =>
+    value === 'new'
+      ? t('import.foot.new')
+      : value === 'all'
+        ? t('import.foot.all')
+        : badRange
+          ? t('import.badRange')
+          : t('import.foot.period', { from, to })
+
   const back = (
     <button className="link" onClick={() => (setManual(null), onClose())}>
       {t('import.back')}
@@ -198,8 +220,8 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
     const total = progress?.total || scan?.count || 0
     const done = progress ? (progress.copied + progress.done) / Math.max(1, 2 * total) : 0
     return (
-      <div className="glass import-card" role="region" aria-label={t('import.title')}>
-        <h2>{device?.name ?? t('import.title')}</h2>
+      <Frame title={t('import.title')} footer={modeLine(mode)}>
+        <p className="drop-title">{device?.name ?? t('import.title')}</p>
         <p className="import-phase" aria-live="polite">
           {paused === 'disconnected'
             ? t('import.disconnected')
@@ -209,12 +231,10 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
                 ? `${t(progress.phase === 'copy' ? 'import.phase.copy' : 'import.phase.sort')} · ${t('import.batch', { n: progress.batch, total: progress.batches })}`
                 : t('import.counting')}
         </p>
-        <div className={`progress${progress ? '' : ' indeterminate'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(done * 100)}>
+        <div className={`progress import-bar${progress ? '' : ' indeterminate'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(done * 100)}>
           <i style={{ width: `${Math.round(done * 100)}%` }} />
         </div>
-        <p className="import-meta">
-          {progress ? `${t('import.progress', { done: progress.done, total })} · ${clock(progress.elapsedMs)}` : ''}
-        </p>
+        <p className="import-meta">{progress ? `${t('import.progress', { done: progress.done, total })} · ${clock(progress.elapsedMs)}` : ''}</p>
         <div className="import-actions">
           {paused !== 'disconnected' && (
             <button className="btn ghost" onClick={() => control(paused ? 'resume' : 'pause')}>
@@ -225,28 +245,28 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
             {t('import.cancel')}
           </button>
         </div>
-      </div>
+      </Frame>
     )
   }
 
   if (stage === 'done' && summary) {
     return (
-      <div className="glass import-card" role="status">
-        <h2>✅ {t('import.done.title')}</h2>
-        <p>{t('import.done.summary', { ...summary })}</p>
+      <Frame title={t('import.done.title')} footer={modeLine(mode)}>
+        <p className="drop-title">✅ {t('import.done.title')}</p>
+        <p className="import-count" role="status">{t('import.done.summary', { ...summary })}</p>
         <div className="import-actions">
           <button className="btn primary" autoFocus onClick={() => setStage('ready')}>
             {t('import.done.ok')}
           </button>
         </div>
-      </div>
+      </Frame>
     )
   }
 
   if (!device) {
     return (
-      <div className="glass import-card">
-        <h2>{t('import.none.title')}</h2>
+      <Frame title={t('import.none.title')} footer={t('import.foot.none')}>
+        <p className="drop-title">{t('import.none.title')}</p>
         <p className="import-help">{t('import.none.help')}</p>
         <div className="import-actions">
           <button className="btn ghost" disabled={disabled} onClick={() => void pick()}>
@@ -254,11 +274,12 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
           </button>
         </div>
         {back}
-      </div>
+      </Frame>
     )
   }
 
-  const zero = scan && scan.count === 0
+  // Only real preconditions disable the button; the live count never does.
+  const zero = scan !== null && scan.count === 0
   const countText = !scan
     ? badRange
       ? t('import.badRange')
@@ -268,12 +289,13 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
       : scan.count === 1
         ? t('import.count.one', { from: scan.from.slice(0, 10) })
         : t('import.count', { n: scan.count, from: scan.from.slice(0, 10), to: scan.to.slice(0, 10) })
-  const cannot = disabled || !!blocked || badRange || !!zero
+  const reason = disabled ? null : (blocked ?? (badRange ? t('import.badRange') : null))
+  const cannot = disabled || !!blocked || badRange
   const modes: Mode[] = ['all', 'new', 'period']
 
   return (
-    <div className="glass import-card">
-      <h2>📱 {device.name}</h2>
+    <Frame title={device.name} footer={modeLine(mode)}>
+      <p className="drop-title">{t('import.ready', { name: device.name })}</p>
       <div className="import-modes" role="radiogroup" aria-label={t('import.mode')}>
         {modes.map((value) => (
           <button key={value} role="radio" aria-checked={mode === value} className={`seg${mode === value ? ' on' : ''}`} onClick={() => setMode(value)}>
@@ -297,8 +319,6 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         {countText}
         {scan && scan.videos > 0 && <span className="import-videos"> · {t('import.videos', { n: scan.videos })}</span>}
       </p>
-      {error && <p className="import-error" role="alert">{error}</p>}
-      {blocked && <p className="import-help">{blocked}</p>}
       <div className="import-actions">
         <button className="btn hot" disabled={cannot} onClick={() => start(mode)}>
           {t('import.start')}
@@ -319,7 +339,12 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
           )}
         </div>
       </div>
+      {(reason || error) && (
+        <p className="import-error" role="alert">
+          {error ?? reason}
+        </p>
+      )}
       {back}
-    </div>
+    </Frame>
   )
 }

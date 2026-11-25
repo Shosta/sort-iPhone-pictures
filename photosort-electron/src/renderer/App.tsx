@@ -683,6 +683,7 @@ export function App(): JSX.Element {
                 setSources((previous) => previous.filter((item) => item !== path))
                 resetResults()
               }}
+              onImport={() => setImportOpen(true)}
             />
           )}
           <ImportCard
@@ -695,11 +696,6 @@ export function App(): JSX.Element {
             onRunning={setImporting}
             onFinished={resetResults}
           />
-          {!importVisible && (
-            <button className="link import-open" disabled={busy} onClick={() => setImportOpen(true)}>
-              {t('import.open')}
-            </button>
-          )}
           </div>
           <div className="glass panel grow list">
             <h2>

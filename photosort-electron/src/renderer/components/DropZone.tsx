@@ -7,9 +7,10 @@ interface Props {
   disabled: boolean
   onAdd: (paths: string[]) => void
   onRemove: (path: string) => void
+  onImport: () => void
 }
 
-export function DropZone({ sources, disabled, onAdd, onRemove }: Props): JSX.Element {
+export function DropZone({ sources, disabled, onAdd, onRemove, onImport }: Props): JSX.Element {
   const t = useT()
   const [hover, setHover] = useState(false)
   return (
@@ -55,6 +56,10 @@ export function DropZone({ sources, disabled, onAdd, onRemove }: Props): JSX.Ele
           ))}
         </AnimatePresence>
       </div>
+      <button className="link import-open" disabled={disabled} onClick={onImport}>
+        {t('import.open')}
+      </button>
+      <p className="card-foot">{sources.length > 0 ? t('drop.foot', { n: sources.length }) : t('drop.foot.empty')}</p>
     </motion.div>
   )
 }
