@@ -1,0 +1,36 @@
+# Les actions des workflows sont epinglees par SHA : Dependabot propose les mises a
+# jour (SHA + tag en commentaire). Les mises a jour mineures/correctives sont groupees
+# pour limiter le bruit ; les majeures restent des PR separees.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /photosort-electron
+    schedule:
+      interval: weekly
+    groups:
+      electron-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      website-minor-patch:
+        update-types: [minor, patch]
