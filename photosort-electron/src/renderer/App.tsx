@@ -695,6 +695,8 @@ export function App(): JSX.Element {
             onVisible={setImportVisible}
             onRunning={setImporting}
             onFinished={resetResults}
+            nas={remote}
+            onUseLocal={() => (updatePrefs({ remoteEnabled: false }), resetResults())}
           />
           </div>
           <div className="glass panel grow list">

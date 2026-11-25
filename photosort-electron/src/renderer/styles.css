@@ -308,3 +308,11 @@ input[type='range'] { padding: 0; background: none; border: 0; accent-color: var
 .import-card .import-modes { width: 100%; max-width: 320px; }
 .import-bar { width: 100%; max-width: 320px; }
 .import-open { margin-top: 8px; }
+.dropzone, .import-card { padding: 0; justify-content: flex-start; }
+.card-body { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 18px; overflow-y: auto; }
+.card-body .drop-title { margin: 0; }
+.card-body .chips { flex: 0 1 auto; margin-top: 0; }
+.card-foot { height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0 18px; text-align: center; }
+.card-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; line-height: 1.2; }
+.card-link-icon { font-size: 15px; line-height: 1; }
+.import-open { margin-top: 0; }

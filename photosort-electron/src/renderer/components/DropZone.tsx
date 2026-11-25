@@ -29,6 +29,7 @@ export function DropZone({ sources, disabled, onAdd, onRemove, onImport }: Props
         if (!disabled) onAdd(window.photosort.pathsFromDrop(Array.from(event.dataTransfer.files)))
       }}
     >
+      <div className="card-body">
       <div className="drop-icon">📂</div>
       <p className="drop-title">{hover ? t('drop.hover') : t('drop.title')}</p>
       <button
@@ -56,9 +57,11 @@ export function DropZone({ sources, disabled, onAdd, onRemove, onImport }: Props
           ))}
         </AnimatePresence>
       </div>
-      <button className="link import-open" disabled={disabled} onClick={onImport}>
+      <button className="link card-link" disabled={disabled} onClick={onImport}>
+        <span className="card-link-icon" aria-hidden="true">📱</span>
         {t('import.open')}
       </button>
+      </div>
       <p className="card-foot">{sources.length > 0 ? t('drop.foot', { n: sources.length }) : t('drop.foot.empty')}</p>
     </motion.div>
   )

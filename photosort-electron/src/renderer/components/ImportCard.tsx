@@ -32,6 +32,9 @@ interface Props {
   /** True while an import is running (locks the rest of the UI). */
   onRunning: (running: boolean) => void
   onFinished: () => void
+  /** Switch the destination back from the NAS to a local folder. */
+  onUseLocal?: () => void
+  nas: boolean
 }
 
 type Mode = 'all' | 'new' | 'period'
@@ -83,14 +86,16 @@ function baseName(path: string): string {
 function Frame({ title, footer, children }: { title: string; footer: string; children: ReactNode }): JSX.Element {
   return (
     <div className="dropzone glass import-card" role="region" aria-label={title}>
-      <div className="drop-icon" aria-hidden="true">📱</div>
-      {children}
+      <div className="card-body">
+        <div className="drop-icon" aria-hidden="true">📱</div>
+        {children}
+      </div>
       <p className="card-foot">{footer}</p>
     </div>
   )
 }
 
-export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished }: Props): JSX.Element | null {
+export function ImportCard({ options, blocked, disabled, open, onClose, onVisible, onRunning, onFinished, onUseLocal, nas }: Props): JSX.Element | null {
   const t = useT()
   const [devices, setDevices] = useState<ImportDevice[]>([])
   const [manual, setManual] = useState<ImportDevice | null>(null)
@@ -211,7 +216,8 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
           : t('import.foot.period', { from, to })
 
   const back = (
-    <button className="link" onClick={() => (setManual(null), onClose())}>
+    <button className="link card-link" onClick={() => (setManual(null), onClose())}>
+      <span className="card-link-icon" aria-hidden="true">📂</span>
       {t('import.back')}
     </button>
   )
@@ -343,6 +349,11 @@ export function ImportCard({ options, blocked, disabled, open, onClose, onVisibl
         <p className="import-error" role="alert">
           {error ?? reason}
         </p>
+      )}
+      {nas && !error && onUseLocal && (
+        <button className="btn ghost" onClick={onUseLocal}>
+          {t('import.useLocal')}
+        </button>
       )}
       {back}
     </Frame>
