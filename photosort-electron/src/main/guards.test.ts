@@ -32,6 +32,8 @@ describe('validateSidecarRequest', () => {
       { id: '1', op: 'thumbnail', path: '/p/a.jpg', size: 256 },
       { id: '2', op: 'cancel', target: '1' },
       { id: '3', op: 'copy', planId: 'p1', remote: { protocol: 'ssh', host: 'nas', port: 22, user: 'me', module: '', path: '/photos', password: 'x', keyFile: '', checksum: true }, dryRun: true },
+      { id: '5', op: 'importScan', devicePath: '/run/user/1000/gvfs/afc:host=X/DCIM', deviceId: 'afc-X', mode: 'period', from: '2026-01-01', to: '2026-12-31' },
+      { id: '6', op: 'importControl', target: '5', action: 'pause' },
       { id: '4', op: 'travelLayout', steps: [{ lat: 1.5, lon: 2.5, label: 'Paris', nested: { a: [1, 2] } }], page: 'a4', provider: 'x', lang: 'fr' }
     ]) {
       assert.equal(validateSidecarRequest(request).ok, true, JSON.stringify(request))

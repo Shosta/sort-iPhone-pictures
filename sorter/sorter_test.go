@@ -441,3 +441,26 @@ func TestSharpness(t *testing.T) {
 		t.Fatalf("flat=%v checker=%v", low, high)
 	}
 }
+
+func TestPlanDateRange(t *testing.T) {
+	source := t.TempDir()
+	days := map[string]time.Time{
+		"in.tiff":    time.Date(2026, 3, 10, 12, 0, 0, 0, time.Local),
+		"early.tiff": time.Date(2026, 2, 27, 23, 59, 0, 0, time.Local),
+		"late.tiff":  time.Date(2026, 3, 31, 23, 59, 30, 0, time.Local),
+	}
+	for name := range days {
+		writePhoto(t, filepath.Join(source, name))
+	}
+	engine := Engine{
+		TakenFrom: time.Date(2026, 3, 1, 0, 0, 0, 0, time.Local),
+		TakenTo:   time.Date(2026, 3, 31, 23, 59, 59, 0, time.Local),
+		ReadMetadata: func(_ context.Context, path string) (Metadata, error) {
+			return Metadata{TakenAt: days[filepath.Base(path)]}, nil
+		},
+	}
+	plan, err := engine.Plan(context.Background(), []string{source}, filepath.Join(t.TempDir(), "out"))
+	if err != nil || len(plan.Entries) != 2 || plan.Filtered != 1 {
+		t.Fatalf("plan: %+v, %v", plan, err)
+	}
+}

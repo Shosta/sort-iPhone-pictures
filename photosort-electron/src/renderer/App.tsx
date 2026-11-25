@@ -2,6 +2,7 @@ import confetti from 'canvas-confetti'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'framer-motion'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DropZone } from './components/DropZone'
+import { ImportCard } from './components/ImportCard'
 import { Flights, type Flight } from './components/Flights'
 import { Preferences } from './components/Preferences'
 import { RemotePanel } from './components/RemotePanel'
@@ -264,6 +265,9 @@ export function App(): JSX.Element {
   const [draftFolders, setDraftFolders] = useState<[string, Entry[]][]>([])
   const [doneByFolder, setDoneByFolder] = useState<Map<string, Entry[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importVisible, setImportVisible] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [showSkipped, setShowSkipped] = useState(false)
   const [tagJob, setTagJob] = useState<TagJob | null>(null)
   const running = useRef<{ cancel: () => void } | null>(null)
@@ -587,7 +591,7 @@ export function App(): JSX.Element {
   )
   const planFolders = useMemo(() => (plan ? sortedFolders(groupByFolder(plan.entries)) : null), [plan])
   const folders = planFolders ?? draftFolders
-  const busy = phase === 'analyzing' || phase === 'copying'
+  const busy = phase === 'analyzing' || phase === 'copying' || importing
   const tagging = tagJob?.state === 'loading' || tagJob?.state === 'running'
   const busyEnded = useRef(0)
   const wasBusy = useRef(false)
@@ -670,15 +674,32 @@ export function App(): JSX.Element {
       <main className="columns">
         <section className="column">
           <div className="top">
-          <DropZone
-            sources={sources}
-            disabled={busy}
-            onAdd={addSources}
-            onRemove={(path) => {
-              setSources((previous) => previous.filter((item) => item !== path))
-              resetResults()
-            }}
+          {!importVisible && (
+            <DropZone
+              sources={sources}
+              disabled={busy}
+              onAdd={addSources}
+              onRemove={(path) => {
+                setSources((previous) => previous.filter((item) => item !== path))
+                resetResults()
+              }}
+            />
+          )}
+          <ImportCard
+            options={{ destination, byLocation, landmarks, dedupe: skipDuplicates, similar: groupSimilar, dateFallback, screenshots: screenshotFolder, blurry: groupBlurry }}
+            blocked={remote ? t('import.nas') : !destination.trim() ? t('import.noDest') : null}
+            disabled={phase === 'analyzing' || phase === 'copying'}
+            open={importOpen}
+            onClose={() => setImportOpen(false)}
+            onVisible={setImportVisible}
+            onRunning={setImporting}
+            onFinished={resetResults}
           />
+          {!importVisible && (
+            <button className="link import-open" disabled={busy} onClick={() => setImportOpen(true)}>
+              {t('import.open')}
+            </button>
+          )}
           </div>
           <div className="glass panel grow list">
             <h2>

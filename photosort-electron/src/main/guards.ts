@@ -28,6 +28,11 @@ export const SIDECAR_OPS: ReadonlySet<string> = new Set([
   'travelScan',
   'travelLayout',
   'travelPdf',
+  'importDetect',
+  'importScan',
+  'importRun',
+  'importControl',
+  'importForget',
   'cancel'
 ])
 
@@ -76,7 +81,11 @@ const FIELDS: Readonly<Record<string, FieldKind>> = {
   steps: 'records',
   lang: 'string',
   remote: 'remote',
-  dryRun: 'boolean'
+  dryRun: 'boolean',
+  deviceId: 'string',
+  devicePath: 'string',
+  mode: 'string',
+  action: 'string'
 }
 
 const REMOTE_FIELDS: Readonly<Record<string, 'string' | 'number' | 'boolean'>> = {

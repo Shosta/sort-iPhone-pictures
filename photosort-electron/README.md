@@ -261,6 +261,10 @@ Pour un semainier papier : le bouton 📅 en haut à droite (`Cmd/Ctrl+P`, menu 
 
 Chaque photo garde sa forme, sans recadrage : son grand côté fait 6,5 cm (portrait : 6,5 cm de haut ; paysage : 6,5 cm de large), avec au moins 5 mm entre deux photos pour découper. Sur A4 paysage, il tient 10 portraits ou 12 paysages 3:4 par page. Les images sont réduites à 300 dpi, d'où un PDF léger. **À l'impression, choisir « Taille réelle » (100 %)**, pas « Ajuster à la page ». Les originaux ne sont jamais modifiés ; un dossier de sortie inutilisable est remplacé par *Téléchargements* avec un avertissement. Le moteur (`internal/scrapbook`, PDF avec `go-pdf/fpdf`) est en Go pur.
 
+## Import depuis un iPhone, une carte SD ou un appareil photo
+
+Sous Linux, Photosort détecte seul un volume monté contenant un dossier `DCIM` (iPhone via GVFS : déverrouillez-le et touchez « Se fier à cet ordinateur »). Sous macOS et Windows, choisissez le dossier `DCIM` à la main. Modes : **Tout**, **Nouveau** (par défaut, grâce à un journal par appareil dans `~/.config/photosort/imports/`) ou **Période**. Les photos (HEIC, JPG, PNG, DNG) sont copiées par lots d'environ 200 Mo dans un dossier temporaire privé, triées, puis le lot est supprimé ; l'appareil n'est jamais modifié. Un appareil débranché met l'import en pause, il reprend au rebranchement. Cet import écrit dans un dossier local (pas encore vers le NAS).
+
 ## Performances et fluidité
 
 - Analyse en flux : la colonne « Classées » se remplit dès qu'une destination est

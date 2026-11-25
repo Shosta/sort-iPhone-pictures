@@ -43,6 +43,7 @@ internal/
   jpeg8/                   fork of Go image/jpeg decoding at 1/8 scale (DC only) → fast hash/AI input
   geo/                     offline GeoNames: city (cities.tsv.gz) + landmarks (places.tsv.gz); gen/ regenerates data
   tagger/                  ONNX scene (Places365) + face (YuNet) + solar moment + EXIF "meta" tags; XMP writer
+  devimport/               import from a mounted DCIM volume: detect (Linux gvfs/media), scan, 200 MiB batches, safe transit dir, per-device journal
   remote/                  NAS upload: stage tree of links → rsync (daemon or ssh) transport; error classification
   scrapbook/               weekly printable PDF sheets: scan week, measure ratios, layout (mm), frames/backgrounds, fpdf render
   mapbase/                 offline Natural Earth base map (world.bin.gz), Mercator fit, optional online tile providers + cache
@@ -80,23 +81,27 @@ docs/                      nas-qnap.md + superpowers/{specs,plans}/ design docs 
 
 One goroutine per request; `server.run` switch dispatches the ops. **Authoritative protocol doc = header comment of `main.go`**.
 Ops: `plan`, `copy`, `remoteTest`, `thumbnail`, `tag`, `weekDays`, `weekPhotos`, `scrapbookLayout`, `scrapbook`,
-`yearMapYears`, `yearMapScan`, `yearMapLayout`, `yearMapPdf`, `travelTrips`, `travelScan`, `travelLayout`, `travelPdf`, `cancel`.
+`yearMapYears`, `yearMapScan`, `yearMapLayout`, `yearMapPdf`, `travelTrips`, `travelScan`, `travelLayout`, `travelPdf`, `importDetect`, `importScan`, `importRun`, `importControl`, `importForget`, `cancel`.
 
 | File | Role |
 |---|---|
 | `main.go` | `request` struct (every JSON field), server, dispatch, `plan` (draft batching 80 ms, `planChunk` ≤ 2000 entries/~256 KB, then `plan` with counts), `copy`, `thumbnail`, `tag` |
 | `cache.go` | thumbnail LRU (96 MiB budget); plan previews prefill it |
 | `remote.go` | `prepareRemotePlan` (scratch stage dir), `remoteTest`, `remoteCopy` (stage links → rsync; events `remoteProgress`, `done`) |
+| `import.go` | DCIM import ops: copy→sort producer/consumer pipeline (next batch copied while previous sorted), pause gate, auto-pause/resume on disconnect, journal after verified delivery. Request fields `deviceId`, `devicePath` (DCIM folder; empty id → `folder-<hash>`), `mode` all\|new\|period (+`from`/`to` YYYY-MM-DD), `action` pause\|resume |
 | `scrapbook.go` | week days/photos, sheet layout, PDF |
 | `yearmap.go`, `travel.go` | place/trip scan, layout, PDF, tile-provider backdrop with fallback |
 | `*_test.go` | protocol/perf tests (`TestPlanStreams`, `TestPlanChunks`, `TestLargePlan` are CI perf guards) |
 
 Event types: `status`, `draft`, `planChunk`, `plan`, `progress`, `done`, `thumbnail`, `tagged`, `weekDays`, `photos`, `layout`,
-`yearMapYears`, `places`, `trips`, `trip`, `remoteTest`, `remoteProgress`, `error` (`cancelled`, remote `code/detail/resumable`).
+`yearMapYears`, `places`, `trips`, `trip`, `importDevices`, `importScan`, `importProgress`, `importPaused`/`importResumed`, `importDone` (import errors carry `code` noDevice/lowDisk/copy + `detail`), `remoteTest`, `remoteProgress`, `error` (`cancelled`, remote `code/detail/resumable`).
 Map PDFs report backdrop problems inside `done` (`backdropFailed`, `backdropWarning`); remote results carry `warnings`.
 Terminal events (renderer drops its listener): see `TERMINAL` in `renderer/sidecar.ts`.
 
 ### Other `internal/*` quick facts
+
+- `sorter.Engine.TakenFrom/TakenTo` (inclusive, zero = unbounded) filter by capture date; undated photos are excluded when a range is set; counted in `Plan.Filtered`.
+- `internal/devimport`: photo ext heic/jpg/jpeg/png/dng (videos only counted); journal `~/.config/photosort/imports/<id>.json` keyed `rel|size|mtime`; transit `os.TempDir()/photosort-<user>` (0700, owner-checked, no symlinks) with `UserCacheDir/photosort/import` fallback. Read-only on the device. v1 imports to a LOCAL destination only (UI disables it with the NAS destination).
 
 - `tagger`: `New(dir, Options)`, `Tags(Photo)`, `Close`, `FindAssets` (dir → `$PHOTOSORT_AI_DIR` → `ai/` next to exe), `XMP/WriteXMP`.
   Models: `places.onnx`, `categories.txt`, `yunet.onnx` + ONNX Runtime lib. Tag constants (mostly French labels) live in `tagger.go` (People/Portrait/Groupe), `scene.go`, `sun.go`, `meta.go`.
@@ -128,7 +133,7 @@ renderer (React, src/renderer)  ──window.photosort (preload)──►  main 
 | `src/renderer/i18n.tsx` | **all UI strings** `fr` / `en-GB` / `da` (`Key = keyof typeof fr`; add a key to all three) |
 | `src/renderer/themes.ts` | 8 themes → CSS vars |
 | `src/renderer/types.ts` | shared TS types (`Plan`, `Entry`, `TagJob`, `Scrap*`, `Year*`, `Travel*`…) + `window.photosort` typing |
-| `src/renderer/components/` | `Preferences`, `TagsPanel`, `ScrapbookPanel` (+`Calendar`), `YearMapPanel`, `TravelMapPanel`, `RemotePanel`, `DropZone`, `IssueList`, `Thumb`, `VirtualGrid`, `Flights`, `Select`, `Flag` |
+| `src/renderer/components/` | `Preferences`, `TagsPanel`, `ScrapbookPanel` (+`Calendar`), `YearMapPanel`, `TravelMapPanel`, `RemotePanel`, `DropZone`, `ImportCard` (DCIM import: polls `importDetect` every 3 s, replaces DropZone while a device is present or the manual "import from a device" link is open), `IssueList`, `Thumb`, `VirtualGrid`, `Flights`, `Select`, `Flag` |
 | `scripts/` | `build-sidecar.mjs` (go build, CGO, GOOS/GOARCH), `fetch-ai-assets.mjs`, `checksums.mjs`, `audit-gate.mjs`, `after-pack.cjs` (Linux launcher), `rename-dev-electron.mjs` |
 | `electron-builder.yml` | dmg / portable exe / AppImage+deb; macOS signing+notarization only when secrets present |
 
@@ -195,9 +200,9 @@ Agreed order of interest; none is implemented.
 
 Rejected: watched folder, native USB/libimobiledevice import (superseded by the mounted-DCIM import below).
 
-### Decided design: import from a mounted DCIM volume (iPhone, SD card, camera) — not started
+### Import from a mounted DCIM volume (iPhone, SD card, camera) — IMPLEMENTED (design record)
 
-Screen design is deferred to an Impeccable brainstorm before development.
+Implemented in `internal/devimport`, `cmd/photosort-sidecar/import.go`, `components/ImportCard.tsx`. Deviation from the design: local destination only (NAS later).
 
 - **Source**: Linux detects an already-mounted `DCIM` (GVFS `/run/user/<uid>/gvfs/afc:host=<UDID>`, `/media`, `/run/media`); also watches for plug-in after launch. No mounting/pairing in the app; help message if nothing found ("unlock the iPhone, tap Trust"). macOS/Windows: pick the source manually; batch-copy code stays platform-neutral.
 - **Read-only**: never modify/delete anything on the device.
@@ -208,4 +213,4 @@ Screen design is deferred to an Impeccable brainstorm before development.
 - **Disconnect**: auto-pause with message, auto-resume on replug (same device id); no partial sort without consent.
 - **Journal**: `~/.config/photosort/imports/<UDID>.json`, atomic write; key = device id + relative path + size + mtime; "New" = absent from journal (instant, no hashing); SHA-256 dedupe at sort remains the safety net; deleted-after-sort photos are not re-imported unless "Re-import everything"; "Forget this device" button.
 - **Screen (confirmed brief)**: keeps the existing dark/aurora world; reuse `Calendar` and the Destination panel patterns. A single "Device detected" card replaces the drop zone while a volume is plugged in (link back to manual folder drop). States: (1) ready — device name, 3-way selector All / New (default) / Period (two date pickers shown only for Period), live "N photos to import, from X to Y" count with a small counting animation that never blocks the button, primary "Import and sort", secondary menu with "Re-import everything" and "Forget this device"; (2) running — same card becomes progress: phase Copy/Sort, batch n/N, photos, elapsed, bar, Pause/Cancel; (3) done — summary (imported, duplicates skipped, videos ignored) then back to ready. Also design: no device + help text, locked phone, disconnect/auto-resume, zero new photos, low disk space, empty period, copy error. FR/EN/DA, keyboard/a11y, narrow window collapses to one column. Out of scope v1: thumbnails of device photos, per-photo selection.
-- Likely touch: new `internal/devimport` (detect, batch copy, journal), sidecar ops + `guards.ts` `FIELDS`, `sorter` date-range filter, new Import card + i18n (3 langs).
+- Touched: new `internal/devimport` (detect, batch copy, journal), sidecar ops + `guards.ts` `FIELDS`, `sorter` date-range filter, new Import card + i18n (3 langs).

@@ -94,6 +94,22 @@
 //     remoteRsync, rsyncMissing, protocol, config, unknown), detail and
 //     resumable and legacyRsync (openrsync in use); running copy again resumes an interrupted upload.
 //
+//   - import: importDetect lists mounted volumes holding a DCIM folder:
+//     importDevices (devices: id, name, path = DCIM folder). importScan
+//     (devicePath, deviceId, mode all|new|period, from/to YYYY-MM-DD for
+//     period) answers importScan (total photos on the device, count to import,
+//     bytes, videos ignored, from/to dates). importRun takes the same fields
+//     plus destination and the plan options: it copies the device photos in
+//     batches of about 200 MB into a private transit folder, sorts each batch
+//     (copying the next meanwhile) and journals only verified files; events
+//     importProgress (phase copy|sort, batch, batches, copied, done, total,
+//     elapsedMs, stage), importPaused / importResumed (reason manual |
+//     disconnected | reconnected; a disconnected device resumes by itself when
+//     it comes back), then importDone (imported, duplicates, videos, filtered,
+//     skipped, total). importControl {target, action pause|resume} pauses a
+//     run; importForget forgets the journal of a device. The device is only
+//     read. Import errors carry code (noDevice, lowDisk, copy) and detail.
+//
 // Any request may end with error (cancelled is true after a cancel); warning
 // events are informational.
 package main
@@ -113,6 +129,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sort-iphone-pictures/internal/devimport"
 	"sort-iphone-pictures/internal/remote"
 	"sort-iphone-pictures/internal/scrapbook"
 	"sort-iphone-pictures/internal/tagger"
@@ -169,6 +186,12 @@ type request struct {
 	RemoteDir      string `json:"remoteDir"`
 	RemoteRefresh  bool   `json:"remoteRefresh"`
 	RemoteNoDedupe bool   `json:"remoteNoDedupe"`
+	// DeviceID, DevicePath (the DCIM folder), Mode (all|new|period) and Action
+	// (pause|resume) drive the import ops.
+	DeviceID   string `json:"deviceId"`
+	DevicePath string `json:"devicePath"`
+	Mode       string `json:"mode"`
+	Action     string `json:"action"`
 }
 
 type event map[string]any
@@ -199,9 +222,16 @@ type server struct {
 	// remoteCache overrides where the remote library listing is cached.
 	remoteCache string
 	wg          sync.WaitGroup
+	// Import state: pause gates by run id, one run at a time; devRoots and
+	// journalDir override the volume roots and the journal folder (tests).
+	gates      map[string]*gate
+	importing  atomic.Bool
+	devRoots   []string
+	journalDir string
 }
 
 func main() {
+	devimport.CleanTransit()
 	srv := newServer(os.Stdout)
 	if err := srv.serve(context.Background(), os.Stdin); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -214,6 +244,7 @@ func newServer(out io.Writer) *server {
 		out:       out,
 		plans:     map[string]sorter.Plan{},
 		cancels:   map[string]context.CancelFunc{},
+		gates:     map[string]*gate{},
 		thumbs:    make(chan struct{}, runtime.NumCPU()),
 		busySlots: make(chan struct{}, busyThumbs),
 		cache:     newThumbCache(cacheBudget),
@@ -281,6 +312,10 @@ func (s *server) handle(parent context.Context, req request) {
 					e["legacyRsync"] = true
 				}
 			}
+			var importErr *devimport.Error
+			if errors.As(err, &importErr) {
+				e["code"], e["detail"] = importErr.Code, importErr.Detail
+			}
 			s.send(e)
 		}
 	}()
@@ -310,6 +345,16 @@ func (s *server) run(ctx context.Context, req request) error {
 			return err
 		}
 		s.send(event{"id": req.ID, "type": "done", "copied": report.Copied, "total": total})
+	case "importDetect":
+		return s.importDetect(req)
+	case "importScan":
+		return s.importScan(ctx, req)
+	case "importRun":
+		return s.importRun(ctx, req)
+	case "importControl":
+		return s.importControl(req)
+	case "importForget":
+		return s.importForget(req)
 	case "remoteTest":
 		return s.remoteTest(ctx, req)
 	case "remoteList":

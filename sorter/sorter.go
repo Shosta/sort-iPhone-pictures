@@ -39,6 +39,9 @@ type Plan struct {
 	Skipped     []Issue `json:"skipped"`
 	// Duplicates lists true duplicates left out of the plan (SkipDuplicates).
 	Duplicates []Duplicate `json:"duplicates"`
+	// Filtered counts photos left out because their date is outside
+	// Engine.TakenFrom/TakenTo.
+	Filtered int `json:"filtered"`
 }
 
 type Report struct {
@@ -87,6 +90,10 @@ type Engine struct {
 	// their file name, then from their modification time, instead of leaving
 	// them in UndatedFolder.
 	DateFallback bool
+	// TakenFrom and TakenTo (inclusive, zero = unbounded) keep only photos
+	// whose capture date (after DateFallback) lies in the range. With a range,
+	// photos without a usable date are left out.
+	TakenFrom, TakenTo time.Time
 	// ScreenshotFolder files screenshots under ScreenshotsFolder instead of
 	// the regular year/month tree.
 	ScreenshotFolder bool
@@ -251,6 +258,8 @@ func (engine Engine) Plan(ctx context.Context, sources []string, destination str
 		switch item := photos[i]; {
 		case item.err != nil && !errors.Is(item.err, errNoEXIF):
 			plan.Skipped = append(plan.Skipped, Issue{path, item.err.Error()})
+		case engine.outsideRange(item.metadata):
+			plan.Filtered++
 		case item.folder == "":
 			undated = append(undated, i)
 		default:
@@ -567,6 +576,17 @@ func (reader contextReader) Read(buffer []byte) (int, error) {
 		return 0, err
 	}
 	return reader.reader.Read(buffer)
+}
+
+func (engine Engine) outsideRange(m Metadata) bool {
+	if engine.TakenFrom.IsZero() && engine.TakenTo.IsZero() {
+		return false
+	}
+	if !validDate(m) {
+		return true
+	}
+	return (!engine.TakenFrom.IsZero() && m.TakenAt.Before(engine.TakenFrom)) ||
+		(!engine.TakenTo.IsZero() && m.TakenAt.After(engine.TakenTo))
 }
 
 func validDate(m Metadata) bool {
