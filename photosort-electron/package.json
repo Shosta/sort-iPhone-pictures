@@ -12,6 +12,7 @@
     "build": "npm run sidecar && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"src/main/*.test.ts\" \"src/renderer/*.test.ts\" \"scripts/*.test.cjs\" \"scripts/*.test.mjs\"",
+    "audit:gate": "node scripts/audit-gate.mjs",
     "checksums": "node scripts/checksums.mjs release",
     "checksums:verify": "node scripts/checksums.mjs release --check",
     "dist": "npm run build && electron-builder && npm run checksums",

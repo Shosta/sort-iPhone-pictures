@@ -28,7 +28,9 @@ describe('checksums', () => {
   })
 
   it('is accepted by the system shasum/sha256sum', { skip: process.platform === 'win32' }, () => {
-    const tool = spawnSync('shasum', ['-a', '256', '-c', MANIFEST], { cwd: dir, encoding: 'utf8' })
+    const candidates = [['shasum', ['-a', '256', '-c', MANIFEST]], ['sha256sum', ['-c', MANIFEST]]]
+    const tool = candidates.map(([cmd, args]) => spawnSync(cmd, args, { cwd: dir, encoding: 'utf8' })).find((run) => !run.error)
+    if (!tool) return // ni shasum ni sha256sum sur cette machine
     assert.equal(tool.status, 0, tool.stderr + tool.stdout)
   })
 

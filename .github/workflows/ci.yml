@@ -1,0 +1,163 @@
+name: CI
+
+# Contrôles de qualité, de sécurité et de performance (garde-fous) du dépôt.
+# - Pull request : exécuté pour toute PR (y compris de forks : jeton en lecture seule, aucun secret).
+# - Push sur main et tag v* : appelé par package.yml (workflow réutilisable) avant de construire les paquets.
+# - Hebdomadaire (lundi) : détecte les nouvelles CVE / avis de sécurité sans qu'il y ait eu de commit.
+# - Lancement manuel : onglet Actions > "CI" > Run workflow.
+on:
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (build, vet, test, govulncheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+
+      # L'interface Fyne (cmd/photosort-gui, internal/desktop) compile du C : OpenGL, X11, Wayland.
+      - name: Bibliothèques système de l'interface Fyne
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev
+
+      - name: Compiler
+        run: go build ./...
+
+      - name: Analyse statique (go vet)
+        run: go vet ./...
+
+      - name: Tests
+        run: go test -count=1 ./...
+
+      # Échoue seulement si le code atteint réellement une fonction vulnérable (dépendances et bibliothèque standard).
+      # Version de l'outil épinglée ; la base de vulnérabilités, elle, est toujours à jour.
+      - name: Vulnérabilités connues (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+
+  # Garde-fou de performance : des tests structurels et de mémoire, volontairement sans seuil de temps
+  # (un chronomètre serait instable sur des runners partagés). Ils échouent si le comportement borné régresse :
+  #  - internal/thumbs : le budget mémoire de décodage (HEIC/AVIF) plafonne le poids décodé en parallèle,
+  #    sert les demandes dans l'ordre, exécute seule une image plus lourde que le budget et se libère
+  #    même quand un décodeur panique ;
+  #  - cmd/photosort-sidecar : un plan de milliers de photos est envoyé en morceaux bornés
+  #    (≤ 2000 éléments, ~256 Ko par ligne) puis réassemblé à l'identique, sans message géant ;
+  #  - côté interface, l'assemblage de ces morceaux (planStream).
+  # Non mesuré : débit (photos/s), consommation mémoire réelle (RSS) sur une grosse photothèque, temps de démarrage.
+  # Le délai global de chaque commande (-timeout) ne détecte que les blocages et les dérives d'un ordre de grandeur.
+  perf:
+    name: Garde-fou performance (mémoire et flux du plan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Budget mémoire du décodage d'images
+        run: go test -count=1 -timeout 5m -v -run 'TestBudget|TestRunWasm|TestDecodeHEIC' ./internal/thumbs
+
+      - name: Plan envoyé par morceaux bornés (sidecar)
+        run: go test -count=1 -timeout 5m -v -run 'TestPlanStreams|TestPlanChunks|TestLargePlan' ./cmd/photosort-sidecar
+
+      - name: Assemblage du plan (interface)
+        working-directory: photosort-electron
+        run: node --test src/renderer/planStream.test.ts
+
+  electron:
+    name: Electron (types, tests, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: photosort-electron
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: photosort-electron/package-lock.json
+
+      # Pas de scripts d'installation : inutile pour typer et tester (le binaire Electron n'est pas nécessaire)
+      # et cela évite d'exécuter le code d'installation des dépendances.
+      - name: Installer les dépendances
+        run: npm ci --ignore-scripts
+
+      - name: Vérifier les types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Bloque sur les vulnérabilités de production et d'Electron (devDependency, donc ignoré par
+      # `npm audit --omit=dev`) ; les avis de l'outillage de build ne sont que signalés. Voir scripts/audit-gate.mjs.
+      - name: Audit des dépendances livrées
+        run: npm run audit:gate
+
+  website:
+    name: Site web (tests, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: website/.nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci --ignore-scripts
+
+      - name: Audit des dépendances de production
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Construire et tester le site
+        run: npm test
+
+  workflows:
+    name: Workflows GitHub Actions (actionlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+
+      # Syntaxe, expressions et, via shellcheck (préinstallé sur le runner), les scripts `run:`.
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
