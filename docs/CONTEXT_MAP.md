@@ -193,4 +193,18 @@ Agreed order of interest; none is implemented.
 2. Incremental sort (skip already-sorted files), Live Photos pairing, dry-run report / rollback, events, timezone handling, filters, renaming, conversion, profiles, licence/Pro.
 3. Fallback: SMB track for the NAS (`docs/nas-qnap.md`).
 
-Rejected: iPhone USB import, watched folder.
+Rejected: watched folder, native USB/libimobiledevice import (superseded by the mounted-DCIM import below).
+
+### Decided design: import from a mounted DCIM volume (iPhone, SD card, camera) — not started
+
+Screen design is deferred to an Impeccable brainstorm before development.
+
+- **Source**: Linux detects an already-mounted `DCIM` (GVFS `/run/user/<uid>/gvfs/afc:host=<UDID>`, `/media`, `/run/media`); also watches for plug-in after launch. No mounting/pairing in the app; help message if nothing found ("unlock the iPhone, tap Trust"). macOS/Windows: pick the source manually; batch-copy code stays platform-neutral.
+- **Read-only**: never modify/delete anything on the device.
+- **Modes**: All / New (default) / Period (two date pickers, start 00:00 → end 23:59:59, year included, default current year). Period = pre-filter on file mtime ±1 day during copy, exact filter on capture date (existing date fallback) at sort.
+- **Files**: HEIC, JPG, JPEG, PNG, DNG only; videos, `.AAE` etc. ignored (report "N videos ignored"); no sidecar pairing.
+- **Transit**: `/tmp/photosort-<user>/` mode 0700 (owner-checked, no symlink following), fallback `~/.cache/photosort/import/` if free space is short; free-space check before each batch. App empties it itself silently at start and before each import; the user never cleans anything.
+- **Batches**: ~200 MB each (a larger file = its own batch), oldest first, 2-batch pipeline (copy N+1 while sorting N). Per batch: copy to `.part` + size check → sort with the usual options (local or NAS destination) → journal entry only after verified delivery → delete batch.
+- **Disconnect**: auto-pause with message, auto-resume on replug (same device id); no partial sort without consent.
+- **Journal**: `~/.config/photosort/imports/<UDID>.json`, atomic write; key = device id + relative path + size + mtime; "New" = absent from journal (instant, no hashing); SHA-256 dedupe at sort remains the safety net; deleted-after-sort photos are not re-imported unless "Re-import everything"; "Forget this device" button.
+- Likely touch: new `internal/devimport` (detect, batch copy, journal), sidecar ops + `guards.ts` `FIELDS`, `sorter` date-range filter, new Import card + i18n (3 langs).
