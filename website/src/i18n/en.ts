@@ -10,7 +10,7 @@ export const en: Copy = {
       'Photosort sorts thousands of loose iPhone photos by the date they were taken and adds tags so you can find them again, with no cloud. As a bonus, a scrapbook PDF for your weekly planner. Open source, for macOS, Linux and Windows.',
   },
   skip: 'Skip to content',
-  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', remote: 'Remote sort', languages: 'Language' },
+  nav: { label: 'Main navigation', how: 'Sorting', scrapbook: 'Planner', features: 'Features', download: 'Download', faq: 'FAQ', remote: 'Remote sort', details: 'Detailed overview', languages: 'Language' },
   hero: {
     eyebrow: 'Open source · local · no account',
     titleA: 'Thousands of loose iPhone photos,',
@@ -94,8 +94,8 @@ export const en: Copy = {
     eyebrow: 'In all transparency',
     title: 'What Photosort does not do (yet).',
     items: [
-      'No direct import from the iPhone: it works on folders on your computer.',
-      'A photo without an EXIF date is skipped and reported, never filed at random.',
+      'iPhone import reads the DCIM folder of an iPhone mounted on your computer: no Wi-Fi, no iCloud.',
+      'A photo without an EXIF date is filed using a fallback (date in the file name, otherwise the file date), never at random.',
       'Videos, Live Photos and XMP/AAE files are not handled.',
       'AI tags are not available on Intel Macs.',
     ],
@@ -104,10 +104,10 @@ export const en: Copy = {
     eyebrow: 'Frequently asked questions',
     title: 'Before you sort.',
     items: [
-      { q: 'Does Photosort import directly from my iPhone?', a: 'No. First get your photos with your usual transfer tool, keeping the originals and their metadata. Photosort then organises the files already on your computer.' },
+      { q: 'Does Photosort import directly from my iPhone?', a: 'Yes, from the DCIM folder of an iPhone mounted on your computer (cable), with resume after an interruption. You can also simply pick folders already copied to your computer.' },
       { q: 'Do my photos leave my computer?', a: 'Never. Sorting, place lookup, duplicate detection and AI tags all run offline, with no account and no server.' },
       { q: 'Are my originals modified?', a: 'No. Photos are copied into a new library; no existing file is overwritten, moved or renamed.' },
-      { q: 'Which formats are supported?', a: 'Notably JPEG, HEIC/HEIF, PNG, TIFF, AVIF and several RAW formats. Sorting needs a readable shooting date in the EXIF metadata: a photo without one is skipped and reported in the summary.' },
+      { q: 'Which formats are supported?', a: 'Notably JPEG, HEIC/HEIF, PNG, TIFF, AVIF and several RAW formats. The shooting date comes from the EXIF metadata; failing that, Photosort reads the date in the file name, then the file date.' },
       { q: 'How does the scrapbook work?', a: 'From the sorted library you pick a week and tick photos. Photosort lays them out on A4 pages with room for cutting, then opens the PDF. Just print at 100%.' },
       { q: 'Which systems does it run on?', a: 'macOS (Apple silicon and Intel), Linux x86_64 (AppImage) and Windows (portable executable). Packages are unsigned, and AI tags are not available on Intel Macs.' },
     ],

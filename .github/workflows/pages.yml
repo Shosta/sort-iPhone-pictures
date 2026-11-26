@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
     paths: ['website/**', '.github/workflows/pages.yml']
+  # Une release publiée fait basculer le bouton « Bientôt disponible » vers le téléchargement.
+  release:
+    types: [published, unpublished, deleted]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +50,18 @@ jobs:
             *.github.io) echo "ASTRO_BASE=/" >> "$GITHUB_ENV" ;;
             *) echo "ASTRO_BASE=/${REPO}" >> "$GITHUB_ENV" ;;
           esac
+
+      # Sans release publiée, la page d'accueil affiche « Bientôt disponible » (lien vers /releases).
+      - name: Détecter une release publiée
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: .
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --silent 2>/dev/null; then
+            echo "PUBLIC_HAS_RELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "PUBLIC_HAS_RELEASE=false" >> "$GITHUB_ENV"
+          fi
 
       - run: npm ci --ignore-scripts
 

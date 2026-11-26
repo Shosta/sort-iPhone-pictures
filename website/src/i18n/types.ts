@@ -7,7 +7,7 @@ export interface Copy {
   languageName: string;
   meta: { title: string; description: string };
   skip: string;
-  nav: { label: string; how: string; scrapbook: string; features: string; download: string; faq: string; remote: string; languages: string };
+  nav: { label: string; how: string; scrapbook: string; features: string; download: string; faq: string; remote: string; details: string; languages: string };
   hero: {
     eyebrow: string;
     titleA: string;

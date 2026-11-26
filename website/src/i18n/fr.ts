@@ -10,7 +10,7 @@ export const fr: Copy = {
       'Photosort classe des milliers de photos d’iPhone en vrac par date de prise de vue, ajoute des tags pour les retrouver facilement, sans cloud. En bonus, un PDF de scrapbook pour votre semainier. Open source, pour macOS, Linux et Windows.',
   },
   skip: 'Aller au contenu',
-  nav: { label: 'Navigation principale', how: 'Classement', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', remote: 'Tri distant', languages: 'Langue' },
+  nav: { label: 'Navigation principale', how: 'Classement', scrapbook: 'Semainier', features: 'Fonctions', download: 'Télécharger', faq: 'FAQ', remote: 'Tri distant', details: 'Présentation détaillée', languages: 'Langue' },
   hero: {
     eyebrow: 'Open source · local · sans compte',
     titleA: 'Des milliers de photos d’iPhone en vrac,',
@@ -94,8 +94,8 @@ export const fr: Copy = {
     eyebrow: 'En toute transparence',
     title: 'Ce que Photosort ne fait pas (encore).',
     items: [
-      'Pas d’import direct depuis l’iPhone : il travaille sur des dossiers de votre ordinateur.',
-      'Une photo sans date EXIF est ignorée et signalée, jamais classée au hasard.',
+      'L’import depuis l’iPhone passe par le dossier DCIM d’un iPhone monté sur l’ordinateur : pas de Wi-Fi ni d’iCloud.',
+      'Une photo sans date EXIF est classée avec un repli (date du nom de fichier, sinon date du fichier), jamais au hasard.',
       'Les vidéos, les Live Photos et les fichiers XMP/AAE ne sont pas gérés.',
       'Les tags par IA ne sont pas disponibles sur les Mac Intel.',
     ],
@@ -104,10 +104,10 @@ export const fr: Copy = {
     eyebrow: 'Questions fréquentes',
     title: 'Avant de faire le tri.',
     items: [
-      { q: 'Photosort importe-t-il directement depuis mon iPhone ?', a: 'Non. Récupérez d’abord vos photos avec votre outil de transfert habituel, en conservant les originaux et leurs métadonnées. Photosort organise ensuite les fichiers déjà présents sur votre ordinateur.' },
+      { q: 'Photosort importe-t-il directement depuis mon iPhone ?', a: 'Oui, depuis le dossier DCIM d’un iPhone monté sur l’ordinateur (câble), avec reprise après interruption. Vous pouvez aussi simplement choisir des dossiers déjà copiés sur l’ordinateur.' },
       { q: 'Mes photos quittent-elles mon ordinateur ?', a: 'Jamais. Le classement, la recherche de lieux, la détection des doublons et les tags par IA fonctionnent hors ligne, sans compte ni serveur.' },
       { q: 'Mes originaux sont-ils modifiés ?', a: 'Non. Les photos sont copiées vers une nouvelle bibliothèque ; aucun fichier existant n’est écrasé, déplacé ni renommé.' },
-      { q: 'Quels formats sont pris en charge ?', a: 'Notamment JPEG, HEIC/HEIF, PNG, TIFF, AVIF et plusieurs formats RAW. Le classement exige une date de prise de vue lisible dans les métadonnées EXIF : une photo sans date est ignorée et signalée dans le bilan.' },
+      { q: 'Quels formats sont pris en charge ?', a: 'Notamment JPEG, HEIC/HEIF, PNG, TIFF, AVIF et plusieurs formats RAW. La date de prise de vue vient des métadonnées EXIF ; à défaut, Photosort lit la date dans le nom du fichier, puis la date du fichier.' },
       { q: 'Comment fonctionne le scrapbook ?', a: 'À partir de la bibliothèque classée, vous choisissez une semaine et cochez des photos. Photosort les place sur des pages A4 avec un espace de découpe, puis ouvre le PDF. Il suffit d’imprimer à 100 %.' },
       { q: 'Sur quels systèmes fonctionne-t-il ?', a: 'macOS (Apple silicon et Intel), Linux x86_64 (AppImage) et Windows (exécutable portable). Les paquets ne sont pas signés, et les tags par IA ne sont pas disponibles sur Mac Intel.' },
     ],

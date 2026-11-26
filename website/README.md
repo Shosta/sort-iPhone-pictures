@@ -19,6 +19,7 @@ npm run preview
 | Variable | Rôle | Défaut |
 | --- | --- | --- |
 | `PUBLIC_REPOSITORY_URL` | URL HTTPS du dépôt (active les boutons) | absente : « Publication du dépôt à venir » |
+| `PUBLIC_HAS_RELEASE` | `true` si une release est publiée : le bouton mène à `/releases/latest` avec détection du système. Sinon il mène à `/releases` avec « Bientôt disponible » | absente (= `false`) |
 | `ASTRO_SITE` | origine du site | `https://shosta.github.io` |
 | `ASTRO_BASE` | sous-chemin (`/<dépôt>` sur Pages) | `/` |
 
@@ -29,7 +30,9 @@ Les liens internes passent par `import.meta.env.BASE_URL`. Les tests lisent
 
 Le workflow `.github/workflows/pages.yml` publie à chaque push sur `main` qui
 touche `website/**`, ou à la demande (*Run workflow*). Il compile, teste, puis
-déploie. `ASTRO_BASE` et `PUBLIC_REPOSITORY_URL` sont déduits du dépôt.
+déploie. `ASTRO_BASE` et `PUBLIC_REPOSITORY_URL` sont déduits du dépôt ; `PUBLIC_HAS_RELEASE`
+vient d'un appel à `gh api releases/latest`. Le workflow se relance aussi à la publication ou
+suppression d'une release (`release`), ce qui fait apparaître le téléchargement sans commit.
 
 Réglage unique : **Settings > Pages > Build and deployment > Source : GitHub Actions**.
 Le dépôt doit être public pour utiliser Pages gratuitement.
@@ -41,7 +44,16 @@ si le dépôt s'appelle `shosta.github.io`).
 
 - Guide « Tri distant vers un NAS » : `/<lang>/tri-distant/` (gabarit `src/pages/[lang]/tri-distant.astro`, textes FR/EN/DA dans `src/i18n/nas.ts`, à tenir à jour avec les libellés et messages de l'application). La capture `src/assets/screenshots/tri-distant-fenetre.png` remplacera l'emplacement dès qu'elle existe.
 
-- Pages : `/fr/`, `/en/`, `/da/` (gabarit `src/pages/[lang]/index.astro`). La racine `/`
+- Accueil « page produit » (style Infuse, identité scrapbook) : `/fr/`, `/en/`, `/da/`
+  (gabarit `src/pages/[lang]/index.astro`, textes `src/i18n/home.ts`) : accroche, bouton de
+  téléchargement, six sections alternées avec capture, grille de fonctions, bloc « gratuit,
+  sans publicité, sans suivi ». Un seul petit script en ligne adapte le libellé du bouton au
+  système (macOS/Windows/Linux) ; sans JavaScript, le libellé générique reste.
+- Ancien accueil, intact : `/<lang>/presentation/` (gabarit `src/pages/[lang]/presentation/index.astro`,
+  textes `src/i18n/{fr,en,da}.ts`). **Pour revenir à l'ancien accueil** : `git mv` du gabarit
+  `presentation/index.astro` vers `src/pages/[lang]/index.astro` (corriger les imports `../../../`
+  → `../../`, `pageUrl` et `SiteHeader path`), et retirer la page produit.
+- Racine : La racine `/`
   choisit la langue du navigateur, avec un choix manuel si JavaScript est absent.
 - Textes : `src/i18n/{fr,en,da}.ts`, typés par `Copy` (`types.ts`). Modifier une langue
   impose de modifier les deux autres. Le danois est à relire par une personne native.
@@ -53,6 +65,20 @@ si le dépôt s'appelle `shosta.github.io`).
 
 ## Captures d'écran
 
-Déposer les images dans `src/assets/screenshots/` (png, jpg ou webp), nommées :
-`apercu`, `lieux`, `doublons`, `scrapbook`. Tant qu'un fichier manque, la page affiche
-un emplacement « Capture à venir ».
+Les images sont dans `src/assets/screenshots/`. Pour en remplacer une, déposer un fichier de
+même nom (png, jpg ou webp ; garder un seul fichier par nom) :
+
+| Nom | Où |
+| --- | --- |
+| `hero` | grande image d'accueil et section « Vie privée » (écran de fin de tri) |
+| `tri` | tri par date et lieu |
+| `iphone` | import depuis un iPhone (DCIM) |
+| `nas` | envoi vers un NAS (adresse fictive `nas.local`) |
+| `cartes` | cartes de voyage |
+| `doublons` | doublons (accueil et présentation) |
+
+Recommandations : largeur 1600 px, WebP (~100 Ko max), **sans EXIF** (ex. `cwebp -metadata none`),
+sans chemin personnel, nom d'utilisateur ni adresse réelle, et uniquement des photos libres de droits sans
+visage. Les textes alternatifs sont dans `src/i18n/home.ts`. Les captures actuelles ont été prises
+sur des photos de démonstration CC0 (voir `src/assets/screenshots/CREDITS.md`). Tant qu'un fichier manque, la page
+affiche un emplacement « Capture à venir ».
