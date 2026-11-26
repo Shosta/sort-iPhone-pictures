@@ -54,12 +54,13 @@ temps de démarrage (aucun benchmark n'existe dans le dépôt).
 
 | Cible | Runner | Fichiers produits |
 | --- | --- | --- |
-| macOS Apple Silicon | `macos-15` | `Photosort-<version>-mac-arm64.dmg` |
+| macOS Apple Silicon (tag ou manuel seulement) | `macos-14` | `Photosort-<version>-mac-arm64.dmg` |
 | macOS Intel | `macos-15-intel` | `Photosort-<version>-mac-x64.dmg` |
 | Linux x64 | `ubuntu-22.04` | `Photosort-<version>-linux-x86_64.AppImage`, `Photosort-<version>-linux-amd64.deb` |
 | Windows x64 | `windows-latest` | `Photosort-<version>-win-x64.exe` (portable : un seul .exe) |
 
-- **Push sur `main`** : paquets non signés, en *Artifacts* du run (30 jours), avec la
+- **Push sur `main`** : paquets non signés (sans macOS Apple Silicon, voir plus bas), en *Artifacts* du run
+  (30 jours), un artefact par fichier, sans zip (`.dmg`, `.exe`, `.AppImage` et `.deb` séparés), avec la
   version de `package.json`. Les changements limités à `docs/`, aux `.md`, à `website/`
   ou à `pages.yml`/`dependabot.yml` ne déclenchent rien.
 - **Tag `vX.Y.Z` ou `vX.Y.Z-rc.1` sur un commit de `main`** :
@@ -73,10 +74,13 @@ temps de démarrage (aucun benchmark n'existe dans le dépôt).
   générées). Relancer le workflow sur le tag (*Run workflow*, ref = le tag) remplace
   les fichiers d'une release existante.
 - **Manuel** : *Actions* > *Package Photosort* > *Run workflow* (artefacts seulement,
-  sauf depuis un tag).
+  sauf depuis un tag). La case « Construire aussi macOS Apple Silicon » est cochée par défaut.
+- **macOS Apple Silicon** : construit uniquement sur un tag ou en manuel. Sur les pushes sur `main`, ce job
+  échouait régulièrement faute de runner hébergé disponible (infrastructure, pas le code) ; il est donc sorti
+  du déclenchement automatique et utilise `macos-14`.
 - **Un job macOS reste en file puis est annulé** (« The job was not acquired by Runner of
   type hosted… », annotation « capacity constraints ») : c'est une saturation des runners
-  macOS Apple Silicon de GitHub, pas une erreur du workflow. Relancer avec *Re-run failed
+  macOS de GitHub, pas une erreur du workflow. Relancer avec *Re-run failed
   jobs* ; la release d'un tag ne part que quand les quatre plateformes sont construites.
 
 Les installeurs non signés : macOS demande une validation (clic droit > Ouvrir, ou
@@ -246,7 +250,7 @@ Les modèles n'ont pas besoin de pleine résolution : les photos d'au moins 3584
 
 La pluie n'est pas détectée de façon fiable et n'est pas proposée. Sans GPS, les tags de moment solaires sont omis.
 
-Les modèles (~46 Mo) et ONNX Runtime (~45 Mo) ne sont pas dans Git : l'application les télécharge au premier lancement (sha256 vérifié, progression dans l'onglet Tags) dans le dossier de données de l'application (`userData/ai`). Les paquets (dmg, AppImage, portable Windows) ne les embarquent donc pas. `npm run ai-assets` reste disponible pour les pré-télécharger dans `ai-assets/` en développement : ce dossier est utilisé en priorité s'il est complet. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
+Les modèles (~46 Mo) et ONNX Runtime (bibliothèque de ~45 Mo extraite du paquet NuGet `Microsoft.ML.OnnxRuntime`, ~160 Mo à télécharger ; les binaires ne sont plus sur GitHub Releases) ne sont pas dans Git : l'application les télécharge au premier lancement (sha256 vérifié, progression dans l'onglet Tags) dans le dossier de données de l'application (`userData/ai`). Les paquets (dmg, AppImage, portable Windows) ne les embarquent donc pas. `npm run ai-assets` reste disponible pour les pré-télécharger dans `ai-assets/` en développement : ce dossier est utilisé en priorité s'il est complet. ONNX Runtime 1.31 n'existe pas pour macOS Intel : l'étiquetage y est désactivé avec un avertissement.
 
 Le sidecar utilise CGO sur tous les OS (MinGW-w64 sous Windows) : il faut le compiler sur chaque OS avec `npm run sidecar` (c'est ce que fait le workflow « Package Photosort », voir plus haut). CLI : `--tag-scenes --tag-moment --tag-people --tag-meta [--ai-dir …]`.
 
