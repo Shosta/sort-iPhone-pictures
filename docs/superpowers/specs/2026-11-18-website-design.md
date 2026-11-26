@@ -1,126 +1,126 @@
-# Site de présentation Photosort – design
+# Photosort showcase website – design
 
-Date : 2026-11-18 · Branche : `feat/website` · Statut : à valider
+Date: 2026-11-18 · Branch: `feat/website` · Status: to be validated
 
-## Objectif
+## Goal
 
-Page de vente trilingue (fr, en, da) pour Photosort, hébergée dans le dépôt de
-l'application (`website/`) et publiée automatiquement sur GitHub Pages à
-`https://shosta.github.io/sort-iPhone-pictures/`. Le contenu décrit uniquement ce
-qui existe aujourd'hui.
+Trilingual (fr, en, da) sales page for Photosort, hosted in the application's
+repository (`website/`) and published automatically to GitHub Pages at
+`https://shosta.github.io/sort-iPhone-pictures/`. The content describes only what
+exists today.
 
-## Périmètre
+## Scope
 
-Inclus : refonte visuelle, contenu réel, trois langues, emplacements pour les
-captures d'écran, liens de téléchargement vers les releases, tests.
-Exclus : analytics, formulaire, cookies, JavaScript applicatif, annonce du NAS
-(en planification), signature des paquets.
+Included: visual overhaul, real content, three languages, placeholders for
+screenshots, download links to the releases, tests.
+Excluded: analytics, form, cookies, application JavaScript, NAS announcement
+(being planned), package signing.
 
-## Contenu (même structure dans les 3 langues)
+## Content (same structure in all 3 languages)
 
-Priorité du message : **classer en masse des photos d'iPhone en vrac par date de
-prise de vue, puis les retrouver grâce aux tags**. Le scrapbook en découle : c'est
-un bonus, présenté après le classement.
+Message priority: **bulk-sort loose iPhone photos by capture date, then find them
+again thanks to tags**. The scrapbook follows from that: it is a bonus, presented
+after the sorting.
 
-1. **Accroche** : « Des milliers de photos d'iPhone en vrac, classées par date et
-   faciles à retrouver », sans cloud. Visuel : planche A4 scotchée avec le tampon
-   « sans cloud », dont les cases contiennent de petites illustrations discrètes
-   (portrait, paysages, animaux, ville, amis) pour évoquer des photos, légendée
-   « Bonus · le semainier en PDF ». Boutons Voir le classement et Télécharger.
-2. **Classement** (« L'essentiel ») : 3 étapes, choisir le dossier source,
-   vérifier l'aperçu, copier (les originaux ne sont jamais modifiés).
-3. **Fonctionnalités** (étiquettes d'herbier numérotées), dans l'ordre :
-   - classement par date EXIF (`AAAA/AAAA-MM`) ;
-   - tags IA locaux (ONNX Runtime) et tags libres, pour retrouver ses photos ;
-   - classement par lieu, villes et monuments, hors ligne ;
-   - doublons et quasi-doublons ;
-   - préférences : langues fr / en-GB / da, thèmes, ⌘, ;
-   - scrapbook PDF hebdomadaire (en dernier).
-4. **Scrapbook / semainier** (« Et ensuite ») : choisir une semaine (lundi à
-   dimanche), cocher les photos, obtenir un PDF A4 paysage (A4 portrait ou Letter
-   en option), photos de 6,5 cm sur le grand côté, au moins 5 mm entre les photos
-   pour la découpe, ouverture automatique du PDF.
-5. **Captures** : 3 à 4 tirages (emplacements, voir plus bas).
-6. **Téléchargements** : macOS (dmg arm64 et Intel), Linux (AppImage x86_64),
-   Windows (exe portable), tous vers `…/releases/latest`.
-7. **Limites honnêtes** : paquets non signés (notarisation macOS, SmartScreen
-   Windows) ; tags IA indisponibles sur Mac Intel ; date EXIF requise.
-8. **FAQ** (`<details>`, sans JavaScript) et pied de page avec licence MIT.
+1. **Hero**: "Thousands of loose iPhone photos, sorted by date and easy to find",
+   no cloud. Visual: a taped A4 sheet with the "no cloud" stamp, whose cells
+   contain small, discreet illustrations (portrait, landscapes, animals, city,
+   friends) to suggest photos, captioned "Bonus · the weekly planner as a PDF".
+   Buttons: See the sorting and Download.
+2. **Sorting** ("The essentials"): 3 steps, choose the source folder,
+   check the preview, copy (originals are never modified).
+3. **Features** (numbered herbarium labels), in this order:
+   - sorting by EXIF date (`YYYY/YYYY-MM`);
+   - local AI tags (ONNX Runtime) and free-form tags, to find your photos;
+   - sorting by place, cities and landmarks, offline;
+   - duplicates and near-duplicates;
+   - preferences: languages fr / en-GB / da, themes, ⌘, ;
+   - weekly PDF scrapbook (last).
+4. **Scrapbook / weekly planner** ("And then"): pick a week (Monday to
+   Sunday), tick the photos, get an A4 landscape PDF (A4 portrait or Letter
+   as an option), photos of 6.5 cm on the long side, at least 5 mm between photos
+   for cutting, PDF opened automatically.
+5. **Screenshots**: 3 to 4 prints (placeholders, see below).
+6. **Downloads**: macOS (dmg arm64 and Intel), Linux (AppImage x86_64),
+   Windows (portable exe), all pointing to `…/releases/latest`.
+7. **Honest limitations**: unsigned packages (macOS notarisation, Windows
+   SmartScreen); AI tags unavailable on Intel Macs; EXIF date required.
+8. **FAQ** (`<details>`, no JavaScript) and footer with the MIT licence.
 
 ## Architecture
 
-- `src/i18n/{fr,en,da}.ts` : un dictionnaire typé par langue (même forme, vérifiée
-  par TypeScript et par un test de clés identiques).
-- `src/pages/[lang]/index.astro` : un seul gabarit, `getStaticPaths` pour les
-  3 langues, `<html lang>`, `hreflang` alternates, sélecteur de langue (liens).
-- `src/pages/index.astro` : redirection racine. Une courte redirection inline
-  choisit la langue selon `navigator.language` (repli `fr`), avec
-  `<meta http-equiv="refresh">` et un lien `<noscript>`. Seule page autorisée à
-  contenir un script.
-- Liens internes toujours construits à partir de `import.meta.env.BASE_URL`.
-- `astro.config.mjs` : `site`, `base` via `ASTRO_SITE` / `ASTRO_BASE` (déjà en place).
-- `PUBLIC_REPOSITORY_URL` est injectée par le workflow ; l'URL attendue est
+- `src/i18n/{fr,en,da}.ts`: one typed dictionary per language (same shape, checked
+  by TypeScript and by an identical-keys test).
+- `src/pages/[lang]/index.astro`: a single template, `getStaticPaths` for the
+  3 languages, `<html lang>`, `hreflang` alternates, language selector (links).
+- `src/pages/index.astro`: root redirect. A short inline redirect
+  picks the language from `navigator.language` (fallback `fr`), with
+  `<meta http-equiv="refresh">` and a `<noscript>` link. The only page allowed to
+  contain a script.
+- Internal links are always built from `import.meta.env.BASE_URL`.
+- `astro.config.mjs`: `site`, `base` via `ASTRO_SITE` / `ASTRO_BASE` (already in place).
+- `PUBLIC_REPOSITORY_URL` is injected by the workflow; the expected URL is
   `https://github.com/shosta/sort-iPhone-pictures`.
-- Le danois est rédigé par l'assistant et doit être relu par le propriétaire.
+- The Danish is written by the assistant and must be proofread by the owner.
 
-## Direction esthétique : « album photo »
+## Aesthetic direction: "photo album"
 
-- **Ton** : éditorial, chaleureux, artisanal. Une page qui ressemble à un album
-  de tirages posés sur une table, pas à un SaaS.
-- **Palette** (variables CSS) : papier crème `#f4ecdd`, encre `#1d1a16`, gris
-  chaud `#6b6257`, accent unique rouge tampon `#b3362b`, filet `#d9cdb6`.
-  Aucun dégradé violet, aucun vert.
-- **Typographie** (fichiers `woff2` copiés dans `src/assets/fonts/`, aucun appel externe) :
-  Young Serif pour les titres (Fraunces écartée : trop répandue), Newsreader pour
-  le texte courant, IBM Plex Mono pour les légendes et métadonnées, Caveat
-  uniquement pour les annotations manuscrites des tirages.
-- **Atmosphère** : grain de papier léger (bruit SVG inline en fond), ombres
-  portées douces sous les tirages, coins photo en SVG, bandes de masking tape
-  translucides qui tiennent les tirages.
-- **Herbier** : en fond, très discrètement (opacité 6 à 12 %, teinte encre
-  brun-sépia), des plantes séchées dessinées en SVG inline (fougère, ginkgo,
-  feuille de chêne, brin de graminée), posées dans les marges, pivotées et
-  parfois coupées par le bord de page. Aucune ne passe derrière du texte long :
-  la lisibilité prime. Les étiquettes de fonctionnalités reprennent les
-  étiquettes d'herbier (numéro, nom, mono).
-- **Tampon « sans cloud »** : différenciateur de l'application. Tampon rond rouge
-  encre, légèrement pivoté et irrégulier (filtre SVG de bruit), dans l'accroche
-  et repris, plus petit, sur la section Téléchargements.
-- **Composition** : asymétrique ; titre décalé sur une grille de 12 colonnes,
-  tirages qui débordent de la grille et se chevauchent, rotations de ±1 à 4°
-  (neutralisées sous 640 px pour la lisibilité).
-- **Mouvement** : un seul moment, les tirages se « déposent » au chargement
-  (translation + rotation, 600 ms, décalage échelonné). Tout est désactivé sous
+- **Tone**: editorial, warm, handcrafted. A page that looks like an album
+  of prints laid out on a table, not like a SaaS.
+- **Palette** (CSS variables): cream paper `#f4ecdd`, ink `#1d1a16`, warm
+  grey `#6b6257`, single accent stamp red `#b3362b`, rule `#d9cdb6`.
+  No purple gradient, no green.
+- **Typography** (`woff2` files copied into `src/assets/fonts/`, no external calls):
+  Young Serif for headings (Fraunces ruled out: too common), Newsreader for
+  body text, IBM Plex Mono for captions and metadata, Caveat
+  only for handwritten annotations on the prints.
+- **Atmosphere**: light paper grain (inline SVG noise as background), soft
+  drop shadows under the prints, SVG photo corners, translucent masking tape
+  strips holding the prints.
+- **Herbarium**: in the background, very discreetly (6 to 12% opacity, sepia-brown
+  ink tint), dried plants drawn as inline SVG (fern, ginkgo,
+  oak leaf, blade of grass), placed in the margins, rotated and
+  sometimes cut off by the page edge. None goes behind long text:
+  readability comes first. The feature labels reuse the herbarium
+  labels (number, name, mono).
+- **"No cloud" stamp**: the application's differentiator. Round ink-red stamp,
+  slightly rotated and irregular (SVG noise filter), in the hero
+  and repeated, smaller, in the Downloads section.
+- **Layout**: asymmetric; heading offset on a 12-column grid,
+  prints that overflow the grid and overlap, rotations of ±1 to 4°
+  (neutralised below 640 px for readability).
+- **Motion**: a single moment, the prints "settle" on load
+  (translation + rotation, 600 ms, staggered delay). Everything is disabled under
   `prefers-reduced-motion`.
-- **Accessibilité** : contraste AA minimum, focus visible, `alt` réels dans
-  chaque langue, structure `h1` unique, navigation clavier du sélecteur de langue.
+- **Accessibility**: AA contrast minimum, visible focus, real `alt` text in
+  each language, single `h1` structure, keyboard navigation of the language selector.
 
-## Captures d'écran
+## Screenshots
 
-Fournies par le propriétaire dans `website/src/assets/screenshots/`
-(`apercu.png`, `lieux.png`, `doublons.png`, `scrapbook.png`). Tant qu'un fichier
-manque, le composant `Print.astro` affiche un tirage vide à légende
-« capture à venir », sans image cassée. Les images passent par le composant
-`Image` d'Astro (WebP, largeur et hauteur déclarées).
+Provided by the owner in `website/src/assets/screenshots/`
+(`apercu.png`, `lieux.png`, `doublons.png`, `scrapbook.png`). As long as a file
+is missing, the `Print.astro` component displays an empty print with the caption
+"capture à venir" (screenshot coming), with no broken image. Images go through Astro's
+`Image` component (WebP, declared width and height).
 
-## Workflow et licence
+## Workflow and licence
 
-- `.github/workflows/pages.yml` (déjà créé) : push sur `main` touchant
-  `website/**` ou `workflow_dispatch` ; `npm ci`, `npm test`, déploiement.
-- Réglage unique à faire par le propriétaire : *Settings > Pages > Source :
-  GitHub Actions*, dépôt public.
-- `LICENSE` MIT, titulaire « Shosta » (à confirmer).
+- `.github/workflows/pages.yml` (already created): push to `main` touching
+  `website/**` or `workflow_dispatch`; `npm ci`, `npm test`, deploy.
+- One-time setting for the owner to make: *Settings > Pages > Source:
+  GitHub Actions*, public repository.
+- MIT `LICENSE`, holder "Shosta" (to be confirmed).
 
-## Tests (`npm test`, aussi avec `ASTRO_BASE=/sort-iPhone-pictures`)
+## Tests (`npm test`, also with `ASTRO_BASE=/sort-iPhone-pictures`)
 
-- Les 3 pages existent, avec le bon `<html lang>`, un seul `h1` et des `hreflang`.
-- Les dictionnaires ont exactement les mêmes clés.
-- Ancres, ressources locales et liens de marque respectent la base.
-- Pas de `<script>` sur les pages de langue, aucune ressource distante.
-- Aucune mention du NAS ni de fonctionnalité inexistante.
-- Les boutons du dépôt n'apparaissent que si `PUBLIC_REPOSITORY_URL` est définie.
-- Les emplacements de capture manquants ne produisent pas d'image cassée.
+- The 3 pages exist, with the correct `<html lang>`, a single `h1` and `hreflang` links.
+- The dictionaries have exactly the same keys.
+- Anchors, local resources and brand links respect the base.
+- No `<script>` on the language pages, no remote resources.
+- No mention of the NAS or of any non-existent feature.
+- The repository buttons appear only if `PUBLIC_REPOSITORY_URL` is set.
+- Missing screenshot placeholders do not produce a broken image.
 
-## Hors de ce lot
+## Out of this batch
 
-Mise à jour du README racine (encore décrit en Fyne), annonce du NAS une fois livré.
+Update of the root README (still described as Fyne), NAS announcement once delivered.

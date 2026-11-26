@@ -1,169 +1,169 @@
-# Plan : classement et tags sur le NAS, connexion en réseau local
+# Plan: sorting and tags on the NAS, local network connection
 
-Date : 2026-11-17 · Branche : `feat/nas-qnap-remote` · Statut : **différé** (aucun code écrit)
-Spec parente : `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
+Date: 2026-11-17 · Branch: `feat/nas-qnap-remote` · Status: **deferred** (no code written)
+Parent spec: `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
 
-> **Différé.** Ce plan (serveur Go dans Docker) exige Container Station, que
-> l'utilisateur n'a pas installé, et un accès SSH qu'il refuse d'activer. Avec
-> quelques centaines de photos à traiter, il n'est pas nécessaire pour la
-> connexion locale : voir `2026-11-17-nas-local-connection-plan.md` (Mac + SMB,
-> rien à installer sur le NAS). Ce plan reste la base pour la **classification
-> automatique** (traitement sans le Mac) et pour l'accès à distance par overlay.
-> Les droits à imposer au conteneur (D1, D3, D4, durcissement) restent valables.
+> **Deferred.** This plan (Go server in Docker) requires Container Station, which
+> the user has not installed, and SSH access, which they refuse to enable. With
+> a few hundred photos to process, it is not needed for the local
+> connection: see `2026-11-17-nas-local-connection-plan.md` (Mac + SMB,
+> nothing to install on the NAS). This plan remains the basis for **automatic
+> classification** (processing without the Mac) and for remote access through an overlay.
+> The rights to impose on the container (D1, D3, D4, hardening) remain valid.
 
-## Objectif
+## Goal
 
-Depuis l'app Electron du Mac, sur le même réseau local, se connecter à un
-`photosort-server` qui tourne dans Docker sur le QNAP TS-251D : classer
-l'entrée en vrac, taguer la bibliothèque classée et produire le PDF du
-semainier. **Le conteneur ne peut rien toucher d'autre** : même compromis, il ne
-modifie ni le dossier iPhone ni le reste du NAS. L'accès à distance viendra
-dans un second plan, sans changer ce que le conteneur a le droit de faire.
+From the Electron app on the Mac, on the same local network, connect to a
+`photosort-server` running in Docker on the QNAP TS-251D: sort
+the loose input, tag the sorted library and produce the weekly
+planner PDF. **The container can touch nothing else**: even if compromised, it
+modifies neither the iPhone folder nor the rest of the NAS. Remote access will come
+in a second plan, without changing what the container is allowed to do.
 
-## Contraintes
+## Constraints
 
-- Logique métier en Go ; moteur existant réutilisé (`sorter`, `internal/tagger`, `internal/scrapbook`).
-- **Entrée jamais écrite** : trois verrous indépendants (droits QTS de l'utilisateur dédié, montage Docker `:ro`, garde au démarrage du serveur).
-- Utilisateur QTS dédié `photosort` : lecture seule sur l'entrée, lecture-écriture sur la bibliothèque, **aucun droit ailleurs**.
-- Conteneur durci : non-root, `cap_drop: ALL`, `no-new-privileges`, racine en lecture seule, ni `privileged`, ni réseau hôte, ni `docker.sock`.
-- Réseau local seulement ; le serveur écoute via une interface `net.Listener` (remplaçable plus tard par un overlay).
-- TS-251D : 2 cœurs, 2 à 4 Go partagés avec QTS et QuMagie → parallélisme et mémoire bornés.
-- Branche `feat/nas-qnap-remote`, aucun merge dans `main` sans demande, trailer `Co-authored-by` sur chaque commit.
-- Aucune nouvelle dépendance côté Electron si possible (`node:tls`, `safeStorage`).
+- Business logic in Go; existing engine reused (`sorter`, `internal/tagger`, `internal/scrapbook`).
+- **Input never written to**: three independent locks (QTS rights of the dedicated user, Docker `:ro` mount, guard at server startup).
+- Dedicated QTS user `photosort`: read-only on the input, read-write on the library, **no rights elsewhere**.
+- Hardened container: non-root, `cap_drop: ALL`, `no-new-privileges`, read-only root, no `privileged`, no host network, no `docker.sock`.
+- Local network only; the server listens through a `net.Listener` interface (replaceable later by an overlay).
+- TS-251D: 2 cores, 2 to 4 GB shared with QTS and QuMagie → bounded parallelism and memory.
+- Branch `feat/nas-qnap-remote`, no merge into `main` without a request, `Co-authored-by` trailer on every commit.
+- No new dependency on the Electron side if possible (`node:tls`, `safeStorage`).
 
-## Décisions (retenues par défaut, à confirmer)
+## Decisions (adopted by default, to be confirmed)
 
-| # | Décision | Raison |
+| # | Decision | Reason |
 | --- | --- | --- |
-| D1 | **Copie, pas de lien physique.** Le lien physique est abandonné | Avec `fs.protected_hardlinks=1`, un utilisateur ne peut lier que des fichiers qu'il possède ou sur lesquels il a lecture **et écriture** ([doc noyau](https://docs.kernel.org/admin-guide/sysctl/fs.html)) : incompatible avec une entrée en lecture seule. Contrepartie : l'espace disque des photos classées s'ajoute (contrôle d'espace avant copie) |
-| D2 | Transport : **TLS + JSON ligne par ligne**, le protocole du sidecar tel quel | `serve(ctx, io.Reader)` et `send` existent déjà ; Electron le parle avec `node:tls`. Pas de WebSocket : pas de dépendance, et le `WebSocket` global de Node 20 (Electron 33.4.11 embarque Node 20.18.3) n'est pas assuré |
-| D3 | **Deux racines fixes** : `/inbox` (lecture seule) et `/library` (écriture) | Surface d'attaque minimale ; pas de navigateur de dossiers distants en v1 |
-| D4 | Authentification : jeton de 256 bits (le serveur n'en garde que l'empreinte SHA-256) + certificat auto-signé **épinglé par empreinte**, vérifiée **avant** d'envoyer le jeton | Le jeton ne circule jamais vers un serveur non reconnu |
-| D5 | Déconnexion = **annulation** des opérations en cours ; reprise en relançant le plan (les doublons déjà copiés sont ignorés, à tester) | Même sémantique que le sidecar ; opérations détachées et reprise par identifiant reportées au plan « accès distant » |
-| D6 | PDF : généré dans le dossier de travail du serveur puis rapatrié par une opération `fetch` (blocs base64) ; le renderer ne change pas | Le PDF arrive dans le dossier choisi en préférences (Téléchargements par défaut) |
-| D7 | Image livrée en **archive `docker save`** (aucun registre requis) | Le dépôt n'a pas de remote ; import dans Container Station |
-| D8 | Tags de métadonnées activés ; **tags IA désactivés tant que l'étape NAS n'a pas mesuré** | Celeron probablement 10 à 30 fois plus lent ; AVX non garanti |
+| D1 | **Copy, no hard link.** The hard link is abandoned | With `fs.protected_hardlinks=1`, a user can only link files they own or on which they have read **and write** access ([kernel doc](https://docs.kernel.org/admin-guide/sysctl/fs.html)): incompatible with a read-only input. Trade-off: the disk space of the sorted photos adds up (space check before copying) |
+| D2 | Transport: **TLS + line-by-line JSON**, the sidecar protocol as is | `serve(ctx, io.Reader)` and `send` already exist; Electron speaks it with `node:tls`. No WebSocket: no dependency, and Node 20's global `WebSocket` (Electron 33.4.11 embeds Node 20.18.3) is not guaranteed |
+| D3 | **Two fixed roots**: `/inbox` (read-only) and `/library` (write) | Minimal attack surface; no remote folder browser in v1 |
+| D4 | Authentication: 256-bit token (the server keeps only its SHA-256 fingerprint) + self-signed certificate **pinned by fingerprint**, checked **before** sending the token | The token never travels to an unrecognised server |
+| D5 | Disconnection = **cancellation** of operations in progress; resume by re-running the plan (already-copied duplicates are ignored, to be tested) | Same semantics as the sidecar; detached operations and resumption by identifier deferred to the "remote access" plan |
+| D6 | PDF: generated in the server's working folder then brought back by a `fetch` operation (base64 blocks); the renderer does not change | The PDF arrives in the folder chosen in the preferences (Downloads by default) |
+| D7 | Image delivered as a **`docker save` archive** (no registry required) | The repository has no remote; import into Container Station |
+| D8 | Metadata tags enabled; **AI tags disabled until the NAS step has measured** | Celeron probably 10 to 30 times slower; AVX not guaranteed |
 
-## Phase 0 — Documentation (inventaire des API)
+## Phase 0 — Documentation (API inventory)
 
-Faite en ligne : API stables de la bibliothèque standard et code du dépôt, pas de sous-agents.
+Done inline: stable standard-library APIs and repository code, no sub-agents.
 
-**API autorisées**
-- Go (1.27.3) : `crypto/tls` (`MinVersion: tls.VersionTLS13`, `tls.NewListener`), `crypto/x509.CreateCertificate`, `crypto/ecdsa` + `elliptic.P256`, `crypto/sha256` (empreinte de `cert.Raw`), `crypto/subtle.ConstantTimeCompare`, `crypto/rand`, `net.Listener`, `syscall.Access` et `syscall.Statfs` (build tag `unix`), `os.OpenRoot` (déjà utilisé : `sorter/sorter.go:415`).
-- Electron 33.4.11 / Node 20.18.3 (vérifié dans le binaire) : `tls.connect`, `socket.getPeerCertificate().fingerprint256`, `readline` (déjà utilisé : `main/index.ts:4`), `safeStorage.isEncryptionAvailable/encryptString/decryptString`.
-- Docker 29.8.2 en local ; clés compose : `user`, `read_only`, `tmpfs`, `cap_drop`, `security_opt: no-new-privileges:true`, `mem_limit`, `cpus`, `pids_limit`, volumes `:ro`.
-- ONNX Runtime : `photosort-electron/scripts/fetch-ai-assets.mjs` sait déjà récupérer `linux-amd64` (sha256 épinglé) : à réutiliser dans l'image.
+**Allowed APIs**
+- Go (1.27.3): `crypto/tls` (`MinVersion: tls.VersionTLS13`, `tls.NewListener`), `crypto/x509.CreateCertificate`, `crypto/ecdsa` + `elliptic.P256`, `crypto/sha256` (fingerprint of `cert.Raw`), `crypto/subtle.ConstantTimeCompare`, `crypto/rand`, `net.Listener`, `syscall.Access` and `syscall.Statfs` (build tag `unix`), `os.OpenRoot` (already used: `sorter/sorter.go:415`).
+- Electron 33.4.11 / Node 20.18.3 (verified in the binary): `tls.connect`, `socket.getPeerCertificate().fingerprint256`, `readline` (already used: `main/index.ts:4`), `safeStorage.isEncryptionAvailable/encryptString/decryptString`.
+- Docker 29.8.2 locally; compose keys: `user`, `read_only`, `tmpfs`, `cap_drop`, `security_opt: no-new-privileges:true`, `mem_limit`, `cpus`, `pids_limit`, `:ro` volumes.
+- ONNX Runtime: `photosort-electron/scripts/fetch-ai-assets.mjs` already knows how to fetch `linux-amd64` (pinned sha256): to be reused in the image.
 
-**À ne pas faire**
-- Ne pas exposer `aiDir`, `outDir`, `fallbackDir` aux clients du réseau : le serveur impose les siens.
-- Ne pas présenter `os.Root` comme un confinement du moteur : il n'est utilisé que pour la copie ; la vraie barrière est le système (utilisateur, montage), la validation des chemins n'est que la seconde.
-- Ne pas utiliser `rejectUnauthorized:false` sans vérifier l'empreinte avant toute écriture ; ne jamais stocker le jeton en clair.
-- Ne pas lancer le conteneur en root, ni monter le socket Docker.
+**Do not**
+- Do not expose `aiDir`, `outDir`, `fallbackDir` to network clients: the server imposes its own.
+- Do not present `os.Root` as a confinement of the engine: it is used only for the copy; the real barrier is the system (user, mount), path validation is only the second one.
+- Do not use `rejectUnauthorized:false` without checking the fingerprint before any write; never store the token in clear text.
+- Do not run the container as root, nor mount the Docker socket.
 
-**Non vérifié (à lever à la phase 7)** : application des droits QTS aux montages Docker ; compose dans Container Station ; UID/GID de l'utilisateur QTS ; AVX et ONNX Runtime sur le Celeron ; lisibilité des copies par QuMagie.
+**Not verified (to be resolved in phase 7)**: application of QTS rights to Docker mounts; compose in Container Station; UID/GID of the QTS user; AVX and ONNX Runtime on the Celeron; readability of the copies by QuMagie.
 
-## Phase 1 — Refactor sans changement de comportement
+## Phase 1 — Refactor with no change of behaviour
 
-**Sortie** : le serveur du sidecar devient un paquet réutilisable.
-**Vérification** : `go test ./cmd/photosort-sidecar/... ./internal/rpc/...` : tests existants inchangés et verts ; le sidecar se lance et répond comme avant.
+**Output**: the sidecar's server becomes a reusable package.
+**Verification**: `go test ./cmd/photosort-sidecar/... ./internal/rpc/...`: existing tests unchanged and green; the sidecar starts and responds as before.
 
-- [ ] Déplacer `server`, `thumbCache` et les opérations (`cmd/photosort-sidecar/{main,cache,scrapbook}.go`) vers `internal/rpc` (`NewServer`, `Serve(ctx, in, out)`), avec une interface `Policy` appelée avant chaque requête (identité par défaut : tout est permis, comme le sidecar)
-- [ ] Rendre configurables (options) le dossier de sortie du PDF et le nombre de workers
-- [ ] `cmd/photosort-sidecar/main.go` : appel mince, comportement inchangé
-- [ ] Déplacer les tests avec le code (`main_test.go`, `scrapbook_test.go`)
+- [ ] Move `server`, `thumbCache` and the operations (`cmd/photosort-sidecar/{main,cache,scrapbook}.go`) to `internal/rpc` (`NewServer`, `Serve(ctx, in, out)`), with a `Policy` interface called before each request (default identity: everything is allowed, like the sidecar)
+- [ ] Make the PDF output folder and the number of workers configurable (options)
+- [ ] `cmd/photosort-sidecar/main.go`: thin call, behaviour unchanged
+- [ ] Move the tests along with the code (`main_test.go`, `scrapbook_test.go`)
 
-## Phase 2 — Moteur : options de copie et contrôle d'espace `[parallel avec 1]`
+## Phase 2 — Engine: copy options and space check `[parallel with 1]`
 
-**Sortie** : la copie accepte un mode de fichier ; l'espace libre se contrôle.
-**Vérification** : `go test ./sorter/...` ; `CopyWithProgress` garde le mode 0600 par défaut (comportement local inchangé).
+**Output**: the copy accepts a file mode; free space can be checked.
+**Verification**: `go test ./sorter/...`; `CopyWithProgress` keeps mode 0600 by default (local behaviour unchanged).
 
-- [ ] `sorter.CopyOptions{FileMode}` + `CopyWithOptions` ; `CopyWithProgress` en devient l'enveloppe (aujourd'hui `copyEntry` écrit en 0600, ce qui rendrait les copies illisibles pour QuMagie et SMB : `sorter/sorter.go:435`)
-- [ ] Fonction `FreeSpace(dir)` (`syscall.Statfs`, build tag `unix`) et comparaison avec la taille du plan
-- [ ] Tests : mode 0644 appliqué ; échec propre si l'espace manque ; copie interrompue sans fichier partiel (comportement existant, à verrouiller par un test)
+- [ ] `sorter.CopyOptions{FileMode}` + `CopyWithOptions`; `CopyWithProgress` becomes its wrapper (today `copyEntry` writes with 0600, which would make the copies unreadable for QuMagie and SMB: `sorter/sorter.go:435`)
+- [ ] `FreeSpace(dir)` function (`syscall.Statfs`, build tag `unix`) and comparison with the plan's size
+- [ ] Tests: mode 0644 applied; clean failure if space is lacking; copy interrupted with no partial file (existing behaviour, to be locked in by a test)
 
-## Phase 3 — Serveur `photosort-server` `[checkpoint]`
+## Phase 3 — `photosort-server` server `[checkpoint]`
 
-**Sortie** : binaire `cmd/photosort-server` + paquet `internal/remote`.
-**Vérification** : `go test ./internal/remote/... ./cmd/photosort-server/...` (intégration sur `127.0.0.1:0`, dossiers temporaires, client TLS réel).
+**Output**: `cmd/photosort-server` binary + `internal/remote` package.
+**Verification**: `go test ./internal/remote/... ./cmd/photosort-server/...` (integration on `127.0.0.1:0`, temporary folders, real TLS client).
 
-- [ ] Contrat : `docs/nas-protocol.md` (`hello`, `status`, `ping`, `fetch`, codes d'erreur, version de protocole)
-- [ ] **Racines et chemins** : `Roots{Inbox, Library}`, `Resolve(path)` (refus de `..`, des chemins hors racines, du préfixe voisin `/inbox2`, des liens symboliques qui sortent), racines non imbriquées
-- [ ] **Politique par opération** : `plan` (sources sous `/inbox`, destination forcée à `/library`), `copy` (par `planId` du serveur : le client n'injecte aucun chemin), `thumbnail` (sous `/inbox` ou `/library`), `tag` et `weekDays/weekPhotos/scrapbook*` (sous `/library` seulement), `fetch` (dossier de travail seulement), `cancel`, `ping`, `status` ; toute autre opération est refusée
-- [ ] **Contrôle au démarrage (échec fermé)** : refus si uid 0 ; refus si `/inbox` est inscriptible (`syscall.Access(W_OK)`, qui tient compte de `EROFS` et des ACL) ; `/library` et le dossier d'état doivent accepter l'écriture (fichier témoin créé puis supprimé) ; sous-commande `selfcheck` pour le NAS
-- [ ] **TLS et jeton** : au premier démarrage, certificat ECDSA P-256 (SAN depuis `PHOTOSORT_HOSTS`), jeton aléatoire affiché une seule fois dans les journaux avec l'empreinte du certificat ; seul le hachage du jeton est écrit (`0600`)
-- [ ] **Connexion** : `hello` attendu en 5 s, ligne limitée à 4 Ko avant authentification, comparaison à temps constant, temporisation après échecs par adresse, **un seul client actif** (le second reçoit `busy`), `ping` toutes les 15 s et fermeture après 45 s de silence, opérations annulées à la fermeture
-- [ ] `status` : résultats du contrôle de démarrage, version, espace libre, IA disponible ; `fetch` : blocs de 256 Ko de fichiers du dossier de travail uniquement ; nettoyage des PDF après rapatriement ou au bout d'1 h
-- [ ] Journal d'audit sur la sortie standard (heure, adresse, opération, résultat ; jamais le jeton)
-- [ ] Mode IA : voir risque 1 (sonde dans un processus enfant)
-- [ ] Tests : mauvais jeton, pas de `hello`, ligne trop longue, second client, opération interdite, évasions de chemin, `plan` puis `copy` avec fichiers en 0644 et **entrée identique avant/après** (somme de l'arborescence), `fetch` octet pour octet, coupure en pleine copie sans fichier partiel
+- [ ] Contract: `docs/nas-protocol.md` (`hello`, `status`, `ping`, `fetch`, error codes, protocol version)
+- [ ] **Roots and paths**: `Roots{Inbox, Library}`, `Resolve(path)` (refusal of `..`, of paths outside the roots, of the neighbouring prefix `/inbox2`, of symbolic links that escape), non-nested roots
+- [ ] **Per-operation policy**: `plan` (sources under `/inbox`, destination forced to `/library`), `copy` (by server `planId`: the client injects no path), `thumbnail` (under `/inbox` or `/library`), `tag` and `weekDays/weekPhotos/scrapbook*` (under `/library` only), `fetch` (working folder only), `cancel`, `ping`, `status`; any other operation is refused
+- [ ] **Startup check (fail closed)**: refuse if uid 0; refuse if `/inbox` is writable (`syscall.Access(W_OK)`, which takes `EROFS` and ACLs into account); `/library` and the state folder must accept writing (witness file created then deleted); `selfcheck` subcommand for the NAS
+- [ ] **TLS and token**: on first start, ECDSA P-256 certificate (SAN from `PHOTOSORT_HOSTS`), random token displayed only once in the logs with the certificate fingerprint; only the token's hash is written (`0600`)
+- [ ] **Connection**: `hello` expected within 5 s, line limited to 4 KB before authentication, constant-time comparison, delay after failures per address, **a single active client** (the second receives `busy`), `ping` every 15 s and closing after 45 s of silence, operations cancelled on close
+- [ ] `status`: startup check results, version, free space, AI available; `fetch`: 256 KB blocks of files from the working folder only; PDFs cleaned up after being brought back or after 1 h
+- [ ] Audit log on standard output (time, address, operation, result; never the token)
+- [ ] AI mode: see risk 1 (probe in a child process)
+- [ ] Tests: wrong token, no `hello`, line too long, second client, forbidden operation, path escapes, `plan` then `copy` with files at 0644 and **input identical before/after** (tree checksum), `fetch` byte for byte, interruption mid-copy with no partial file
 
-## Phase 4 — Image Docker et compose `[parallel avec 5]`
+## Phase 4 — Docker image and compose `[parallel with 5]`
 
-**Sortie** : `Dockerfile`, `docker-compose.yml`, `scripts/build-nas-image.sh`, archive `dist/photosort-server-amd64.tar`.
-**Vérification** (Docker local) : conteneur durci démarré avec une entrée `:ro` ; `docker exec … touch /inbox/x` échoue (`Read-only file system`) ; `docker inspect` ne montre ni `Privileged` ni capacités ; test d'intégration de la phase 3 rejoué contre le conteneur ; taille de l'image notée.
+**Output**: `Dockerfile`, `docker-compose.yml`, `scripts/build-nas-image.sh`, archive `dist/photosort-server-amd64.tar`.
+**Verification** (local Docker): hardened container started with a `:ro` input; `docker exec … touch /inbox/x` fails (`Read-only file system`); `docker inspect` shows neither `Privileged` nor capabilities; phase 3 integration test replayed against the container; image size noted.
 
-- [ ] Dockerfile multi-étapes (Go avec CGO, `libonnxruntime.so` et modèles via `fetch-ai-assets` pour la plateforme visée, image d'exécution mince, `USER` numérique)
-- [ ] Compose : `user: "<uid>:<gid>"`, `/inbox:ro`, `/library`, dossier d'état, `read_only`, `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `mem_limit`, `cpus`, `pids_limit`, port publié sur l'adresse LAN du NAS (`IP:8443:8443`), jamais `privileged` ni réseau hôte
-- [ ] Script : construction `linux/amd64` (émulée sur le M2) et `linux/arm64` (tests locaux), export `docker save` compressé
-- [ ] Verrouiller par un test ce qui est déjà vrai dans le code : `tagger.New` n'initialise ONNX Runtime que pour les scènes et les personnes (`internal/tagger/tagger.go:117`), donc les tags de métadonnées et de moment fonctionnent sans `libonnxruntime.so`
+- [ ] Multi-stage Dockerfile (Go with CGO, `libonnxruntime.so` and models via `fetch-ai-assets` for the target platform, thin runtime image, numeric `USER`)
+- [ ] Compose: `user: "<uid>:<gid>"`, `/inbox:ro`, `/library`, state folder, `read_only`, `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `mem_limit`, `cpus`, `pids_limit`, port published on the NAS's LAN address (`IP:8443:8443`), never `privileged` nor host network
+- [ ] Script: `linux/amd64` build (emulated on the M2) and `linux/arm64` (local tests), compressed `docker save` export
+- [ ] Lock in with a test what is already true in the code: `tagger.New` initialises ONNX Runtime only for scenes and people (`internal/tagger/tagger.go:117`), so metadata and moment tags work without `libonnxruntime.so`
 
-## Phase 5 — Electron, processus principal `[parallel avec 4]`
+## Phase 5 — Electron, main process `[parallel with 4]`
 
-**Sortie** : second backend réseau derrière la même interface que le sidecar.
-**Vérification** : `npm run typecheck` ; `node --test` (type stripping de Node 24, sans dépendance) contre un vrai `photosort-server` lancé en local.
+**Output**: second network backend behind the same interface as the sidecar.
+**Verification**: `npm run typecheck`; `node --test` (Node 24 type stripping, no dependency) against a real `photosort-server` run locally.
 
-- [ ] `src/main/backend.ts` : interface `Backend` (`send`, événements) ; `LocalSidecar` (code actuel) et `RemoteServer` ; `ipcMain.on('sidecar:send')` bascule selon le mode
-- [ ] `src/main/remote.ts` : `probe(host, port)` (lit l'empreinte sans rien envoyer) ; `connect` avec vérification de `fingerprint256` à `secureConnect`, **avant** d'écrire le `hello` ; battement de cœur ; événement `error` synthétique à la perte de connexion ; reconnexion manuelle
-- [ ] Rapatriement du PDF : à l'événement `done` d'un `scrapbook`, téléchargement par `fetch` dans le dossier choisi en préférences, puis réécriture de `path` en chemin local : le renderer n'est pas modifié
-- [ ] `src/main/secrets.ts` : jeton chiffré par `safeStorage` dans `userData` ; si le chiffrement est indisponible, ne rien écrire et redemander le jeton à chaque session
-- [ ] IPC et `preload` : `nas.probe`, `nas.connect`, `nas.forget`, `nas.status`, `backend.use`
-- [ ] Tests : une empreinte différente est refusée **sans qu'un seul octet soit envoyé** (serveur TLS factice qui compte les octets reçus) ; `hello` ; miniature ; `fetch` avec somme de contrôle identique
+- [ ] `src/main/backend.ts`: `Backend` interface (`send`, events); `LocalSidecar` (current code) and `RemoteServer`; `ipcMain.on('sidecar:send')` switches depending on the mode
+- [ ] `src/main/remote.ts`: `probe(host, port)` (reads the fingerprint without sending anything); `connect` with `fingerprint256` verification at `secureConnect`, **before** writing the `hello`; heartbeat; synthetic `error` event on connection loss; manual reconnection
+- [ ] Bringing the PDF back: on the `done` event of a `scrapbook`, download by `fetch` into the folder chosen in the preferences, then rewrite `path` as a local path: the renderer is not modified
+- [ ] `src/main/secrets.ts`: token encrypted by `safeStorage` in `userData`; if encryption is unavailable, write nothing and ask for the token again each session
+- [ ] IPC and `preload`: `nas.probe`, `nas.connect`, `nas.forget`, `nas.status`, `backend.use`
+- [ ] Tests: a different fingerprint is refused **without a single byte being sent** (fake TLS server that counts the bytes received); `hello`; thumbnail; `fetch` with identical checksum
 
-## Phase 6 — Electron, interface `[checkpoint : revue visuelle]`
+## Phase 6 — Electron, interface `[checkpoint: visual review]`
 
-**Sortie** : écran de connexion et mode NAS.
-**Vérification** : `npm run typecheck`, `npm run build`, parcours manuel contre le conteneur local, capture d'écran.
+**Output**: connection screen and NAS mode.
+**Verification**: `npm run typecheck`, `npm run build`, manual walkthrough against the local container, screenshot.
 
-- [ ] Écran de connexion : adresse, port, jeton ; étape « Comparer l'empreinte avec celle des journaux du conteneur » avant validation
-- [ ] Carte de statut : liste de sécurité animée (entrée en lecture seule ✔, bibliothèque inscriptible ✔, non-root ✔, TLS épinglé ✔, espace libre, version) ; rouge et explicite si un contrôle échoue
-- [ ] Mode NAS : sélecteur « Ce Mac / NAS » ; entrée et bibliothèque affichées comme racines fixes, sans sélecteurs de dossiers ni dépôt par glisser-déposer ; case « tags IA » masquée tant que le serveur ne l'annonce pas
-- [ ] Bandeau de déconnexion avec « Se reconnecter » ; notification du PDF rapatrié
-- [ ] Chaînes i18n fr/en/da ; animations dans le style existant (`framer-motion`)
+- [ ] Connection screen: address, port, token; step "Compare the fingerprint with the one in the container logs" before validation
+- [ ] Status card: animated security list (input read-only ✔, library writable ✔, non-root ✔, TLS pinned ✔, free space, version); red and explicit if a check fails
+- [ ] NAS mode: "This Mac / NAS" selector; input and library shown as fixed roots, with no folder pickers or drag-and-drop; "AI tags" checkbox hidden until the server announces it
+- [ ] Disconnection banner with "Reconnect"; notification of the PDF brought back
+- [ ] fr/en/da i18n strings; animations in the existing style (`framer-motion`)
 
-## Phase 7 — Recette sur le NAS `[checkpoint : intervention de l'utilisateur]`
+## Phase 7 — Acceptance test on the NAS `[checkpoint: user action]`
 
-**Sortie** : `docs/nas/installation.md` (guide pas à pas en français) et `docs/nas/measurements.md` (mesures).
-**Vérification** : liste de recette signée par l'utilisateur.
+**Output**: `docs/nas/installation.md` (step-by-step guide in French) and `docs/nas/measurements.md` (measurements).
+**Verification**: acceptance checklist signed by the user.
 
-- [ ] Guide : créer l'utilisateur QTS `photosort` (non administrateur, aucun accès aux applications), matrice de droits sur les deux dossiers partagés (entrée : lecture seule ; bibliothèque : lecture-écriture ; tous les autres : aucun accès), dossier d'état, import de l'archive dans Container Station, compose, lecture du jeton et de l'empreinte
-- [ ] Recette : `status` entièrement vert ; **preuve négative** : donner temporairement l'écriture sur l'entrée, le conteneur doit refuser de démarrer, puis rétablir ; relever `id photosort` et `fs.protected_hardlinks`
-- [ ] QuMagie lit les copies (droits 0644) ; n'indexer que la bibliothèque
-- [ ] Mesures sur un échantillon : durée du plan, tags de métadonnées, un tag IA, démarrage d'ONNX Runtime, pic mémoire (`docker stats`), CPU ; décision sur les tags IA et les bornes de workers
+- [ ] Guide: create the QTS user `photosort` (non-administrator, no application access), rights matrix on the two shared folders (input: read-only; library: read-write; all others: no access), state folder, import of the archive into Container Station, compose, reading the token and fingerprint
+- [ ] Acceptance: `status` entirely green; **negative proof**: temporarily give write access on the input, the container must refuse to start, then restore; record `id photosort` and `fs.protected_hardlinks`
+- [ ] QuMagie reads the copies (0644 rights); index only the library
+- [ ] Measurements on a sample: plan duration, metadata tags, one AI tag, ONNX Runtime startup, memory peak (`docker stats`), CPU; decision on AI tags and worker bounds
 
-## Phase 8 — Documentation et CI `[parallel]`
+## Phase 8 — Documentation and CI `[parallel]`
 
-**Vérification** : YAML valide ; l'archive produite se charge avec `docker load`.
+**Verification**: valid YAML; the produced archive loads with `docker load`.
 
-- [ ] README (section NAS) et mise à jour de la spec (décisions D1 à D8)
-- [ ] Étape CI optionnelle de construction de l'image `linux/amd64` en artefact (`workflow_dispatch`)
+- [ ] README (NAS section) and update of the spec (decisions D1 to D8)
+- [ ] Optional CI step building the `linux/amd64` image as an artefact (`workflow_dispatch`)
 
-## Risques
+## Risks
 
-1. **ONNX Runtime sans AVX sur le Celeron** : un `SIGILL` tuerait le serveur et ne se rattrape pas dans le processus → sonde d'initialisation dans un **processus enfant** au démarrage ; en cas d'échec, `status` annonce `ai:false` et les tags IA restent indisponibles, le reste fonctionne.
-2. **Droits QTS non appliqués aux montages Docker comme attendu** → les verrous sont indépendants (montage `:ro` et garde au démarrage échouent fermés) ; vérifié par la preuve négative de la phase 7.
-3. **Disque** : la copie double l'espace des photos classées → contrôle d'espace avant copie, estimation donnée à l'utilisateur.
-4. **Mac en veille en pleine copie** → annulation propre (sans fichier partiel), reprise par un nouveau plan.
-5. **Image malveillante dans l'entrée visant un décodeur** : atténué par le but même du plan (non-root, sans capacités, sans écriture sur l'entrée, rien d'autre de monté).
-6. **Jeton et empreinte à la première connexion** : l'utilisateur doit comparer l'empreinte aux journaux ; le jeton ne part jamais avant cette validation.
-7. **Container Station** : prise en charge de compose et rôle de `user:` non vérifiés → phase 7.
+1. **ONNX Runtime without AVX on the Celeron**: a `SIGILL` would kill the server and cannot be recovered within the process → initialisation probe in a **child process** at startup; on failure, `status` announces `ai:false` and AI tags remain unavailable, the rest works.
+2. **QTS rights not applied to Docker mounts as expected** → the locks are independent (`:ro` mount and startup guard fail closed); verified by the negative proof in phase 7.
+3. **Disk**: the copy doubles the space of the sorted photos → space check before copying, estimate given to the user.
+4. **Mac asleep mid-copy** → clean cancellation (no partial file), resume with a new plan.
+5. **Malicious image in the input targeting a decoder**: mitigated by the very purpose of the plan (non-root, no capabilities, no write access to the input, nothing else mounted).
+6. **Token and fingerprint at first connection**: the user must compare the fingerprint with the logs; the token never leaves before this validation.
+7. **Container Station**: compose support and role of `user:` not verified → phase 7.
 
-## Hors périmètre
+## Out of scope
 
-Accès distant (second plan : Tailscale `tsnet` ou NetBird, ou myQNAPcloud Link avec MFA ; l'invariant ci-dessus s'y applique tel quel), case « classer automatiquement », lien physique, navigateur de dossiers distants, découverte automatique (mDNS), multi-utilisateurs, opérations détachées avec reprise par identifiant, déplacement ou suppression d'originaux.
+Remote access (second plan: Tailscale `tsnet` or NetBird, or myQNAPcloud Link with MFA; the invariant above applies to it as is), "sort automatically" checkbox, hard link, remote folder browser, automatic discovery (mDNS), multi-user, detached operations with resumption by identifier, moving or deleting originals.
 
-## Questions ouvertes
+## Open questions
 
-1. Entrée et bibliothèque sont-elles **deux dossiers partagés distincts** (droits simples) ou deux sous-dossiers d'un même partage (ACL avancées de QTS) ?
-2. La bibliothèque classée existe-t-elle déjà, ou sera-t-elle créée vide ? Avec quel espace libre sur le disque ?
-3. Container Station est-il installé et l'accès SSH permis (pour relever `id photosort` ; sinon la phase 7 passe par l'interface) ?
-4. Ordre de grandeur du nombre de photos dans l'entrée ?
+1. Are the input and the library **two distinct shared folders** (simple rights) or two subfolders of the same share (advanced QTS ACLs)?
+2. Does the sorted library already exist, or will it be created empty? With how much free space on the disk?
+3. Is Container Station installed and SSH access allowed (to record `id photosort`; otherwise phase 7 goes through the interface)?
+4. Order of magnitude of the number of photos in the input?

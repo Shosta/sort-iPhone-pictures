@@ -1,219 +1,219 @@
-# Planche scrapbooking hebdomadaire (PDF) : spécification
+# Weekly scrapbooking sheet (PDF): specification
 
-Date : 2026-11-16 · Branche : `feat/weekly-scrapbook-pdf` · Statut : **validée et implémentée** (voir « Écarts avec l'implémentation »)
+Date: 2026-11-16 · Branch: `feat/weekly-scrapbook-pdf` · Status: **validated and implemented** (see "Differences from the implementation")
 
-## Objectif
+## Goal
 
-Depuis le dossier racine classé (`Racine/2026/2026-05/…jpg`), choisir une semaine
-dans un calendrier, voir les photos de cette semaine, en sélectionner, et obtenir
-un PDF imprimable : une grille de photos à découper, à coller dans le semainier.
-Le PDF s'ouvre automatiquement à la fin. Aucun original n'est modifié.
+From the sorted root folder (`Root/2026/2026-05/…jpg`), choose a week
+in a calendar, see that week's photos, select some, and get a
+printable PDF: a grid of photos to cut out and stick into the weekly planner.
+The PDF opens automatically at the end. No original is modified.
 
-Nouveau bouton 📅 dans l'en-tête, à côté de 🏷️ (raccourci `Cmd/Ctrl+P`), qui ouvre
-un panneau dédié, sur le modèle de `TagsPanel`. L'écran principal ne gagne qu'un
-bouton : la règle des 3 actions maximum est respectée.
+New 📅 button in the header, next to 🏷️ (shortcut `Cmd/Ctrl+P`), which opens
+a dedicated panel, modelled on `TagsPanel`. The main screen gains only
+one button: the rule of 3 actions maximum is respected.
 
-## Décisions
+## Decisions
 
-Confirmées par l'utilisateur (✔) ou retenues par défaut (hypothèse) :
+Confirmed by the user (✔) or adopted by default (assumption):
 
-| # | Sujet | Décision |
+| # | Topic | Decision |
 | --- | --- | --- |
-| 1 | Taille des photos ✔ | **Grand côté = 6,5 cm, ratio d'origine conservé** : portrait 6,5 cm de haut, paysage 6,5 cm de large (soit 4,9 × 6,5 cm ou 6,5 × 4,9 cm pour un iPhone 3:4). Valeur réglable (5 à 8 cm) |
-| 2 | Espace entre photos ✔ | **Au moins 5 mm** entre deux photos, horizontalement et verticalement, pour faciliter la découpe. Valeur par défaut 5 mm, réglable de 5 à 10 mm (jamais en dessous de 5 mm) |
-| 3 | Début de semaine ✔ | Lundi → dimanche |
-| 4 | Sélection initiale ✔ | Aucune photo cochée ; boutons « tout cocher / tout décocher » |
-| 5 | Format de page ✔ | **A4 paysage** (297 × 210 mm) par défaut, marges 10 mm (zone non imprimable des imprimantes) ; A4 portrait et Letter en option ; rappel d'imprimer à 100 % |
-| 6 | Dossier de sortie ✔ | Choisi dans les **préférences** (⚙️), **Téléchargements** par défaut ; nom `Semaine 2026-S20 (11-17 mai).pdf`, suffixe ` (2)` si le fichier existe déjà |
-| 7 | Quasi-doublons ✔ | **Inclus** : les dossiers « … - Almost Duplicates » sont parcourus comme les autres ; seuls les fichiers non image sont ignorés |
-| 8 | Recadrage (hypothèse) | Aucun : chaque photo garde son cadrage et sa forme, imprimée sans déformation (orientation EXIF appliquée) |
-| 9 | Date d'une photo (hypothèse) | Préfixe `AAAA-MM-JJ` du nom de fichier (déjà écrit par le tri), sinon date EXIF, sinon date de modification |
-| 10 | Aide à la découpe (hypothèse) | Filet gris fin autour de chaque photo ; l'espace entre les photos sert de zone de coupe |
+| 1 | Photo size ✔ | **Long side = 6.5 cm, original ratio kept**: portrait 6.5 cm high, landscape 6.5 cm wide (i.e. 4.9 × 6.5 cm or 6.5 × 4.9 cm for a 3:4 iPhone). Adjustable value (5 to 8 cm) |
+| 2 | Space between photos ✔ | **At least 5 mm** between two photos, horizontally and vertically, to make cutting easier. Default value 5 mm, adjustable from 5 to 10 mm (never below 5 mm) |
+| 3 | Start of week ✔ | Monday → Sunday |
+| 4 | Initial selection ✔ | No photo ticked; "tick all / untick all" buttons |
+| 5 | Page format ✔ | **A4 landscape** (297 × 210 mm) by default, 10 mm margins (printers' non-printable area); A4 portrait and Letter as options; reminder to print at 100% |
+| 6 | Output folder ✔ | Chosen in the **preferences** (⚙️), **Downloads** by default; name `Semaine 2026-S20 (11-17 mai).pdf`, suffix ` (2)` if the file already exists |
+| 7 | Near-duplicates ✔ | **Included**: the "… - Almost Duplicates" folders are walked like the others; only non-image files are ignored |
+| 8 | Cropping (assumption) | None: each photo keeps its framing and shape, printed without distortion (EXIF orientation applied) |
+| 9 | Photo date (assumption) | `YYYY-MM-DD` prefix of the file name (already written by the sort), otherwise EXIF date, otherwise modification date |
+| 10 | Cutting aid (assumption) | Thin grey rule around each photo; the space between photos serves as the cutting zone |
 
-Hors périmètre (YAGNI, possibles plus tard) : légende de date (inutile avec un
-espace de coupe de 5 mm), taille propre à chaque photo (S/M/L), panoramas plus
-larges (ils suivent la règle du grand côté dans la v1), recadrage intelligent sur
-les visages (YuNet existe déjà), filtrage par tags, mise en page manuelle par
-glisser-déposer.
+Out of scope (YAGNI, possible later): date caption (useless with a
+5 mm cutting space), individual size per photo (S/M/L), wider panoramas
+(they follow the long-side rule in v1), smart cropping on
+faces (YuNet already exists), filtering by tags, manual drag-and-drop
+layout.
 
-## Approches étudiées
+## Approaches studied
 
-- **A. PDF en Go (recommandé)** : moteur de mise en page et génération PDF dans le
-  cœur Go avec `github.com/go-pdf/fpdf` (MIT, v0.9.0). Cohérent avec « la logique
-  métier reste en Go », parallélisable (goroutines), faible mémoire, aucune
-  dépendance runtime (pas de Chromium).
-- **B. `printToPDF` d'Electron (HTML/CSS)** : mise en page facile, mais la logique
-  quitte Go, les images transitent par le renderer, mémoire élevée, rendu
-  dépendant de Chromium.
-- **C. Export PPTX** : reproduit l'ancien processus, mais n'automatise pas
-  l'impression et ajoute une dépendance lourde.
+- **A. PDF in Go (recommended)**: layout engine and PDF generation in the
+  Go core with `github.com/go-pdf/fpdf` (MIT, v0.9.0). Consistent with "the business
+  logic stays in Go", parallelisable (goroutines), low memory, no
+  runtime dependency (no Chromium).
+- **B. Electron's `printToPDF` (HTML/CSS)**: easy layout, but the logic
+  leaves Go, images go through the renderer, high memory, rendering
+  dependent on Chromium.
+- **C. PPTX export**: reproduces the old process, but does not automate
+  printing and adds a heavy dependency.
 
 → **A**.
 
 ## Architecture
 
 ```text
-internal/scrapbook/            (nouveau, Go pur, sans I/O réseau)
-  week.go      Week(date, firstDay) -> [début, fin] ; étiquettes (« 11-17 mai »)
-  scan.go      ScanWeek(root, week) -> []Photo ; DayCounts(root, month) -> map[jour]n
-               (récursif sous Racine/AAAA/AAAA-MM, sous-dossiers de lieu et
-               « Almost Duplicates » compris)
-  layout.go    Layout(page, opts, []Size) -> [][]Placement   (pur, testé : placement par rangées)
-  render.go    Render(photos, opts, out, progress)    (fpdf + redimensionnement)
-cmd/photosort-sidecar/main.go  nouvelles opérations du protocole JSON
+internal/scrapbook/            (new, pure Go, no network I/O)
+  week.go      Week(date, firstDay) -> [start, end] ; labels ("11-17 mai")
+  scan.go      ScanWeek(root, week) -> []Photo ; DayCounts(root, month) -> map[day]n
+               (recursive under Root/YYYY/YYYY-MM, place subfolders and
+               "Almost Duplicates" included)
+  layout.go    Layout(page, opts, []Size) -> [][]Placement   (pure, tested: row placement)
+  render.go    Render(photos, opts, out, progress)    (fpdf + resizing)
+cmd/photosort-sidecar/main.go  new JSON protocol operations
 photosort-electron/src/renderer/components/ScrapbookPanel.tsx (+ Calendar.tsx)
 ```
 
-### Opérations du sidecar (JSON par ligne, comme `tag`)
+### Sidecar operations (line-by-line JSON, like `tag`)
 
-- `weekDays` `{root, month}` → `{days: {"2026-05-12": 7, …}}` : nombre de photos par
-  jour, pour marquer le calendrier. Parcours limité à `Racine/AAAA/AAAA-MM`.
-- `weekPhotos` `{root, from, to}` → événements `photo` en flux `{path, date, w, h}`
-  (la liste s'affiche dès la première photo ; `w`×`h` = dimensions après
-  orientation EXIF, lues dans l'en-tête sans décodage complet), puis `done`. Les
-  miniatures réutilisent l'op `thumbnail` existante (cache, limitation de débit).
-- `scrapbookLayout` `{page, longSide, gutter, sizes:[{w,h}…]}` → pages de positions
-  en mm. `gutter` est ramené à 5 mm minimum côté Go. Source unique de vérité :
-  l'aperçu de l'UI dessine ces positions, le PDF aussi.
-- `scrapbook` `{files, options, outDir, name}` → événements `progress {done,total}`
-  puis `done {path, pages}`. `outDir` vient des préférences (Téléchargements par
-  défaut), créé s'il manque. Annulable (`cancel`), comme les autres opérations.
+- `weekDays` `{root, month}` → `{days: {"2026-05-12": 7, …}}`: number of photos per
+  day, to mark the calendar. Walk limited to `Root/YYYY/YYYY-MM`.
+- `weekPhotos` `{root, from, to}` → streamed `photo` events `{path, date, w, h}`
+  (the list shows from the first photo; `w`×`h` = dimensions after
+  EXIF orientation, read from the header without a full decode), then `done`. Thumbnails
+  reuse the existing `thumbnail` op (cache, rate limiting).
+- `scrapbookLayout` `{page, longSide, gutter, sizes:[{w,h}…]}` → pages of positions
+  in mm. `gutter` is brought up to a 5 mm minimum on the Go side. Single source of truth:
+  the UI preview draws these positions, and so does the PDF.
+- `scrapbook` `{files, options, outDir, name}` → `progress {done,total}` events
+  then `done {path, pages}`. `outDir` comes from the preferences (Downloads by
+  default), created if missing. Cancellable (`cancel`), like the other operations.
 
-### Mise en page (`layout.go`)
+### Layout (`layout.go`)
 
-Chaque photo est mise à l'échelle pour que son grand côté vaille `longSide`
-(6,5 cm), sans recadrage. Pour que la découpe reste simple (coupes de bord à bord
-d'abord en rangées, puis verticales), le placement se fait **par rangées**, avec
-un espace d'au moins `gutter` (5 mm) entre deux photos voisines et entre deux
-rangées :
+Each photo is scaled so that its long side equals `longSide`
+(6.5 cm), without cropping. To keep cutting simple (edge-to-edge cuts
+first in rows, then vertical), placement is done **by rows**, with
+a space of at least `gutter` (5 mm) between two neighbouring photos and between two
+rows:
 
-1. Les photos sont séparées par orientation (portrait / paysage / carré), l'ordre
-   chronologique étant conservé dans chaque groupe.
-2. Les rangées se remplissent de gauche à droite ; la hauteur d'une rangée est
-   celle de sa photo la plus haute. Les photos restantes de chaque groupe sont
-   réunies dans une dernière rangée mixte pour limiter le gaspillage de papier.
-3. Les rangées s'empilent page après page ; une rangée ne coupe jamais une page.
+1. Photos are separated by orientation (portrait / landscape / square), the
+   chronological order being kept within each group.
+2. Rows are filled from left to right; the height of a row is
+   that of its tallest photo. The remaining photos of each group are
+   gathered into a last mixed row to limit paper waste.
+3. Rows are stacked page after page; a row never splits across pages.
 
-Capacité en A4 paysage (zone utile 277 × 190 mm, espace 5 mm) pour des photos 3:4 :
-5 portraits de 48,75 mm par rangée sur 2 rangées, soit **10 par page** ; ou
-4 paysages de 65 mm par rangée sur 3 rangées de 48,75 mm, soit **12 par page**.
-Une page peut mêler rangées de portraits et de paysages (par exemple 1 rangée de
-portraits + 2 rangées de paysages = 172,5 mm de haut). Le nombre de pages est
-affiché avant la génération.
+Capacity on A4 landscape (usable area 277 × 190 mm, 5 mm space) for 3:4 photos:
+5 portraits of 48.75 mm per row over 2 rows, i.e. **10 per page**; or
+4 landscapes of 65 mm per row over 3 rows of 48.75 mm, i.e. **12 per page**.
+A page may mix rows of portraits and landscapes (for example 1 row of
+portraits + 2 rows of landscapes = 172.5 mm high). The number of pages is
+shown before generation.
 
-### Génération du PDF
+### PDF generation
 
-1. Pool de workers : décodage (JPEG/HEIC/PNG déjà gérés, orientation EXIF
-   appliquée), réduction à **300 dpi** de la taille imprimée, ré-encodage JPEG q90.
-   Évite des PDF de 200 Mo et garde une impression nette.
-2. Assemblage séquentiel des pages ; filet de découpe gris fin autour de chaque
-   photo (il reste dans l'espace de coupe, la photo n'est jamais rognée).
-3. Écriture atomique (`.tmp` puis renommage) dans le dossier de sortie, puis
-   `shell.openPath` côté Electron à la réception de `done`.
+1. Worker pool: decoding (JPEG/HEIC/PNG already handled, EXIF orientation
+   applied), reduction to **300 dpi** of the printed size, JPEG q90 re-encoding.
+   Avoids 200 MB PDFs and keeps printing sharp.
+2. Sequential assembly of the pages; thin grey cutting rule around each
+   photo (it stays within the cutting space, the photo is never trimmed).
+3. Atomic write (`.tmp` then rename) into the output folder, then
+   `shell.openPath` on the Electron side when `done` is received.
 
 ### Interface
 
-Le panneau se déroule en un seul écran, sans étapes bloquantes :
+The panel unfolds on a single screen, with no blocking steps:
 
-1. **Dossier racine** : prérempli avec le dossier de destination des préférences.
-2. **Calendrier mensuel** : jours avec photos marqués d'un point ; un clic sur un
-   jour surligne toute la semaine ; flèches mois précédent/suivant ; « Cette semaine ».
-3. **Photos de la semaine** : `VirtualGrid` + `Thumb` existants, cases à cocher,
-   compteur « 9 sur 38 ».
-4. **Réglages** (repliés) : taille du grand côté (6,5 cm), format de page, espace
-   entre photos (5 mm minimum).
-5. **Aperçu de page** à droite avec les photos à leur vraie proportion, mis à jour
-   en direct (nombre de pages affiché), puis bouton **Créer le PDF**. Une ligne
-   rappelle le dossier de sortie (« Enregistré dans : Téléchargements »). Rappel :
-   imprimer à 100 % (« taille réelle »), sans « adapter à la page ».
+1. **Root folder**: prefilled with the destination folder from the preferences.
+2. **Monthly calendar**: days with photos marked with a dot; a click on a
+   day highlights the whole week; previous/next month arrows; "This week".
+3. **Photos of the week**: existing `VirtualGrid` + `Thumb`, checkboxes,
+   counter "9 of 38".
+4. **Settings** (collapsed): long-side size (6.5 cm), page format, space
+   between photos (5 mm minimum).
+5. **Page preview** on the right with the photos in their true proportion, updated
+   live (number of pages shown), then a **Create the PDF** button. A line
+   reminds the output folder ("Saved in: Downloads"). Reminder:
+   print at 100% ("actual size"), without "fit to page".
 
-**Préférences (⚙️)** : nouveau champ « Dossier des PDF de semainier » avec
-sélecteur de dossier (réutilise `dialog:pickFolder`). Vide = Téléchargements,
-résolu côté main par `app.getPath('downloads')` (nouvel IPC `app:downloadsDir`,
-valable macOS, Windows et Linux).
+**Preferences (⚙️)**: new field "Weekly planner PDF folder" with a
+folder picker (reuses `dialog:pickFolder`). Empty = Downloads,
+resolved on the main side by `app.getPath('downloads')` (new IPC `app:downloadsDir`,
+valid on macOS, Windows and Linux).
 
-i18n fr/en/da ; préférences persistées dans `prefs.ts` (`scrapOutputDir`,
+fr/en/da i18n; preferences persisted in `prefs.ts` (`scrapOutputDir`,
 `scrapLongSide`, `scrapPage`, `scrapGutter`).
 
-## Direction esthétique
+## Aesthetic direction
 
-« **Carnet de papeterie** » : s'appuie sur les thèmes existants (variables CSS) pour
-rester cohérent, avec un ton chaleureux de papier et de ruban adhésif.
+"**Stationery notebook**": builds on the existing themes (CSS variables) to
+stay consistent, with a warm tone of paper and adhesive tape.
 
-- La semaine sélectionnée apparaît comme une **bande de washi tape** translucide
-  qui se pose sur la rangée du calendrier (rotation de ~1°, bord dentelé en CSS).
-- Les photos cochées prennent un léger **cadre blanc façon polaroïd** et un numéro
-  d'ordre (tampon) ; décocher le retire en douceur.
-- **Un moment fort** : à « Créer le PDF », les miniatures cochées s'envolent vers
-  l'aperçu de page (réutilise `Flights.tsx`), la feuille se remplit, puis glisse
-  hors de l'écran à l'ouverture du PDF. Le reste reste sobre : transitions
-  `transform`/`opacity` uniquement, comme dans le reste de l'application.
-- Typographie : pile système de l'application ; numéros d'ordre et étiquette de
-  semaine en chasse fixe (`ui-monospace`) pour évoquer un tampon dateur.
-- Pas de flou en direct ni d'ombres coûteuses (contraintes de performance existantes).
+- The selected week appears as a translucent **washi tape strip**
+  laid over the calendar row (rotation of ~1°, jagged edge in CSS).
+- Ticked photos get a light **white polaroid-style frame** and a sequence
+  number (stamp); unticking removes it smoothly.
+- **One highlight**: on "Create the PDF", the ticked thumbnails fly to
+  the page preview (reuses `Flights.tsx`), the sheet fills up, then slides
+  off the screen when the PDF opens. The rest stays sober: `transform`/`opacity`
+  transitions only, as in the rest of the application.
+- Typography: the application's system stack; sequence numbers and week label
+  in monospace (`ui-monospace`) to evoke a date stamp.
+- No live blur or costly shadows (existing performance constraints).
 
-## Gestion des erreurs et cas limites
+## Error handling and edge cases
 
-- Semaine sans photo : message clair et bouton désactivé.
-- Photo illisible ou HEIC non décodable : ignorée avec avertissement dans le résumé,
-  les autres pages sont générées.
-- Plus de photos que de place sur une page : pagination automatique.
-- Dossier racine invalide ou sans `AAAA/AAAA-MM` : message guidant vers le bon dossier.
-- Dossier de sortie absent ou non inscriptible : repli sur Téléchargements avec
-  avertissement ; si l'écriture échoue encore, erreur explicite et aucun fichier partiel.
-- Semaine à cheval sur deux mois ou deux années : le scan couvre les deux dossiers.
-- Annulation en cours : aucun fichier partiel laissé.
+- Week with no photo: clear message and disabled button.
+- Unreadable photo or undecodable HEIC: ignored with a warning in the summary,
+  the other pages are generated.
+- More photos than fit on a page: automatic pagination.
+- Invalid root folder or one without `YYYY/YYYY-MM`: message guiding to the right folder.
+- Output folder missing or not writable: fallback to Downloads with a
+  warning; if writing still fails, explicit error and no partial file.
+- Week spanning two months or two years: the scan covers both folders.
+- Cancellation in progress: no partial file left behind.
 
 ## Tests
 
-- Go : `week_test.go` (début de semaine, chevauchement mois/année, 53ᵉ semaine),
-  `scan_test.go` (arbre temporaire, fichiers non image ignorés, « Almost Duplicates »
-  inclus, repli sur EXIF/mtime), `layout_test.go` (grand côté exact à 0,1 mm,
-  portrait/paysage/carré, rangées mixtes, **espace ≥ 5 mm entre toutes les paires de
-  photos**, même avec `gutter` demandé < 5 mm, aucun débordement des marges,
-  10 portraits / 12 paysages par page A4 paysage, pagination), `render_test.go`
-  (PDF valide : en-tête `%PDF`, nombre de pages, taille raisonnable, annulation,
-  suffixe ` (2)` en cas de collision de nom).
-- Test de bout en bout du sidecar sur une **copie** d'un échantillon de
-  `~/Pictures` (jamais l'original).
-- UI : `npm run typecheck`, `electron-vite build`, parcours manuel (calendrier,
-  sélection, aperçu, ouverture du PDF) et impression d'une planche à l'échelle 100 %
-  pour vérifier les cotes (règle).
+- Go: `week_test.go` (start of week, month/year overlap, 53rd week),
+  `scan_test.go` (temporary tree, non-image files ignored, "Almost Duplicates"
+  included, fallback to EXIF/mtime), `layout_test.go` (exact long side to 0.1 mm,
+  portrait/landscape/square, mixed rows, **space ≥ 5 mm between all pairs of
+  photos**, even with a requested `gutter` < 5 mm, no overflow of the margins,
+  10 portraits / 12 landscapes per A4 landscape page, pagination), `render_test.go`
+  (valid PDF: `%PDF` header, page count, reasonable size, cancellation,
+  ` (2)` suffix on name collision).
+- End-to-end sidecar test on a **copy** of a sample of
+  `~/Pictures` (never the original).
+- UI: `npm run typecheck`, `electron-vite build`, manual walkthrough (calendar,
+  selection, preview, PDF opening) and printing of a sheet at 100% scale
+  to check the dimensions (ruler).
 
-## Découpage en étapes
+## Breakdown into steps
 
-1. Cœur Go : `week`, `scan`, `layout` + tests.
-2. Rendu PDF + opérations sidecar + test e2e.
-3. Calendrier et sélection dans le panneau (sans aperçu).
-4. Aperçu en direct, réglages, préférences, i18n.
-5. Animations « carnet de papeterie », README, packaging inchangé (pas de nouvelle
-   dépendance native : fpdf est en Go pur, compatible CGO/Windows du workflow CI).
+1. Go core: `week`, `scan`, `layout` + tests.
+2. PDF rendering + sidecar operations + e2e test.
+3. Calendar and selection in the panel (without preview).
+4. Live preview, settings, preferences, i18n.
+5. "Stationery notebook" animations, README, packaging unchanged (no new
+   native dependency: fpdf is pure Go, compatible with the CI workflow's CGO/Windows).
 
-## Écarts avec l'implémentation
+## Differences from the implementation
 
-Le contrat final du sidecar et de l'UI diffère légèrement de ce qui précède :
+The final sidecar and UI contract differs slightly from the above:
 
-- `weekDays` prend `{root, from, to}` (la grille visible du calendrier, semaines
-  des mois voisins comprises) et renvoie `{days, rootOk}` ; `rootOk` faux affiche
-  « aucun dossier d'année ici ».
-- `weekPhotos` renvoie **un seul** événement `photos` `{photos:[{path, date}]}`
-  trié par date, et non un flux `photo` : le scan ne lit que les noms de fichiers
-  (ou EXIF/mtime en dernier recours), c'est instantané.
-- `scrapbookLayout` prend `{files, page, longSide, gutter}` : le ratio de chaque
-  photo est lu côté Go dans l'en-tête (`image.DecodeConfig`, aperçu de 11 HEIC
-  passé de 18 s à 1 s) et non envoyé par l'UI. Il renvoie `layout` avec les
-  positions en mm et `failed` pour les photos illisibles, exclues.
-- `scrapbook` prend en plus `fallbackDir` (Téléchargements) ; `done` contient
-  `fallback` (booléen) : le dossier réellement utilisé est `dirname(path)`.
-- Les libellés (semaine, nom du fichier `Semaine 2026-S47 (16–22 novembre).pdf`)
-  sont construits dans l'UI avec `Intl` (i18n fr/en/da), pas en Go.
-- La semaine courante est présélectionnée à l'ouverture du panneau.
-- Plage limitée à 366 jours ; sélection vide ou entièrement illisible = événement
-  `error`.
-- Esthétique : ruban washi sur la semaine, feuilles crème dans l'aperçu avec
-  ressort à l'apparition, vol des miniatures et confettis à la création. Les
-  photos cochées reçoivent un anneau d'accent et une coche animée (pas de cadre
-  polaroïd ni de numéro d'ordre, jugés inutiles pour une sélection non ordonnée).
-- Raccourci `Cmd/Ctrl+P` (menu *Semainier*) en plus du bouton 📅.
-- Les préférences `scrapLongSide` et `scrapGutter` sont réglables dans le panneau
-  (50–80 mm, 5–10 mm) ; le dossier des PDF l'est dans ⚙️.
+- `weekDays` takes `{root, from, to}` (the visible calendar grid, including weeks
+  of neighbouring months) and returns `{days, rootOk}`; a false `rootOk` shows
+  "no year folder here".
+- `weekPhotos` returns **a single** `photos` event `{photos:[{path, date}]}`
+  sorted by date, and not a `photo` stream: the scan reads only file names
+  (or EXIF/mtime as a last resort), it is instantaneous.
+- `scrapbookLayout` takes `{files, page, longSide, gutter}`: the ratio of each
+  photo is read on the Go side from the header (`image.DecodeConfig`, preview of 11 HEICs
+  down from 18 s to 1 s) and not sent by the UI. It returns `layout` with the
+  positions in mm and `failed` for unreadable photos, which are excluded.
+- `scrapbook` additionally takes `fallbackDir` (Downloads); `done` contains
+  `fallback` (boolean): the folder actually used is `dirname(path)`.
+- Labels (week, file name `Semaine 2026-S47 (16–22 novembre).pdf`)
+  are built in the UI with `Intl` (fr/en/da i18n), not in Go.
+- The current week is preselected when the panel opens.
+- Range limited to 366 days; empty or entirely unreadable selection = `error`
+  event.
+- Aesthetics: washi tape on the week, cream sheets in the preview with
+  a spring on appearance, thumbnails flying and confetti on creation. Ticked
+  photos get an accent ring and an animated tick (no polaroid frame
+  or sequence number, judged unnecessary for an unordered selection).
+- `Cmd/Ctrl+P` shortcut (*Weekly planner* menu) in addition to the 📅 button.
+- The `scrapLongSide` and `scrapGutter` preferences are adjustable in the panel
+  (50–80 mm, 5–10 mm); the PDF folder is adjustable in ⚙️.

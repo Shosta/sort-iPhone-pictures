@@ -1,226 +1,226 @@
-# Plan : classement et tags sur le NAS, connexion en réseau local (Mac + SMB)
+# Plan: sorting and tags on the NAS, local network connection (Mac + SMB)
 
-Date : 2026-11-17, révisé le 2026-11-18 (Tailscale) · Branche : `feat/nas-qnap-remote` · Statut : **plan révisé, en attente d'approbation** (aucun code écrit)
-Spec parente : `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
-Plan différé (serveur Docker) : `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`
+Date: 2026-11-17, revised on 2026-11-18 (Tailscale) · Branch: `feat/nas-qnap-remote` · Status: **revised plan, awaiting approval** (no code written)
+Parent spec: `docs/superpowers/specs/2026-11-16-nas-qnap-remote-design.md`
+Deferred plan (Docker server): `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`
 
-## Pourquoi ce plan remplace le précédent
+## Why this plan replaces the previous one
 
-Réponses de l'utilisateur (2026-11-17) :
-- entrée et bibliothèque sont **deux sous-dossiers d'un même partage** ;
-- la bibliothèque existe déjà et est **massive** ;
-- **Container Station n'est pas installé** et le **SSH reste désactivé** (surface d'attaque) ;
-- l'entrée contient **quelques centaines de photos**.
+User's answers (2026-11-17):
+- input and library are **two subfolders of the same share**;
+- the library already exists and is **massive**;
+- **Container Station is not installed** and **SSH remains disabled** (attack surface);
+- the input contains **a few hundred photos**.
 
-Conséquences : le serveur Docker (Container Station + import d'image) ajouterait
-au NAS un démon root et de la maintenance pour traiter quelques centaines de
-photos. L'app sait déjà lire un dossier d'entrée et écrire dans un dossier de
-destination : un partage SMB monté sur le Mac suffit. **Rien à installer sur le
-NAS, aucun port nouveau.** Le Mac (Apple M2) rend en plus les tags IA
-réalistes, ce que le Celeron du NAS ne garantissait pas.
+Consequences: the Docker server (Container Station + image import) would add
+a root daemon and maintenance to the NAS to process a few hundred
+photos. The app already knows how to read an input folder and write to a
+destination folder: an SMB share mounted on the Mac is enough. **Nothing to install on the
+NAS, no new port.** The Mac (Apple M2) also makes AI tags
+realistic, which the NAS's Celeron did not guarantee.
 
-## Révision du 2026-11-18 : Tailscale
+## Revision of 2026-11-18: Tailscale
 
-Fait nouveau : SMB direct sur le réseau local « ne fonctionne pas de façon optimale » (délais dépassés depuis le Mac, montage correct depuis Kubuntu). L'utilisateur installe **Tailscale** (VPN maillé WireGuard) sur son Linux, son iPhone et le NAS QNAP.
+New fact: direct SMB on the local network "does not work optimally" (timeouts from the Mac, correct mount from Kubuntu). The user installs **Tailscale** (WireGuard mesh VPN) on their Linux machine, their iPhone and the QNAP NAS.
 
-Ce que cela change :
-- **Le transport devient le tailnet.** Le partage SMB reste la voie retenue, mais il est atteint par le nom MagicDNS ou l'adresse `100.x` du NAS : plus de découverte Bonjour ni de dépendance au réseau local, et le trafic est chiffré de bout en bout.
-- **L'accès à distance, sorti du périmètre, entre dans ce plan** (via le même montage SMB). Il ne doit jamais élargir les droits du compte `photosort`.
-- **La contrainte « rien d'installé sur le NAS » est levée pour un seul logiciel : Tailscale.** Le moteur, lui, ne change pas.
-- **La latence devient le risque principal.** SMB enchaîne beaucoup de petites requêtes ; à distance ou via un relais, le parcours d'une bibliothèque massive peut devenir très lent. Le dédoublonnage à portée (phase 2) passe de confort à nécessité.
-- **Le client de référence devient le Linux** (Tailscale y est installé). Le Mac professionnel n'est pas dans le tailnet : on ne suppose pas qu'on peut y installer Tailscale (pas de droits administrateur). Il reste sur le réseau local, à diagnostiquer séparément.
+What this changes:
+- **The transport becomes the tailnet.** The SMB share remains the chosen route, but it is reached through the NAS's MagicDNS name or `100.x` address: no more Bonjour discovery or dependence on the local network, and traffic is encrypted end to end.
+- **Remote access, previously out of scope, enters this plan** (through the same SMB mount). It must never widen the rights of the `photosort` account.
+- **The constraint "nothing installed on the NAS" is lifted for a single piece of software: Tailscale.** The engine itself does not change.
+- **Latency becomes the main risk.** SMB chains many small requests; remotely or through a relay, walking a massive library can become very slow. Scoped deduplication (phase 2) goes from a comfort to a necessity.
+- **The reference client becomes the Linux machine** (Tailscale is installed there). The work Mac is not in the tailnet: we do not assume Tailscale can be installed on it (no administrator rights). It stays on the local network, to be diagnosed separately.
 
-## Objectif
+## Goal
 
-Depuis l'app Electron d'un poste du tailnet (Linux en premier, le Mac en réseau local) : classer l'entrée en
-vrac dans la bibliothèque du NAS, taguer la bibliothèque et produire le PDF du
-semainier, avec un compte QTS dédié aux droits minimaux, au bureau comme à distance par
-Tailscale. Le traitement sans poste client (serveur sur le NAS) viendra dans un
-plan ultérieur.
+From the Electron app on a tailnet machine (Linux first, the Mac on the local network): sort the loose
+input into the NAS library, tag the library and produce the weekly planner
+PDF, with a dedicated QTS account with minimal rights, at the office as well as remotely through
+Tailscale. Processing without a client machine (server on the NAS) will come in a later
+plan.
 
-## Contraintes
+## Constraints
 
-- Logique métier en Go ; moteur existant réutilisé (`sorter`, `internal/tagger`, `internal/scrapbook`).
-- **Entrée jamais écrite**, bibliothèque seul dossier inscriptible.
-- Compte QTS dédié `photosort` : lecture seule sur l'entrée, lecture-écriture sur la bibliothèque, **aucun droit ailleurs**, SMB seulement.
-- **Seul ajout sur le NAS : Tailscale.** Ni SSH, ni Container Station, ni autre QPKG tiers.
-- **Jamais de port 445 sur internet.** Tailscale Funnel, Tailscale Serve, routes de sous-réseau et nœud de sortie : interdits sur le NAS.
-- Le comportement local actuel ne change pas par défaut (toute nouveauté est une option ou un durcissement neutre).
-- Aucun secret dans l'app : le montage est fait par l'OS (trousseau macOS).
-- Branche `feat/nas-qnap-remote`, aucun merge dans `main` sans demande, trailer `Co-authored-by` sur chaque commit.
+- Business logic in Go; existing engine reused (`sorter`, `internal/tagger`, `internal/scrapbook`).
+- **Input never written to**, library is the only writable folder.
+- Dedicated QTS account `photosort`: read-only on the input, read-write on the library, **no rights elsewhere**, SMB only.
+- **Only addition on the NAS: Tailscale.** No SSH, no Container Station, no other third-party QPKG.
+- **Never port 445 on the internet.** Tailscale Funnel, Tailscale Serve, subnet routes and exit node: forbidden on the NAS.
+- Current local behaviour does not change by default (anything new is an option or a neutral hardening).
+- No secret in the app: the mount is done by the OS (macOS keychain).
+- Branch `feat/nas-qnap-remote`, no merge into `main` without a request, `Co-authored-by` trailer on every commit.
 
-## Décisions (retenues par défaut, à confirmer)
+## Decisions (adopted by default, to be confirmed)
 
-| # | Décision | Raison |
+| # | Decision | Reason |
 | --- | --- | --- |
-| N1 | **Voie A' : l'app sur un poste client, le partage monté en SMB** avec le compte dédié, **à travers Tailscale**. Le serveur Docker reste différé | Pas de SSH ni de Container Station ; le moteur ne change pas ; Tailscale règle l'accès et le chiffrement |
-| N2 | Droits : **Advanced Folder Permissions** de QTS (droits par sous-dossier : lecture, lecture-écriture, refus) | Documenté par QNAP ; seul moyen de séparer deux sous-dossiers d'un même partage sans Docker. Réglage global du NAS : voir risques |
-| N3 | Montage par l'**OS** (Finder `smb://`, lecteur réseau Windows, `mount.cifs`, GVFS sous KDE) sur le nom MagicDNS du NAS ; l'app ne monte rien et ne voit jamais le mot de passe | Le trousseau gère le secret ; aucune dépendance |
-| N4 | **Contrôle préalable** `nasCheck` (Go) : l'entrée doit refuser l'écriture, la bibliothèque doit l'accepter | Seconde barrière : si l'ACL QTS est mal réglée, l'app refuse de lancer l'opération (échoue fermé) |
-| N5 | **Copie** (pas de lien physique) vers la bibliothèque | Un lien physique ne passe pas sur un montage SMB et contredit la lecture seule de l'entrée |
-| N6 | Dédoublonnage **à portée** (option) : ne parcourir dans la bibliothèque que les mois concernés par le plan | `loadDestination` (`sorter/dedupe.go:44`) parcourt toute la destination avec un `lstat` par fichier : coûteux sur SMB avec une bibliothèque massive |
-| N7 | Ignorer les dossiers et fichiers **système** (`.@__thumb`, `@Recycle`, `@Recently-Snapshot`, `@eaDir`, `._*`, `.DS_Store`) | `Plan` (`sorter.go:122`) et `deduper` ne sautent aucun dossier caché alors que `tags.go:39` et `scrapbook/scan.go:101` le font déjà ; QTS crée des `.@__thumb` partout |
-| N8 | Copie **atomique** : écriture dans `<cible>.part` puis renommage | Une coupure réseau laisserait sinon un fichier tronqué au nom final (`copyEntry`, `sorter.go:415`), pris ensuite pour une photo valide |
-| N9 | Semainier et tags inchangés : lecture de la bibliothèque en SMB, **PDF écrit localement** (Téléchargements) | Rien à rapatrier |
-| N10 | Tags IA **autorisés** (calculés sur le poste client) | Le blocage du Celeron disparaît |
-| N11 | **ACL Tailscale minimales** : seul l'appareil qui lance Photosort (étiquette dédiée) atteint le NAS, et seulement sur le port **445** ; l'iPhone n'y accède pas ; aucune route de sous-réseau, aucun nœud de sortie, ni Serve ni Funnel sur le NAS | Le tailnet ne doit pas rouvrir ce que les droits QTS ferment : un appareil volé du tailnet ne doit pas atteindre l'interface d'administration QTS |
-| N12 | **Expiration de clé désactivée pour le NAS** (console d'administration Tailscale) | Sinon le NAS quitte le tailnet à l'expiration de sa clé et l'accès à distance tombe sans prévenir |
-| N13 | Les droits QTS (compte `photosort`, permissions avancées) restent **la barrière principale** ; Tailscale ne les remplace pas | Même si un appareil du tailnet est compromis, il ne trouve qu'un compte à droits minimaux |
-| N14 | **Dédoublonnage à portée activé par défaut en mode NAS** quand la bibliothèque suit `AAAA/AAAA-MM`, et **relais détecté** : avertissement dans la recette si `tailscale ping` passe par un relais DERP | Un `lstat` par fichier sur un lien à latence est le pire cas ; un relais multiplie la latence |
-| N15 | Nombre de copies en parallèle **réglable** (4 par défaut), à ajuster d'après la recette | Sur un lien à latence, plus de travailleurs masquent la latence ; à mesurer, pas à deviner |
-| N16 | Le serveur Docker (TLS, jeton, certificat épinglé) reste **différé** ; Tailscale fournirait déjà authentification et chiffrement du transport, ce qui simplifierait D2 et D4 | À reprendre seulement si un traitement sans poste client devient nécessaire |
+| N1 | **Route A': the app on a client machine, the share mounted over SMB** with the dedicated account, **through Tailscale**. The Docker server remains deferred | No SSH or Container Station; the engine does not change; Tailscale handles access and encryption |
+| N2 | Rights: QTS **Advanced Folder Permissions** (per-subfolder rights: read, read-write, deny) | Documented by QNAP; only way to separate two subfolders of the same share without Docker. Global NAS setting: see risks |
+| N3 | Mounting by the **OS** (Finder `smb://`, Windows network drive, `mount.cifs`, GVFS under KDE) on the NAS's MagicDNS name; the app mounts nothing and never sees the password | The keychain manages the secret; no dependency |
+| N4 | **Prior check** `nasCheck` (Go): the input must refuse writing, the library must accept it | Second barrier: if the QTS ACL is misconfigured, the app refuses to launch the operation (fails closed) |
+| N5 | **Copy** (no hard link) to the library | A hard link does not work over an SMB mount and contradicts the read-only input |
+| N6 | **Scoped** deduplication (option): only walk, in the library, the months concerned by the plan | `loadDestination` (`sorter/dedupe.go:44`) walks the whole destination with one `lstat` per file: costly over SMB with a massive library |
+| N7 | Ignore **system** folders and files (`.@__thumb`, `@Recycle`, `@Recently-Snapshot`, `@eaDir`, `._*`, `.DS_Store`) | `Plan` (`sorter.go:122`) and `deduper` skip no hidden folder whereas `tags.go:39` and `scrapbook/scan.go:101` already do; QTS creates `.@__thumb` everywhere |
+| N8 | **Atomic** copy: write to `<target>.part` then rename | A network interruption would otherwise leave a truncated file under the final name (`copyEntry`, `sorter.go:415`), later mistaken for a valid photo |
+| N9 | Weekly planner and tags unchanged: library read over SMB, **PDF written locally** (Downloads) | Nothing to bring back |
+| N10 | AI tags **allowed** (computed on the client machine) | The Celeron blocker disappears |
+| N11 | **Minimal Tailscale ACLs**: only the device that runs Photosort (dedicated tag) reaches the NAS, and only on port **445**; the iPhone does not access it; no subnet route, no exit node, neither Serve nor Funnel on the NAS | The tailnet must not reopen what the QTS rights close: a stolen tailnet device must not reach the QTS administration interface |
+| N12 | **Key expiry disabled for the NAS** (Tailscale admin console) | Otherwise the NAS leaves the tailnet when its key expires and remote access drops without warning |
+| N13 | The QTS rights (`photosort` account, advanced permissions) remain **the main barrier**; Tailscale does not replace them | Even if a tailnet device is compromised, it only finds an account with minimal rights |
+| N14 | **Scoped deduplication enabled by default in NAS mode** when the library follows `YYYY/YYYY-MM`, and **relay detected**: warning in the acceptance test if `tailscale ping` goes through a DERP relay | One `lstat` per file on a high-latency link is the worst case; a relay multiplies latency |
+| N15 | Number of parallel copies **adjustable** (4 by default), to be tuned from the acceptance test | On a high-latency link, more workers hide latency; to be measured, not guessed |
+| N16 | The Docker server (TLS, token, pinned certificate) remains **deferred**; Tailscale would already provide authentication and transport encryption, which would simplify D2 and D4 | To be resumed only if processing without a client machine becomes necessary |
 
-## Phase 0 — Documentation (inventaire des API)
+## Phase 0 — Documentation (API inventory)
 
-Faite en ligne : API stables de la bibliothèque standard et code du dépôt, pas de sous-agents.
+Done inline: stable standard-library APIs and repository code, no sub-agents.
 
-**Vérifié dans le code**
-- `Plan` parcourt les sources avec `WalkDir` sans sauter les dossiers cachés (`sorter.go:122`) ; `deduper.loadDestination` parcourt toute la destination (`dedupe.go:44-60`) et ne hache que les fichiers de **même taille** qu'une source (`dedupe.go:69`) ; la destination n'est comparée qu'**octet pour octet** (`register`, `dedupe.go:90`).
-- `copyEntry` crée le fichier final en `O_EXCL`, mode 0600 (`sorter.go:435`) et ne nettoie qu'en cas d'erreur rattrapée.
-- `copyWorkers = 4` (`sorter.go:330`) : adapté à un disque réseau.
-- `tags.go:39` et `scrapbook/scan.go:101` sautent les dossiers dont le nom commence par `.`.
+**Verified in the code**
+- `Plan` walks the sources with `WalkDir` without skipping hidden folders (`sorter.go:122`); `deduper.loadDestination` walks the whole destination (`dedupe.go:44-60`) and only hashes files of the **same size** as a source (`dedupe.go:69`); the destination is compared only **byte for byte** (`register`, `dedupe.go:90`).
+- `copyEntry` creates the final file with `O_EXCL`, mode 0600 (`sorter.go:435`) and only cleans up on a caught error.
+- `copyWorkers = 4` (`sorter.go:330`): suited to a network disk.
+- `tags.go:39` and `scrapbook/scan.go:101` skip folders whose name starts with `.`.
 
-**Vérifié dans la documentation QNAP** : *Control Panel > Privilege > Shared Folders > Advanced Permissions > Enable Advanced Folder Permissions* permet de fixer lecture, lecture-écriture ou refus par utilisateur pour chaque dossier et sous-dossier ([QTS 5.2](https://docs.qnap.com/operating-system/qts/5.2.x/en-us/configuring-advanced-folder-permissions-16E9201B.html), [FAQ QNAP](https://www.qnap.com/en/how-to/faq/article/should-i-enable-advanced-folder-permissions-or-windows-acl-support)). « Windows ACL » est une alternative, configurée depuis l'Explorateur Windows : non retenue.
+**Verified in the QNAP documentation**: *Control Panel > Privilege > Shared Folders > Advanced Permissions > Enable Advanced Folder Permissions* allows setting read, read-write or deny per user for each folder and subfolder ([QTS 5.2](https://docs.qnap.com/operating-system/qts/5.2.x/en-us/configuring-advanced-folder-permissions-16E9201B.html), [QNAP FAQ](https://www.qnap.com/en/how-to/faq/article/should-i-enable-advanced-folder-permissions-or-windows-acl-support)). "Windows ACL" is an alternative, configured from Windows Explorer: not chosen.
 
-**À ne pas faire**
-- Ne jamais tester l'écriture de l'entrée autrement que par une tentative qui **doit échouer** ; si elle réussit, supprimer la sonde et refuser.
-- Ne pas stocker de mot de passe dans l'app ; ne pas monter de partage depuis l'app.
-- Ne pas exposer SMB (port 445) sur internet, ni le rediriger sur la box.
-- Ne pas changer le comportement local par défaut (dédoublonnage complet de la destination conservé).
+**Do not**
+- Never test writing to the input other than by an attempt that **must fail**; if it succeeds, delete the probe and refuse.
+- Do not store a password in the app; do not mount a share from the app.
+- Do not expose SMB (port 445) to the internet, nor forward it on the router.
+- Do not change the default local behaviour (full deduplication of the destination kept).
 
-**Non vérifié (à lever à la phase 6)** : effet de l'Advanced Folder Permissions sur les accès existants ; mode des fichiers créés (0600) vu par QuMagie et les autres comptes ; options de sécurité SMB disponibles dans la version de QTS installée (version SMB minimale, signature) ; accès du compte aux applications QTS (restriction « Application Privilege ») ; durée réelle du parcours de la bibliothèque sur SMB ; normalisation Unicode des noms de lieux accentués ; organisation de la bibliothèque existante (voir questions).
+**Not verified (to be resolved in phase 6)**: effect of Advanced Folder Permissions on existing access; mode of created files (0600) as seen by QuMagie and the other accounts; SMB security options available in the installed QTS version (minimum SMB version, signing); the account's access to QTS applications ("Application Privilege" restriction); actual duration of walking the library over SMB; Unicode normalisation of accented place names; organisation of the existing library (see questions).
 
-## Phase 0b — Préparer le NAS `[utilisateur, aucune ligne de code]`
+## Phase 0b — Prepare the NAS `[user, no lines of code]`
 
-**Sortie** : un compte `photosort` qui ne peut que lire l'entrée et écrire la bibliothèque, et un partage monté sur le Mac.
-**Vérification** (manuelle, 5 contrôles) : avec ce compte monté sur le Mac, (1) créer un fichier dans l'entrée échoue, (2) supprimer ou renommer une photo de l'entrée échoue, (3) créer puis supprimer un fichier dans la bibliothèque réussit, (4) les autres dossiers du partage et les autres partages sont refusés, (5) les comptes existants (la sauvegarde de l'iPhone, QuMagie) fonctionnent comme avant.
+**Output**: a `photosort` account that can only read the input and write the library, and a share mounted on the Mac.
+**Verification** (manual, 5 checks): with this account mounted on the Mac, (1) creating a file in the input fails, (2) deleting or renaming a photo in the input fails, (3) creating then deleting a file in the library succeeds, (4) the other folders of the share and the other shares are denied, (5) the existing accounts (the iPhone backup, QuMagie) work as before.
 
-Procédure pas à pas : [`docs/nas-qnap.md`](../../nas-qnap.md). Résumé :
-- [ ] Sauvegarder la configuration QTS (*Backup / Restore*) avant tout changement.
-- [ ] Créer l'utilisateur `photosort`, mot de passe long et unique, **hors** groupe `administrators`.
-- [ ] Activer *Advanced Folder Permissions* (réglage global).
-- [ ] Sur le partage : `photosort` en lecture-écriture sur la bibliothèque, **lecture seule** sur l'entrée, **refus** sur le reste ; refus sur tous les autres partages. Règle QNAP : un droit lecture seule ou un refus sur la racine s'impose aux sous-dossiers ; la racine reçoit donc lecture-écriture avec *Only admin can create files and folders* et *Only the owner can delete the contents* (propriétaire `admin`).
-- [ ] Limiter les applications accessibles au compte (SMB seulement ; pas de File Station, FTP, SSH).
-- [ ] Options SMB (à confirmer dans QTS) : version minimale SMB 3, signature activée.
-- [ ] Monter `smb://<nas>/<partage>` depuis le Finder avec ce compte, enregistrer le mot de passe dans le trousseau.
+Step-by-step procedure: [`docs/nas-qnap.md`](../../nas-qnap.md). Summary:
+- [ ] Back up the QTS configuration (*Backup / Restore*) before any change.
+- [ ] Create the `photosort` user, long and unique password, **outside** the `administrators` group.
+- [ ] Enable *Advanced Folder Permissions* (global setting).
+- [ ] On the share: `photosort` read-write on the library, **read-only** on the input, **deny** on the rest; deny on all other shares. QNAP rule: a read-only right or a deny on the root applies to the subfolders; the root therefore gets read-write with *Only admin can create files and folders* and *Only the owner can delete the contents* (owner `admin`).
+- [ ] Limit the applications accessible to the account (SMB only; no File Station, FTP, SSH).
+- [ ] SMB options (to be confirmed in QTS): minimum version SMB 3, signing enabled.
+- [ ] Mount `smb://<nas>/<share>` from the Finder with this account, save the password in the keychain.
 
-## Phase 0c — Préparer Tailscale `[utilisateur, aucune ligne de code]`
+## Phase 0c — Prepare Tailscale `[user, no lines of code]`
 
-**Sortie** : le Linux atteint le NAS par son nom MagicDNS, en connexion directe, et seul ce Linux peut joindre le port 445.
-**Vérification** (manuelle) :
-- [ ] `tailscale status` sur le Linux liste le NAS et l'iPhone ; le NAS apparaît comme connecté.
-- [ ] `tailscale ping <nas>` finit par répondre **« via … direct »** (pas « via DERP » en continu). Un relais est utilisable mais plus lent : noter lequel.
-- [ ] `tailscale ip -4 <nas>` renvoie une adresse `100.x`.
-- [ ] Depuis le Linux, `smbclient -L //<nas> -U photosort` (ou le montage de l'étape 7) réussit par le nom MagicDNS.
-- [ ] Depuis l'iPhone **sans** autorisation ACL, le NAS reste inaccessible sur 445 (une fois les ACL posées).
+**Output**: the Linux machine reaches the NAS by its MagicDNS name, over a direct connection, and only this Linux machine can reach port 445.
+**Verification** (manual):
+- [ ] `tailscale status` on the Linux machine lists the NAS and the iPhone; the NAS appears as connected.
+- [ ] `tailscale ping <nas>` eventually replies **"via … direct"** (not "via DERP" continuously). A relay is usable but slower: note which one.
+- [ ] `tailscale ip -4 <nas>` returns a `100.x` address.
+- [ ] From the Linux machine, `smbclient -L //<nas> -U photosort` (or the mount from step 7) succeeds through the MagicDNS name.
+- [ ] From the iPhone **without** ACL authorisation, the NAS remains inaccessible on 445 (once the ACLs are set).
 
-Tâches :
-- [ ] **Origine du paquet sur le NAS** : installer Tailscale depuis le catalogue officiel QNAP ou le paquet publié par Tailscale, pas depuis une source tierce ; noter la version. **(à confirmer dans votre App Center)**
-- [ ] Console d'administration : **désactiver l'expiration de clé** du NAS (N12) et lui attribuer une étiquette (par exemple `tag:nas`).
-- [ ] ACL (N11) : règle explicite `Linux de travail -> tag:nas:445` ; refus implicite pour le reste. Ne pas annoncer de routes de sous-réseau ni de nœud de sortie depuis le NAS.
-- [ ] Vérifier que ni Funnel ni Serve ne sont actifs sur le NAS.
-- [ ] Linux : monter le partage. Deux options, à comparer à la recette : `mount.cifs` (droits administrateur nécessaires, ou entrée `fstab` avec `user`) ou GVFS/Dolphin (`smb://<nas>/<PARTAGE>`, sans droits administrateur, chemin sous `/run/user/<uid>/gvfs/`). GVFS passe par FUSE : tester que la création `O_EXCL` et le renommage de la copie atomique (phase 3) y fonctionnent.
-- [ ] L'ouverture d'un accès `smb://` par le nom MagicDNS peut exiger de n'autoriser que l'adresse du tailnet dans *Accès à l'hôte Réseaux Microsoft* : **à confirmer** (l'adresse source vue par QTS dépend du mode réseau de Tailscale sur le NAS).
+Tasks:
+- [ ] **Origin of the package on the NAS**: install Tailscale from the official QNAP catalogue or the package published by Tailscale, not from a third-party source; note the version. **(to be confirmed in your App Center)**
+- [ ] Admin console: **disable key expiry** for the NAS (N12) and give it a tag (for example `tag:nas`).
+- [ ] ACL (N11): explicit rule `work Linux -> tag:nas:445`; implicit deny for the rest. Do not advertise subnet routes or an exit node from the NAS.
+- [ ] Check that neither Funnel nor Serve is active on the NAS.
+- [ ] Linux: mount the share. Two options, to be compared in the acceptance test: `mount.cifs` (administrator rights needed, or an `fstab` entry with `user`) or GVFS/Dolphin (`smb://<nas>/<SHARE>`, no administrator rights, path under `/run/user/<uid>/gvfs/`). GVFS goes through FUSE: test that `O_EXCL` creation and the rename of the atomic copy (phase 3) work there.
+- [ ] Opening `smb://` access by the MagicDNS name may require allowing only the tailnet address in *Microsoft Networking host access*: **to be confirmed** (the source address seen by QTS depends on Tailscale's network mode on the NAS).
 
-**Non vérifié** : si le paquet QNAP de Tailscale utilise un périphérique TUN ou le mode « userspace networking », et ce que QTS voit alors comme adresse source ; le débit réel d'un montage SMB à travers le tunnel.
+**Not verified**: whether the QNAP Tailscale package uses a TUN device or "userspace networking" mode, and what QTS then sees as source address; the real throughput of an SMB mount through the tunnel.
 
-## Phase 1 — Moteur : ignorer les noms système
+## Phase 1 — Engine: ignore system names
 
-**Sortie** : un point unique décide quels dossiers et fichiers sont ignorés, utilisé par les quatre parcours.
-**Vérification** : `go test ./sorter/... ./internal/scrapbook/...` ; test avec un arbre contenant `.@__thumb/x.jpg`, `@Recycle/y.jpg`, `._IMG_1.HEIC`, `.DS_Store`, `vrai/IMG_2.HEIC` : seul `vrai/IMG_2.HEIC` est vu par `Plan`, `deduper`, `PhotosToTag` et `scanMonth`.
+**Output**: a single point decides which folders and files are ignored, used by the four walks.
+**Verification**: `go test ./sorter/... ./internal/scrapbook/...`; test with a tree containing `.@__thumb/x.jpg`, `@Recycle/y.jpg`, `._IMG_1.HEIC`, `.DS_Store`, `vrai/IMG_2.HEIC`: only `vrai/IMG_2.HEIC` is seen by `Plan`, `deduper`, `PhotosToTag` and `scanMonth`.
 
-Tâches :
-- [ ] Ajouter `SkipDir(name)` et `SkipFile(name)` dans `sorter` (nom caché `.`, préfixe `@`, `._*`, `.DS_Store`, `Thumbs.db`).
-- [ ] Les utiliser dans `Plan` (`sorter.go:122`), `deduper.loadDestination` (`dedupe.go:44`), `PhotosToTag` (`tags.go:39`) et `scanMonth` (`scan.go:101`, qui garde sa règle actuelle plus la nouvelle).
+Tasks:
+- [ ] Add `SkipDir(name)` and `SkipFile(name)` in `sorter` (hidden name `.`, prefix `@`, `._*`, `.DS_Store`, `Thumbs.db`).
+- [ ] Use them in `Plan` (`sorter.go:122`), `deduper.loadDestination` (`dedupe.go:44`), `PhotosToTag` (`tags.go:39`) and `scanMonth` (`scan.go:101`, which keeps its current rule plus the new one).
 - [ ] Tests (`sorter_test.go`, `tags_test.go`, `scan_test.go`).
 
-## Phase 2 — Moteur : dédoublonnage à portée `[après 1 : mêmes fichiers]`
+## Phase 2 — Engine: scoped deduplication `[after 1: same files]`
 
-**Sortie** : option `Engine.ScopedDestination` ; par défaut dans le moteur, comportement inchangé ; **activée par défaut par le mode NAS d'Electron** (N14).
-**Vérification** : `go test ./sorter/...` ; test avec 24 mois de fichiers factices et 2 mois dans le plan : le parcours ne visite que ces 2 mois (compteur de fichiers visités, pas de chronomètre), et un doublon octet pour octet d'un de ces mois est toujours détecté. Sans l'option, tous les mois sont visités.
+**Output**: `Engine.ScopedDestination` option; default in the engine, behaviour unchanged; **enabled by default by Electron's NAS mode** (N14).
+**Verification**: `go test ./sorter/...`; test with 24 months of dummy files and 2 months in the plan: the walk only visits those 2 months (counter of visited files, no stopwatch), and a byte-for-byte duplicate in one of those months is still detected. Without the option, all months are visited.
 
-Tâches :
-- [ ] `newDeduper(destination, scope)` : si `scope` est non vide, `loadDestination` ne parcourt que `<destination>/<AAAA>/<AAAA-MM>` pour les mois présents dans le plan ; la liste vient de l'étape 1 de `Plan` (le dossier de chaque photo est déjà calculé avant les empreintes).
-- [ ] Documenter l'hypothèse : un fichier identique a la même date EXIF, donc le même mois, **si la bibliothèque suit l'arborescence de Photosort**. Sinon, laisser l'option désactivée.
-- [ ] Exposer `scopedDestination` dans la requête `plan` du sidecar (booléen optionnel, défaut `false`).
+Tasks:
+- [ ] `newDeduper(destination, scope)`: if `scope` is non-empty, `loadDestination` only walks `<destination>/<YYYY>/<YYYY-MM>` for the months present in the plan; the list comes from step 1 of `Plan` (each photo's folder is already computed before the fingerprints).
+- [ ] Document the assumption: an identical file has the same EXIF date, therefore the same month, **if the library follows Photosort's tree**. Otherwise, leave the option disabled.
+- [ ] Expose `scopedDestination` in the sidecar's `plan` request (optional boolean, default `false`).
 
-## Phase 3 — Moteur : copie atomique et reprise sur coupure `[après 2]`
+## Phase 3 — Engine: atomic copy and resumption after interruption `[after 2]`
 
-**Sortie** : `copyEntry` écrit dans `<cible>.part` puis renomme ; une coupure ne laisse jamais de fichier tronqué au nom final.
-**Vérification** : `go test ./sorter/...` ; test : source tronquée en cours de copie (lecteur qui échoue) → la cible finale n'existe pas, le `.part` est supprimé ; un `.part` orphelin d'une exécution précédente est écrasé ; une cible existante n'est jamais remplacée ; une copie réussie garde le contenu exact.
+**Output**: `copyEntry` writes to `<target>.part` then renames; an interruption never leaves a truncated file under the final name.
+**Verification**: `go test ./sorter/...`; test: source truncated mid-copy (failing reader) → the final target does not exist, the `.part` is deleted; an orphan `.part` from a previous run is overwritten; an existing target is never replaced; a successful copy keeps the exact content.
 
-Tâches :
-- [ ] `copyEntry` (`sorter.go:415`) : ouverture de `<cible>.part` en `O_CREATE|O_TRUNC|O_WRONLY`, `Sync`, vérification que la cible n'existe pas (`root.Lstat`), `root.Rename`.
-- [ ] Nouvelle tentative (3 fois, attente croissante) sur les erreurs réseau transitoires de la copie (`EIO`, `ETIMEDOUT`, `ENOTCONN`, `ESTALE`, `EHOSTDOWN`) ; échec clair ensuite, la reprise consiste à relancer le plan (doublons déjà copiés ignorés).
-- [ ] **Conditionnel** : si la recette (phase 6) montre que le mode 0600 rend les copies illisibles pour QuMagie ou d'autres comptes, ajouter `CopyOptions{FileMode}` (0644 sur le NAS, 0600 en local).
+Tasks:
+- [ ] `copyEntry` (`sorter.go:415`): open `<target>.part` with `O_CREATE|O_TRUNC|O_WRONLY`, `Sync`, check that the target does not exist (`root.Lstat`), `root.Rename`.
+- [ ] Retry (3 times, increasing wait) on transient network errors during the copy (`EIO`, `ETIMEDOUT`, `ENOTCONN`, `ESTALE`, `EHOSTDOWN`); clear failure afterwards, resumption consists in re-running the plan (already-copied duplicates ignored).
+- [ ] **Conditional**: if the acceptance test (phase 6) shows that mode 0600 makes the copies unreadable for QuMagie or other accounts, add `CopyOptions{FileMode}` (0644 on the NAS, 0600 locally).
 
-## Phase 4 — Contrôle préalable `nasCheck` `[parallel avec 1 à 3 : autres fichiers]`
+## Phase 4 — Prior check `nasCheck` `[parallel with 1 to 3: other files]`
 
-**Sortie** : opération `nasCheck` du sidecar (même enveloppe de requête que `plan`).
-**Vérification** : `go test ./cmd/photosort-sidecar/...` ; tests sur des dossiers temporaires : entrée en `0555` → `inputReadOnly: true` ; entrée inscriptible → `inputReadOnly: false` **et sonde supprimée** ; bibliothèque inscriptible → `libraryWritable: true` ; chemin absent ou non dossier → erreur claire.
+**Output**: `nasCheck` sidecar operation (same request envelope as `plan`).
+**Verification**: `go test ./cmd/photosort-sidecar/...`; tests on temporary folders: input at `0555` → `inputReadOnly: true`; writable input → `inputReadOnly: false` **and probe deleted**; writable library → `libraryWritable: true`; missing path or not a folder → clear error.
 
-Tâches :
-- [ ] Paquet `internal/nascheck` : `Check(input, library string) (Result, error)` avec `{mounted, inputReadOnly, libraryWritable, problems[]}`. La sonde d'entrée est une création de fichier qui **doit** échouer (`EACCES`, `EPERM`, `EROFS`) ; toute autre erreur est un échec fermé ; si elle réussit, suppression immédiate et `inputReadOnly: false`. La sonde de bibliothèque est un fichier caché `.photosort-probe-<aléatoire>` créé puis supprimé.
-- [ ] Opération `nasCheck` dans `cmd/photosort-sidecar/main.go` et test dans `main_test.go`.
-- [ ] Note : sous Windows, `EACCES` se traduit par `ERROR_ACCESS_DENIED` ; le paquet normalise via `errors.Is(err, fs.ErrPermission)`.
+Tasks:
+- [ ] `internal/nascheck` package: `Check(input, library string) (Result, error)` with `{mounted, inputReadOnly, libraryWritable, problems[]}`. The input probe is a file creation that **must** fail (`EACCES`, `EPERM`, `EROFS`); any other error is a closed failure; if it succeeds, immediate deletion and `inputReadOnly: false`. The library probe is a hidden file `.photosort-probe-<random>` created then deleted.
+- [ ] `nasCheck` operation in `cmd/photosort-sidecar/main.go` and test in `main_test.go`.
+- [ ] Note: on Windows, `EACCES` translates to `ERROR_ACCESS_DENIED`; the package normalises via `errors.Is(err, fs.ErrPermission)`.
 
-## Phase 5 — Electron : mode NAS `[après 2 et 4 ; checkpoint : revue visuelle]`
+## Phase 5 — Electron: NAS mode `[after 2 and 4; checkpoint: visual review]`
 
-**Sortie** : dans les préférences, un bloc « NAS » (dossier d'entrée, bibliothèque, case « bibliothèque rangée par Photosort » = dédoublonnage à portée, case « vérifier la lecture seule de l'entrée » cochée par défaut) ; avant chaque classement ou tag en mode NAS, un contrôle `nasCheck` avec message clair en cas d'échec ; entrée et bibliothèque mémorisées comme dossiers par défaut.
-**Vérification** : `npm run typecheck` ; capture d'écran de l'écran de préférences et du message d'échec ; test manuel : entrée inscriptible → classement refusé avec l'explication ; NAS démonté → message « dossier introuvable, montez le partage ».
+**Output**: in the preferences, a "NAS" block (input folder, library, "library organised by Photosort" checkbox = scoped deduplication, "check the input is read-only" checkbox ticked by default); before each sort or tag in NAS mode, a `nasCheck` check with a clear message on failure; input and library remembered as default folders.
+**Verification**: `npm run typecheck`; screenshot of the preferences screen and of the failure message; manual test: writable input → sort refused with the explanation; NAS unmounted → message "folder not found, mount the share".
 
-Tâches :
-- [ ] Préférences et types (`photosort-electron/src/renderer/…`), traductions fr/en/da.
-- [ ] Appel de `nasCheck` avant `plan`, et propagation de `scopedDestination`.
-- [ ] Messages d'erreur : partage non monté, entrée inscriptible, bibliothèque en lecture seule.
-- [ ] Revue visuelle (thèmes clair/sombre).
+Tasks:
+- [ ] Preferences and types (`photosort-electron/src/renderer/…`), fr/en/da translations.
+- [ ] `nasCheck` call before `plan`, and propagation of `scopedDestination`.
+- [ ] Error messages: share not mounted, writable input, read-only library.
+- [ ] Visual review (light/dark themes).
 
-## Phase 6 — Recette sur le NAS `[checkpoint : intervention de l'utilisateur]`
+## Phase 6 — Acceptance test on the NAS `[checkpoint: user action]`
 
-**Sortie** : un compte rendu chiffré.
-**Vérification** : exécuter sur les vraies photos et noter :
-- [ ] les 5 contrôles de la phase 0b ;
-- [ ] durée de `plan` avec et sans dédoublonnage à portée, sur la vraie bibliothèque ;
-- [ ] durée de la copie de quelques centaines de photos ;
-- [ ] une photo en double octet pour octet est bien ignorée ;
-- [ ] un lieu accentué (ex. `Orléans`) ne crée pas deux dossiers ;
-- [ ] QuMagie voit les copies après réindexation, les `.xmp` ne le perturbent pas ;
-- [ ] mode des fichiers créés (0600) : lisible par les autres comptes ? sinon, tâche conditionnelle de la phase 3 ;
-- [ ] tags de métadonnées puis IA sur un mois, lecture et écriture des `.xmp` par SMB ;
-- [ ] coupure volontaire du Wi-Fi pendant une copie : aucun fichier tronqué, reprise propre.
+**Output**: a quantified report.
+**Verification**: run on the real photos and note:
+- [ ] the 5 checks of phase 0b;
+- [ ] duration of `plan` with and without scoped deduplication, on the real library;
+- [ ] duration of copying a few hundred photos;
+- [ ] a byte-for-byte duplicate photo is indeed ignored;
+- [ ] an accented place (e.g. `Orléans`) does not create two folders;
+- [ ] QuMagie sees the copies after reindexing, the `.xmp` files do not disturb it;
+- [ ] mode of created files (0600): readable by the other accounts? if not, conditional task of phase 3;
+- [ ] metadata then AI tags on one month, reading and writing of `.xmp` over SMB;
+- [ ] deliberate Wi-Fi cut during a copy: no truncated file, clean resumption.
 
 ## Phase 7 — Documentation `[parallel]`
 
-- [ ] `docs/nas-qnap.md` (rédigé, sans captures) : l'ajuster après la recette (menus réellement observés, captures éventuelles) et le lier depuis le README.
-- [ ] `README.md` : section « NAS QNAP en réseau local », renvoi vers ce document ; notes Windows (lecteur réseau) et Linux (`mount.cifs`).
-- [ ] Spec : statut mis à jour.
+- [ ] `docs/nas-qnap.md` (written, without screenshots): adjust it after the acceptance test (menus actually observed, possible screenshots) and link it from the README.
+- [ ] `README.md`: "QNAP NAS on the local network" section, pointing to this document; Windows (network drive) and Linux (`mount.cifs`) notes.
+- [ ] Spec: status updated.
 
-## Risques
+## Risks
 
-- **Advanced Folder Permissions est global** → sauvegarde de la configuration avant, contrôle 5 de la phase 0b ; retour arrière possible en le désactivant (la doc QNAP signale des effets sur les ACL existantes).
-- **Seulement deux verrous sur l'entrée** (droits QTS, contrôle préalable) au lieu de trois avec Docker → contrôle exécuté à chaque lancement, échec fermé, compte sans autre droit, jamais d'ouverture en écriture hors de la destination dans le moteur.
-- **Performances SMB non mesurées** (et **latence accrue par le tunnel**, surtout via un relais DERP) → dédoublonnage à portée, copie parallèle réglable, progression déjà affichée ; `tailscale ping` direct/relais et chiffres relevés à la phase 6. Si SMB reste trop lent même en connexion directe, la voie de repli est le serveur sur le NAS (plan différé), dont Tailscale simplifierait la sécurité.
-- **Tailscale sur le NAS est du code tiers installé avec des privilèges élevés** → paquet officiel seulement, mises à jour suivies, ACL minimales (N11), ni Serve ni Funnel ni routes ; un appareil du tailnet compromis ne doit atteindre que le port 445, derrière le compte `photosort`.
-- **Clé du NAS expirée** → expiration désactivée (N12) ; sinon l'accès tombe sans message clair.
-- **Le Mac professionnel hors du tailnet** → il reste sur le LAN ; le diagnostic SMB local (`~/photosort-smb-diag.sh`) reste à traiter séparément, sans bloquer le Linux.
-- **Photos de l'iPhone** : l'iPhone, déjà dans le tailnet, pourrait envoyer ses photos vers l'entrée à distance ; hors de ce plan, et à ne pas ouvrir au-delà du port 445 limité par l'ACL.
-- **Mac en veille ou Wi-Fi coupé en cours de copie** → copie atomique, relance idempotente.
-- **Le compte `photosort` fuite** → il ne peut lire que l'entrée et écrire la bibliothèque ; pas d'application QTS, pas de SSH.
-- **Bibliothèque organisée autrement que par Photosort** → l'option de portée reste désactivée ; parcours complet avec progression.
+- **Advanced Folder Permissions is global** → configuration backup beforehand, check 5 of phase 0b; rollback possible by disabling it (the QNAP doc notes effects on existing ACLs).
+- **Only two locks on the input** (QTS rights, prior check) instead of three with Docker → check run at every launch, fails closed, account with no other rights, the engine never opens for writing outside the destination.
+- **SMB performance not measured** (and **latency increased by the tunnel**, especially through a DERP relay) → scoped deduplication, adjustable parallel copy, progress already displayed; `tailscale ping` direct/relay and figures recorded in phase 6. If SMB remains too slow even on a direct connection, the fallback route is the server on the NAS (deferred plan), whose security Tailscale would simplify.
+- **Tailscale on the NAS is third-party code installed with elevated privileges** → official package only, updates followed, minimal ACLs (N11), neither Serve nor Funnel nor routes; a compromised tailnet device must only reach port 445, behind the `photosort` account.
+- **NAS key expired** → expiry disabled (N12); otherwise access drops without a clear message.
+- **Work Mac outside the tailnet** → it stays on the LAN; the local SMB diagnosis (`~/photosort-smb-diag.sh`) remains to be handled separately, without blocking the Linux machine.
+- **iPhone photos**: the iPhone, already in the tailnet, could send its photos to the input remotely; outside this plan, and not to be opened beyond port 445 limited by the ACL.
+- **Mac asleep or Wi-Fi cut during a copy** → atomic copy, idempotent re-run.
+- **The `photosort` account leaks** → it can only read the input and write the library; no QTS application, no SSH.
+- **Library organised differently from Photosort** → the scope option stays disabled; full walk with progress.
 
-## Hors périmètre
+## Out of scope
 
-- Serveur Docker sur le NAS et classification automatique sans poste client : plan ultérieur (voir N16).
-- NetBird, myQNAPcloud Link et QVPN : écartés, Tailscale est installé.
-- Détection de Tailscale par l'app : l'app ne monte rien et ne parle pas à Tailscale ; elle affiche seulement un message générique « NAS injoignable : Tailscale est-il connecté ? ».
-- Contrôle d'espace libre avant copie (quelques centaines de photos).
-- Déplacement ou suppression des originaux, navigateur de dossiers distants, montage automatique depuis l'app.
+- Docker server on the NAS and automatic classification without a client machine: later plan (see N16).
+- NetBird, myQNAPcloud Link and QVPN: ruled out, Tailscale is installed.
+- Tailscale detection by the app: the app mounts nothing and does not talk to Tailscale; it only shows a generic message "NAS unreachable: is Tailscale connected?".
+- Free-space check before copying (a few hundred photos).
+- Moving or deleting originals, remote folder browser, automatic mounting from the app.
 
-## Questions ouvertes
+## Open questions
 
-1. Valides-tu la voie **SMB à travers Tailscale** (Linux en premier, Mac en LAN), le serveur Docker restant différé ?
-2. Acceptes-tu d'activer **Advanced Folder Permissions** (réglage global du NAS) ? À défaut, l'entrée ne serait protégée que par l'app (moins strict).
-3. La bibliothèque existante suit-elle déjà l'arborescence `AAAA/AAAA-MM` de Photosort ? (conditionne le dédoublonnage à portée)
-4. QuMagie indexe-t-il l'entrée, la bibliothèque, ou les deux ?
-5. Le NAS est-il en mode TUN ou « userspace networking » avec le paquet Tailscale installé, et `tailscale ping` est-il direct ?
-6. Veux-tu que l'iPhone puisse déposer ses photos dans l'entrée à distance (plan séparé) ?
+1. Do you validate the **SMB through Tailscale** route (Linux first, Mac on the LAN), with the Docker server remaining deferred?
+2. Do you agree to enable **Advanced Folder Permissions** (global NAS setting)? Otherwise, the input would be protected only by the app (less strict).
+3. Does the existing library already follow Photosort's `YYYY/YYYY-MM` tree? (determines scoped deduplication)
+4. Does QuMagie index the input, the library, or both?
+5. Is the NAS in TUN mode or "userspace networking" with the Tailscale package installed, and is `tailscale ping` direct?
+6. Do you want the iPhone to be able to drop its photos into the input remotely (separate plan)?

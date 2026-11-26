@@ -1,216 +1,104 @@
 # Photosort
 
-Application locale de classement de photos en Go, avec interface Fyne et CLI.
-Compatible macOS et Linux, avec Go 1.27 ou plus recent, sans serveur.
+**Sort your photos by date and place — on your disk or straight onto your NAS. No cloud, no account, and your originals are never touched.**
 
-## Interface Graphique
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml) <!-- TODO: replace OWNER/REPO once the repository URL is known -->
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0--rc.1-orange.svg)](#status)
 
-Lancer depuis le terminal, sans debugger ni droits administrateur :
+![Photosort in action](docs/assets/photosort-demo.gif)
 
-```sh
-go run ./cmd/photosort-gui
-```
+<sub>Demo screenshots use public-domain (CC0) photos — see the [credits](website/src/assets/screenshots/CREDITS.md). They are placeholders and will be replaced by real captures.</sub>
 
-Ou compiler un executable puis le lancer :
+## What it does
 
-```sh
-go build -o bin/photosort-gui ./cmd/photosort-gui
-./bin/photosort-gui
-```
-
-- Deposer un ou plusieurs dossiers dans la fenetre, ou utiliser `Ajouter`.
-- L'arborescence de gauche contient uniquement les photos classables et leurs
-  dossiers parents. `Vider` retire les sources sans supprimer de fichiers.
-- Modifier le chemin au-dessus du panneau droit, ou utiliser `Choisir`.
-  Le chemin peut designer un dossier qui n'existe pas encore.
-  La derniere destination analysee avec succes est memorisee localement.
-- `Trier` lance les copies. Le panneau droit affiche uniquement les copies
-  reussies de cette session, pas le contenu preexistant du dossier destination.
-- `Annuler` arrete l'analyse ou la copie ; les copies deja terminees restent
-  presentes. Les originaux sont toujours conserves.
-- Les fichiers ignores et les echecs de miniatures figurent dans `Signalements`.
-
-Les miniatures se chargent en arriere-plan ; les dossiers ont une icone bleue.
-JPEG, PNG, TIFF, HEIC/HEIF et AVIF disposent de decodeurs. Les formats RAW
-utilisent leur apercu JPEG embarque lorsqu'il existe. Une image endommagee,
-sans apercu decodable, ou de plus de 100 megapixels conserve une icone de
-fichier et genere un signalement, sans bloquer sa copie si ses EXIF sont valides.
-
-Fyne ajoute des dependances graphiques natives : les Command Line Tools Apple
-sur macOS ; un compilateur C, pkg-config et les bibliotheques de developpement
-OpenGL/X11 sur Linux (voir les [prerequis Fyne](https://docs.fyne.io/started/)).
-Le decodage HEIC/AVIF utilise une bibliotheque locale si disponible, sinon un
-decodeur WASM embarque, sans televersement ni outil externe obligatoire.
-Le depot externe de dossiers doit encore etre verifie manuellement sur Linux.
-
-## Tri distant vers un NAS (rsync)
-
-L'application Electron peut envoyer le tri directement vers un NAS (QNAP, etc.)
-via rsync, sans copie intermediaire. Ouvrir « Destination distante (NAS) » puis
-cocher l'envoi vers un NAS. Les champs :
-
-- **Protocole** : `daemon` (serveur rsync du NAS, port 873, mot de passe) ou `SSH`.
-- **Hote, port, utilisateur** : adresse du NAS et compte rsync.
-- **Dossier partage du NAS (module rsync)** : le *nom du partage* defini sur le
-  NAS (QNAP : Services reseau > Serveur Rsync). Ce n'est pas un chemin : c'est
-  le point d'entree, qui pointe vers un dossier reel du NAS (ex. `Photos`).
-  Laisse vide, le bouton « Parcourir… » liste les modules disponibles.
-- **Dossier ou ranger les photos, dans ce partage** (facultatif) : sous-dossier
-  de la bibliotheque, ex. `Bibliotheque`. Les photos arrivent dans
-  `module/dossier/2026/2026-10/...`. Vide = racine du module. En SSH, c'est le
-  chemin complet sur le NAS.
-- **Parcourir…** : navigue dans les dossiers du NAS niveau par niveau ;
-  « Choisir ce dossier » remplit le champ.
-- **Mot de passe** : saisi a chaque fois, ou memorise dans le trousseau du systeme.
-- **Verifier l'integrite (checksum)** et **Ne pas renvoyer les photos deja
-  presentes** (par chemin, nom+taille+date ou contenu SHA-256).
-
-Conseil QNAP : creer un module qui ne pointe que vers le dossier de la
-bibliotheque photo, pas vers un volume entier. Photosort n'ecrit que dans le
-dossier choisi et n'efface jamais rien (ni `--delete`, ni `--remove-source-files`).
-`Tester la connexion` puis `Simuler l'envoi` permettent de verifier avant l'envoi.
-
-## Applications Distribuables
-
-Les taches VS Code `Photosort: build macOS (.app)` et
-`Photosort: build Linux (AppImage x86_64)` generent les applications dans `dist/`.
-Le packaging est isole dans [packaging](packaging/README.md).
-
-```sh
-bash packaging/build.sh macos
-bash packaging/build.sh linux
-```
-
-Le build macOS s'execute sur un Mac. Le build Linux utilise Docker avec un moteur
-demarre, y compris depuis macOS ARM64. Voir les prerequis et limites de
-distribution dans la documentation du packaging.
-
-## Utilisation
-
-Depuis la racine du projet, simuler un classement sans rien ecrire :
-
-```sh
-go run ./cmd/photosort --source "/chemin/photos" --destination "/chemin/classement"
-```
-
-Copier les photos apres verification de la simulation :
-
-```sh
-go run ./cmd/photosort --source "/chemin/photos" --destination "/chemin/classement" --apply
-```
-
-Plusieurs sources et une sortie JSON :
-
-```sh
-go run ./cmd/photosort --source "/chemin/photos" --source "/chemin/autres-photos" --destination "/chemin/classement" --json
-```
-
-`--json` peut aussi etre combine avec `--apply`. `--help` affiche les options.
-Le code de sortie est 1 en cas d'erreur bloquante, 0 sinon. Les fichiers ignores
-sont signales dans le bilan, sans rendre toute l'operation bloquante.
-Les arguments de Go doivent preceder ceux de l'application.
-
-Compiler un executable :
-
-```sh
-go build -o bin/photosort ./cmd/photosort
-./bin/photosort --help
-```
-
-## Regles de classement
-
-Exemple de destination :
+Drop in your photo folders (or plug in an iPhone) and Photosort copies every picture into a clean library:
 
 ```text
-2026/2026-10/2026-10-20 - iPhone - 1.png
-2026/2026-10/2026-10-20 - iPhone - 2.png
+2026/2026-10/Rouen/2026-10-20 - iPhone - 1.heic
 ```
 
-- Parcours recursif, avec ordre de traitement stable par chemin source.
-- Date issue exclusivement de la date EXIF de prise de vue (`OriginalDate`).
-  Aucune substitution par la date de modification du fichier.
-- Modele d'appareil issu des EXIF, sinon `Unknown camera`.
-- Caracteres dangereux du modele remplaces ; modele limite a 40 caracteres.
-- Numerotation a partir de 1 par jour et modele, en evitant les noms deja
-  presents dans la destination et ceux reserves dans le plan courant.
-- Option `--by-location` (CLI) : si la photo contient un GPS, un sous-dossier de
-  ville est ajoute dans le mois (`2026/2026-06/Rouen/...`). Sans GPS ou sans ville
-  a moins de 50 km, la photo reste a la racine du mois. La ville est trouvee hors
-  ligne dans une base GeoNames embarquee (`internal/geo`, noms locaux, licence
-  CC BY 4.0, https://www.geonames.org) ; aucune coordonnee ne quitte la machine.
-  Les quartiers et banlieues proches sont regroupes sous la ville la plus peuplee
-  (rayon de 6 km autour de la localite la plus proche). Desactive par defaut.
-  Option `--landmarks` : si la photo est a moins de ~120 m d'un monument ou
-  ~250 m d'un musee, chateau, palais, stade, salle ou theatre (Europe, Canada,
-  Etats-Unis, base GeoNames `internal/geo/places.tsv.gz`), le dossier porte le nom
-  du lieu (`.../Musee du Louvre/...`) ; sinon c'est la ville (best effort).
-  Regenerer les lieux : `go run ./internal/geo/gen poi allCountries.txt internal/geo/places.tsv.gz`.
-  Regenerer la base : `go run ./internal/geo/gen cities1000.txt internal/geo/cities.tsv.gz`.
-- Extension conservee, normalisee en minuscules ; aucune conversion d'image.
-- Sources qui se recouvrent dedupliquees par chemin canonique. Les doublons
-  de contenu dans des fichiers distincts ne sont pas detectes.
-- Liens symboliques rencontres pendant le parcours ignores. Un dossier source
-  explicitement fourni via un lien est resolu avant le parcours.
-- Source et destination doivent etre disjointes, y compris via un lien symbolique.
-- Images sans date, illisibles ou avec EXIF invalides ignorees avec une raison.
-  Les fichiers d'extensions non reconnues ne sont pas examines.
-- Copie uniquement : les originaux ne sont ni renommes, ni deplaces, ni effaces.
-  Le contenu binaire et les EXIF sont conserves, mais pas les dates et permissions
-  du systeme de fichiers. Les copies sont creees avec des permissions privees.
-- Aucun fichier existant n'est ecrase, meme s'il apparait apres la planification.
-  La copie s'arrete sur une erreur ; les copies precedentes restent presentes.
-  Un fichier partiellement copie est supprime en cas d'erreur ou d'annulation
-  geree. Un arret brutal du processus peut laisser un fichier incomplet.
-- Une nouvelle execution recopie les photos avec de nouveaux numeros :
-  il ne s'agit pas encore d'une synchronisation ou d'une deduplication.
+- **Sorts by date and place** — year / month folders from the EXIF capture date, plus an optional city or landmark folder resolved **offline** from GPS coordinates.
+- **Tidies up** — skips exact duplicates, groups near-duplicates and blurry shots, sets screenshots aside, and falls back to the filename or file date when EXIF is missing.
+- **Imports from an iPhone** — reads the mounted DCIM folder: everything, only new photos, or a date range; pauses and resumes if the cable is unplugged.
+- **Sorts straight to a NAS** — sends the result with rsync (daemon or SSH), for example to a QNAP, and never deletes anything there.
+- **Travel and scrapbook** — printable weekly photo sheets, a "photos of the year" map and trip route maps, as PDFs.
+- **Optional AI tags** — local scene and face detection (ONNX) written to `.xmp` files next to the copies.
+- **Private by design** — everything runs locally. Originals are only read, files are never overwritten, and the only network uses are opt-in map tiles and a one-time download of the AI models.
 
-Le decodeur [imagemeta](https://github.com/evanoberholster/imagemeta) est une
-dependance Go ; la CLI ne requiert ni ExifTool, ni moteur graphique, ni compilateur C.
-Extensions examinees : JPEG, PNG, TIFF, HEIC/HEIF, AVIF, DNG, CR2/CR3, NEF,
-ARW, RW2 et CRW. Leur exploitation depend de la presence d'EXIF pris en charge
-par le decodeur. Les PNG sans bloc EXIF, les videos, Live Photos et les fichiers
-annexes XMP/AAE ne sont pas geres. Les formats reels de tes appareils restent
-a tester ; les tests integres utilisent un petit TIFF EXIF genere en memoire.
+The interface is available in **French, English and Danish**.
 
-## Architecture Et Tests
+## Download
 
-`sorter.Engine.Plan(ctx, sources, destination)` prepare un plan sans ecriture.
-`sorter.Copy(ctx, plan)` execute les copies et renvoie leur nombre, meme si une
-erreur survient ensuite. Les erreurs de lecture individuelles figurent dans
-`plan.Skipped`. Les photos sans date de prise de vue valide (ou sans EXIF)
-sont copiees dans le dossier `Photos_Undated`, renommees `Photo undated - N.ext` (N incremental). Les deux operations acceptent un contexte d'annulation.
-L'interface `internal/desktop` et la CLI reutilisent le meme package.
-`sorter.CopyWithProgress` ajoute une notification par copie reussie pour l'UI.
-`Engine.ReadMetadata` permet de substituer le lecteur EXIF dans les tests.
-Le plan est produit et consomme dans la meme execution ; la CLI ne recharge
-pas de plans JSON. Les sources ne doivent pas changer entre analyse et copie.
+Installers (macOS `.dmg`, Windows portable `.exe`, Linux `.AppImage` and `.deb`) are built by the release workflow and attached to the project's **GitHub Releases**; release candidates are marked as pre-releases. They are **not code-signed yet** — see [Status](#status).
 
-```sh
-go test ./...
-go test -race ./...
-go vet ./...
+## How it works
+
+1. **Plan** — Photosort scans your sources and builds a plan without writing anything: EXIF reading, plus optional hashing for duplicates, blur and similarity detection. You can review the proposed tree first.
+2. **Copy** — it copies the photos into the destination (locally, or through rsync to a NAS), never overwriting an existing file and removing partial copies on error or cancel.
+
+One Go engine powers the command-line tool, a small Fyne desktop app and the full Electron app.
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Engine, CLI, sidecar | **Go** — EXIF via [imagemeta](https://github.com/evanoberholster/imagemeta), HEIC/AVIF decoding through WASM, embedded GeoNames data |
+| Desktop app | **Electron + React + TypeScript** (Vite), sandboxed renderer, allow-listed IPC |
+| AI tags | **ONNX Runtime** with Places365 (scenes) and YuNet (faces) models |
+| Remote sort | **rsync** over daemon or SSH |
+| Website | **Astro** (static, French / English / Danish) |
+| CI / release | GitHub Actions, electron-builder |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph App["Electron app"]
+    UI["React UI<br/>(sandboxed renderer)"] -- "IPC via preload<br/>(allow-listed)" --> Main["Main process"]
+  end
+  Main -- "JSON lines<br/>stdin / stdout" --> Sidecar["Go sidecar"]
+  subgraph Core["Go core"]
+    Sidecar --> Sorter["sorter<br/>plan · copy · duplicates · blur"]
+    Sidecar --> Geo["geo<br/>offline GeoNames"]
+    Sidecar --> AI["tagger<br/>ONNX scenes + faces"]
+    Sidecar --> PDF["scrapbook · yearmap · travelmap<br/>PDF output"]
+    Sidecar --> Dev["devimport<br/>iPhone DCIM"]
+    Sidecar --> Remote["remote<br/>rsync"]
+  end
+  Dev -. "read-only" .-> Phone[("iPhone DCIM")]
+  Sorter --> Lib[("Local library")]
+  Remote -- "rsync (daemon or SSH)" --> NAS[("NAS")]
+  CLI["CLI<br/>cmd/photosort"] --> Sorter
 ```
 
-Dans VS Code, installer l'extension Go officielle si necessaire. Les profils
-`Photosort: preview` et `Photosort: copy` demandent les chemins au lancement.
-Placer un point d'arret dans `Engine.Plan`, `ReadMetadata` ou `Copy`, puis F5.
-Le profil `copy` ecrit reellement les fichiers.
+## Technical highlights
 
-## GitHub Entreprise
+- **Originals are sacred**: copy-only, no overwrite, and source and destination must be disjoint (even through symlinks).
+- **Streamed plans**: large plans travel in bounded chunks over the sidecar protocol, and CI runs performance guards on this path.
+- **Offline geocoding**: embedded GeoNames data resolves cities and landmarks without any coordinate leaving the machine.
+- **Fast image reading**: a forked JPEG decoder reads images at 1/8 scale to feed duplicate and AI detection quickly.
+- **Safe iPhone import**: files go through a private transit directory in ~200 MB batches; a per-device journal records a photo only after verified delivery.
+- **Hardened IPC**: every request field is allow-listed and size-capped in the main process; NAS passwords are never written to logs or settings.
+- **Supply chain checks**: GitHub Actions pinned by commit SHA, `govulncheck`, `actionlint` and an npm audit gate in CI.
 
-Le depot Git est deja initialise localement. Aucun commit ni remote n'est cree.
-Ne pas ajouter tes photos personnelles au depot ; utiliser des dossiers sources
-et de destination exterieurs au projet.
+More detail: [architecture map](docs/CONTEXT_MAP.md) · [sorting rules](docs/sorting-rules.md) · [CLI and Fyne app](docs/cli.md) · [remote sort to a NAS](docs/remote-sort.md) · [QNAP setup](docs/nas-qnap.md).
 
-Quand tu souhaiteras publier : creer un depot vide dans GitHub Entreprise,
-sans README, licence ou gitignore genere cote serveur, puis executer :
+## Status
 
-```sh
-git add .
-git commit -m "Initial photo sorting engine"
-git remote add origin <URL_DU_DEPOT_ENTREPRISE>
-git push -u origin main
-```
+Photosort is a **1.0 release candidate** (`1.0.0-rc.1`). Please keep in mind:
 
-Le nom du module Go est actuellement local (`sort-iphone-pictures`) et pourra
-etre adapte a l'adresse du depot quand elle sera connue.
+- It has been validated with a real iPhone and a QNAP NAS from a **Linux machine (AppImage)**. **Windows and macOS are less tested.**
+- **macOS builds are not signed or notarized**, so macOS asks for confirmation on first launch.
+- **ONNX Runtime is not available for Intel Macs**, so AI tags are disabled there.
+- Videos, Live Photos and `.AAE` / `.XMP` companion files are not handled.
+
+Found something unexpected? Please open an issue.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING](docs/CONTRIBUTING.md) and the [Code of Conduct](docs/CODE_OF_CONDUCT.md).
+
+## License
+
+[MIT](LICENSE). Offline place data comes from [GeoNames](https://www.geonames.org) (CC BY 4.0).

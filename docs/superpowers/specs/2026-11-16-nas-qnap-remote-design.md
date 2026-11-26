@@ -1,256 +1,256 @@
-# Classement et tags sur un NAS QNAP : cadrage
+# Sorting and tags on a QNAP NAS: scoping
 
-Date : 2026-11-16 · Branche : `feat/nas-qnap-remote` · Statut : **cadrage ; plan de la connexion locale révisé (Mac + SMB), en attente d'approbation** (aucun code écrit)
+Date: 2026-11-16 · Branch: `feat/nas-qnap-remote` · Status: **scoping; local-connection plan revised (Mac + SMB), awaiting approval** (no code written)
 
-Plan de la connexion locale : `docs/superpowers/plans/2026-11-17-nas-local-connection-plan.md`.
-Plan du serveur Docker (différé) : `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`.
+Local-connection plan: `docs/superpowers/plans/2026-11-17-nas-local-connection-plan.md`.
+Docker server plan (deferred): `docs/superpowers/plans/2026-11-17-nas-docker-server-plan-deferred.md`.
 
-> **Révision du 2026-11-17.** Container Station n'est pas installé, le SSH reste
-> désactivé, l'entrée ne contient que quelques centaines de photos et la
-> bibliothèque existante est massive. La v1 locale passe donc par l'approche **A'**
-> (l'app sur le Mac, le partage monté en SMB avec un compte dédié) : rien à
-> installer sur le NAS. L'approche **B** (serveur Docker) est différée ; elle
-> reste pertinente pour la classification automatique et l'accès à distance. Les
-> sections « Design (approche B) », « Docker et architecture » et « Performance »
-> ci-dessous décrivent B et restent valables pour ce plan différé.
+> **Revision of 2026-11-17.** Container Station is not installed, SSH remains
+> disabled, the input contains only a few hundred photos and the existing
+> library is massive. The local v1 therefore goes through approach **A'**
+> (the app on the Mac, the share mounted over SMB with a dedicated account): nothing
+> to install on the NAS. Approach **B** (Docker server) is deferred; it
+> remains relevant for automatic classification and remote access. The
+> sections "Design (approach B)", "Docker and architecture" and "Performance"
+> below describe B and remain valid for this deferred plan.
 
-## Objectif
+## Goal
 
-Les photos d'iPhone sont sauvegardées automatiquement sur un QNAP, dans un seul
-gros dossier. Pouvoir les **classer** (date, lieu, doublons) et les **taguer**
-directement sur le NAS, depuis l'app Electron, **en local comme à distance**.
-La logique métier reste en Go. Les originaux ne sont jamais modifiés.
+iPhone photos are backed up automatically to a QNAP, in a single
+large folder. Be able to **sort** them (date, place, duplicates) and **tag** them
+directly on the NAS, from the Electron app, **locally and remotely**.
+The business logic stays in Go. Originals are never modified.
 
-## Faits et décisions
+## Facts and decisions
 
-Confirmés par l'utilisateur (✔) ou retenus par défaut (hypothèse) :
+Confirmed by the user (✔) or adopted by default (assumption):
 
-| # | Sujet | Décision |
+| # | Topic | Decision |
 | --- | --- | --- |
-| F1 | NAS ✔ | **QNAP TS-251D** : Celeron J4005/J4025, **2 cœurs / 2 threads**, x86_64, 2 ou 4 Go de RAM (8 Go maximum). Container Station (Docker) disponible mais **non installé** ✔ ; **SSH désactivé** ✔ (surface d'attaque) |
-| F2 | Stockage ✔ | Les photos sont sur un disque du NAS, dans **un seul partage à deux sous-dossiers** (entrée en vrac et bibliothèque classée) ✔. La bibliothèque **existe déjà et est massive** ✔ |
-| F3 | Déclenchement ✔ | **Manuel depuis l'app** d'abord ; une case « classer automatiquement » viendra ensuite |
-| F4 | Accès distant ✔ | **Aucun en place** : la v1 fonctionne en réseau local. Accès à distance ensuite ; comparatif myQNAPcloud Link, Tailscale et NetBird plus bas, recommandation Tailscale intégré au serveur (à confirmer) |
-| F5 | Tags existants ✔ | L'utilisateur utilise le **tagging de QNAP** (QuMagie). Les tags Photosort sont un complément, pas un remplacement |
-| F6 | Classement (révisé) | **Copie** de l'entrée vers la bibliothèque. Le lien physique est abandonné : avec `fs.protected_hardlinks=1`, un utilisateur ne peut lier que des fichiers qu'il possède ou sur lesquels il a lecture et écriture, ce qui contredit F8. « Déplacer » n'est pas proposé en v1 ; l'espace disque des photos classées s'ajoute (contrôle avant copie) |
-| F7 | Volume ✔ | **Quelques centaines de photos** dans l'entrée ; bibliothèque massive. Le coût à surveiller est le parcours de la bibliothèque (dédoublonnage), pas la copie |
-| F8 | Droits ✔ | **Moindre privilège** : utilisateur QTS dédié, **lecture seule** sur le dossier iPhone en vrac, **écriture seulement** sur la destination, aucun autre droit. Un logiciel d'accès (réseau local, Tailscale, NetBird) peut avoir des failles : ce que le compte dédié (et le conteneur, en voie B) peut toucher ne dépend jamais du mode d'accès |
+| F1 | NAS ✔ | **QNAP TS-251D**: Celeron J4005/J4025, **2 cores / 2 threads**, x86_64, 2 or 4 GB of RAM (8 GB maximum). Container Station (Docker) available but **not installed** ✔; **SSH disabled** ✔ (attack surface) |
+| F2 | Storage ✔ | The photos are on a NAS disk, in **a single share with two subfolders** (loose input and sorted library) ✔. The library **already exists and is massive** ✔ |
+| F3 | Trigger ✔ | **Manual from the app** first; a "sort automatically" checkbox will come later |
+| F4 | Remote access ✔ | **None in place**: v1 works on the local network. Remote access afterwards; comparison of myQNAPcloud Link, Tailscale and NetBird below, recommendation Tailscale integrated into the server (to be confirmed) |
+| F5 | Existing tags ✔ | The user uses **QNAP's tagging** (QuMagie). Photosort tags are a complement, not a replacement |
+| F6 | Sorting (revised) | **Copy** from the input to the library. The hard link is abandoned: with `fs.protected_hardlinks=1`, a user can only link files they own or on which they have read and write access, which contradicts F8. "Move" is not offered in v1; the disk space of the sorted photos adds up (check before copying) |
+| F7 | Volume ✔ | **A few hundred photos** in the input; massive library. The cost to watch is walking the library (deduplication), not the copy |
+| F8 | Rights ✔ | **Least privilege**: dedicated QTS user, **read-only** on the loose iPhone folder, **write only** on the destination, no other rights. Access software (local network, Tailscale, NetBird) may have flaws: what the dedicated account (and the container, in route B) can touch never depends on the access mode |
 
-## Approches étudiées
+## Approaches studied
 
-| | Principe | Avantages | Limites |
+| | Principle | Advantages | Limits |
 | --- | --- | --- | --- |
-| A | Le Mac traite, NAS monté en SMB avec un compte dédié | Rien à installer sur le NAS, ni SSH ni Docker ; l'app lit déjà un dossier et écrit dans un autre ; tags IA rapides sur le Mac ; aucun secret dans l'app | Les données transitent par le réseau (quelques centaines de photos : sans importance) ; parcours de la bibliothèque massive à contenir ; inutilisable à distance sans VPN ; pas d'automatisation sans le Mac |
-| **B** | **Serveur Go en Docker sur le NAS** ; l'app Electron s'y connecte | Traitement à côté des données ; seuls miniatures et progression circulent ; local et distant ; automatisable | Exige Container Station (démon root) ; code serveur à écrire ; CPU du NAS décisif pour l'IA |
-| B' | Variante de B : binaire Go statique (sans CGO, sans IA) lancé par QTS | Pas de Docker nécessaire | Pas de tags IA sur le NAS ; sans objet ici, le TS-251D gère Docker |
-| C | Tâche planifiée sur le NAS, sans UI | Entièrement automatique | Pas de prévisualisation ni de contrôle |
+| A | The Mac does the processing, NAS mounted over SMB with a dedicated account | Nothing to install on the NAS, neither SSH nor Docker; the app already reads one folder and writes to another; fast AI tags on the Mac; no secret in the app | Data travels over the network (a few hundred photos: irrelevant); walking the massive library must be contained; unusable remotely without a VPN; no automation without the Mac |
+| **B** | **Go server in Docker on the NAS**; the Electron app connects to it | Processing next to the data; only thumbnails and progress travel; local and remote; automatable | Requires Container Station (root daemon); server code to write; NAS CPU decisive for AI |
+| B' | Variant of B: static Go binary (no CGO, no AI) launched by QTS | No Docker needed | No AI tags on the NAS; irrelevant here, the TS-251D handles Docker |
+| C | Scheduled task on the NAS, no UI | Fully automatic | No preview or control |
 
-**Recommandation révisée : A' pour la v1 en réseau local** (A durci : compte dédié aux
-droits minimaux, contrôle préalable de la lecture seule, dédoublonnage à portée,
-copie atomique, noms système ignorés). **B reste la cible** pour la classification
-automatique (case « classer automatiquement ») et l'accès à distance ; C en découle.
+**Revised recommendation: A' for the v1 on the local network** (A hardened: dedicated account with
+minimal rights, prior check of read-only access, scoped deduplication,
+atomic copy, system names ignored). **B remains the target** for automatic
+classification (the "sort automatically" checkbox) and remote access; C follows from it.
 
-Raisons de la révision : B exige Container Station et un démon root que
-l'utilisateur n'a pas, pour quelques centaines de photos ; le protocole du
-sidecar (une requête JSON, des événements portant l'`id` de la requête) se
-transpose néanmoins tel quel sur une connexion TLS le jour où B sera construit.
+Reasons for the revision: B requires Container Station and a root daemon that
+the user does not have, for a few hundred photos; the sidecar protocol
+(one JSON request, events carrying the request `id`) nevertheless
+carries over unchanged to a TLS connection the day B is built.
 
-## Design (approche B)
+## Design (approach B)
 
-### Composants
+### Components
 
-- **`cmd/photosort-server`** (nouveau) : même moteur que `photosort-sidecar`, exposé
-  en TLS avec le protocole JSON ligne par ligne du sidecar. Un seul service Go,
-  dans une image Docker `linux/amd64`.
-- **Transport** : l'app Electron reçoit un second « backend » dans son processus
-  principal (`node:tls`) : mêmes requêtes, mêmes événements, seul le transport
-  change (processus local ou connexion TLS). Pas de WebSocket.
-- **Authentification** : jeton de 256 bits généré au premier lancement (le serveur
-  n'en garde que l'empreinte), stocké côté Electron dans le trousseau du système
-  (`safeStorage`). TLS obligatoire ; en réseau local, certificat auto-signé
-  **épinglé par empreinte**, vérifiée avant l'envoi du jeton.
-  Le serveur écoute via une interface `net.Listener` interchangeable (réseau
-  local, puis réseau privé Tailscale ou NetBird, voir « Accès à distance »).
-- **Chemins** : deux racines fixes dans le conteneur, `/inbox` (lecture seule) et
-  `/library` (écriture) ; le serveur refuse tout chemin hors de ces racines
-  (`..`, liens). Cette validation double les droits du système, elle ne les
-  remplace pas.
-- **Fichiers volumineux** : seules les miniatures (JPEG réduits) et le PDF du
-  semainier sont rapatriés ; les originaux ne quittent pas le NAS.
+- **`cmd/photosort-server`** (new): same engine as `photosort-sidecar`, exposed
+  over TLS with the sidecar's line-by-line JSON protocol. A single Go service,
+  in a `linux/amd64` Docker image.
+- **Transport**: the Electron app gets a second "backend" in its main
+  process (`node:tls`): same requests, same events, only the transport
+  changes (local process or TLS connection). No WebSocket.
+- **Authentication**: 256-bit token generated on first launch (the server
+  keeps only its fingerprint), stored on the Electron side in the system keychain
+  (`safeStorage`). TLS mandatory; on the local network, self-signed certificate
+  **pinned by fingerprint**, checked before the token is sent.
+  The server listens through an interchangeable `net.Listener` interface (local
+  network, then Tailscale or NetBird private network, see "Remote access").
+- **Paths**: two fixed roots in the container, `/inbox` (read-only) and
+  `/library` (write); the server refuses any path outside these roots
+  (`..`, links). This validation doubles the system rights, it does not
+  replace them.
+- **Large files**: only thumbnails (reduced JPEGs) and the weekly planner PDF
+  are brought back; originals never leave the NAS.
 
-### Flux de données
+### Data flow
 
-1. L'app se connecte (adresse, jeton) ; l'entrée et la bibliothèque sont les deux
-   racines fixes du serveur.
-2. `plan` : le serveur lit les EXIF sur place et diffuse la progression et les
-   brouillons (déjà le comportement actuel).
-3. `copy` : copie locale au NAS, sans trafic réseau. Entrée (`:ro`) et
-   bibliothèque sont deux montages distincts. En cas de coupure, l'opération est
-   annulée sans fichier partiel ; relancer le plan reprend le travail.
-4. `tag` : tags `.xmp` écrits à côté des photos, comme aujourd'hui.
-5. Semainier : le PDF est généré sur le NAS puis téléchargé dans le dossier
-   choisi en préférences.
+1. The app connects (address, token); the input and the library are the two
+   fixed roots of the server.
+2. `plan`: the server reads the EXIF data in place and streams progress and
+   drafts (already the current behaviour).
+3. `copy`: copy local to the NAS, no network traffic. Input (`:ro`) and
+   library are two distinct mounts. In case of an interruption, the operation is
+   cancelled with no partial file; re-running the plan resumes the work.
+4. `tag`: `.xmp` tags written next to the photos, as today.
+5. Weekly planner: the PDF is generated on the NAS then downloaded into the folder
+   chosen in the preferences.
 
-### Gestion des erreurs et sécurité
+### Error handling and security
 
-- Connexion perdue : les opérations en cours sont annulées (v1) ; l'app se
-  reconnecte et relance le plan. Opérations détachées et reprise par identifiant :
-  plan « accès distant ».
-- Fichiers en cours de synchro : ignorés tant que leur taille ou leur date de
-  modification change, ou que leur âge est inférieur à un seuil (60 s).
-- Aucune suppression ni modification d'original. Écritures limitées à la
-  bibliothèque (copies, sidecars `.xmp`) et au dossier d'état du conteneur.
-- **L'entrée n'est jamais écrite**, par trois verrous indépendants : droits QTS de
-  l'utilisateur dédié (F8), montage Docker `:ro`, et contrôle au démarrage du
-  serveur, qui refuse de démarrer si l'entrée est inscriptible.
-- Conteneur non-root, sans capacités, racine en lecture seule, sans `privileged`
-  ni socket Docker, avec le seul accès aux deux dossiers et à son dossier d'état.
+- Connection lost: operations in progress are cancelled (v1); the app
+  reconnects and re-runs the plan. Detached operations and resumption by identifier:
+  "remote access" plan.
+- Files being synced: ignored as long as their size or modification date
+  changes, or their age is below a threshold (60 s).
+- No deletion or modification of originals. Writes limited to the
+  library (copies, `.xmp` sidecars) and to the container's state folder.
+- **The input is never written to**, by three independent locks: QTS rights of the
+  dedicated user (F8), Docker `:ro` mount, and a check at server startup,
+  which refuses to start if the input is writable.
+- Non-root container, no capabilities, read-only root, no `privileged`
+  or Docker socket, with access only to the two folders and to its state folder.
 
-### Docker et architecture
+### Docker and architecture
 
-Docker n'émule pas le processeur : le conteneur utilise le CPU et la RAM du NAS.
-L'architecture compte donc encore, mais le TS-251D est en **x86_64** : l'image
-`linux/amd64` convient. Ce qui pèse vraiment, c'est la puissance (2 cœurs) et la
-mémoire (2 à 4 Go, partagés avec QTS et QuMagie). Le conteneur est limité en
-mémoire et en CPU pour ne pas gêner QuMagie.
+Docker does not emulate the processor: the container uses the NAS's CPU and RAM.
+Architecture therefore still matters, but the TS-251D is **x86_64**: the
+`linux/amd64` image is suitable. What really weighs is the power (2 cores) and the
+memory (2 to 4 GB, shared with QTS and QuMagie). The container is limited in
+memory and CPU so as not to hinder QuMagie.
 
-### Performance (estimations à mesurer)
+### Performance (estimates to be measured)
 
-- Sur le Mac M2, le tagging IA prend 0,06 à 0,1 s par photo. Le Celeron à
-  2 cœurs sera nettement plus lent (ordre de grandeur : 10 à 30 fois, soit
-  1 à 3 s par photo, à confirmer) : plusieurs heures pour des dizaines de
-  milliers de photos.
-- Le classement (EXIF, doublons, copies) et les tags de métadonnées
-  restent légers : **activés par défaut sur le NAS**. Les tags IA
-  (scènes, moment, personnes) sont **optionnels**, pensés pour tourner en
-  tâche de fond. QuMagie fournit déjà sa propre reconnaissance.
-- Parallélisme borné à 1 ou 2 workers ; EXIF et décodage HEIC partiels sur place,
-  à 1/8, comme en local.
-- Il faut vérifier qu'ONNX Runtime tourne sur ce Celeron (sans AVX) : test
-  de l'étape 0.
+- On the M2 Mac, AI tagging takes 0.06 to 0.1 s per photo. The 2-core
+  Celeron will be noticeably slower (order of magnitude: 10 to 30 times, i.e.
+  1 to 3 s per photo, to be confirmed): several hours for tens of
+  thousands of photos.
+- Sorting (EXIF, duplicates, copies) and metadata tags
+  remain light: **enabled by default on the NAS**. AI tags
+  (scenes, moment, people) are **optional**, designed to run as a
+  background task. QuMagie already provides its own recognition.
+- Parallelism bounded to 1 or 2 workers; partial EXIF and HEIC decoding in place,
+  at 1/8, as locally.
+- We must check that ONNX Runtime runs on this Celeron (no AVX): test
+  in step 0.
 
-### Coexistence avec QuMagie
+### Coexistence with QuMagie
 
-- QuMagie ne doit indexer que la **bibliothèque classée**, pas l'entrée : les
-  photos y existeraient deux fois (l'original et sa copie), d'où des doublons
-  dans ses albums.
-- Les `.xmp` de Photosort sont écrits à côté des photos ; QuMagie les ignore,
-  ses tags restent indépendants. Un affichage des tags Photosort dans l'app
-  sert à la recherche et au semainier.
-- La sauvegarde automatique de l'iPhone n'est jamais modifiée : aucun fichier
-  de l'entrée n'est écrit, déplacé ni supprimé.
+- QuMagie must only index the **sorted library**, not the input: the
+  photos would exist there twice (the original and its copy), hence duplicates
+  in its albums.
+- Photosort's `.xmp` files are written next to the photos; QuMagie ignores them,
+  its tags remain independent. Displaying Photosort tags in the app
+  serves search and the weekly planner.
+- The iPhone's automatic backup is never modified: no file
+  in the input is written, moved or deleted.
 
-## Plan par étapes
+## Step-by-step plan
 
-1. **Connexion locale, voie A'** (plan `2026-11-17-nas-local-connection-plan.md`) :
-   compte QTS dédié et Advanced Folder Permissions (phase 0b), noms système
-   ignorés, dédoublonnage à portée, copie atomique, contrôle préalable
-   `nasCheck`, mode NAS dans les préférences, recette sur le NAS, documentation.
-   Les tags (métadonnées et IA) et le semainier fonctionnent sans changement :
-   la bibliothèque est lue en SMB, le PDF est écrit en local.
-2. **Serveur Docker (voie B, différé)** (plan `…-nas-docker-server-plan-deferred.md`) :
-   serveur Go, jeton, TLS épinglé, racines fixes, image `linux/amd64` et
-   `docker-compose.yml` durci ; mesure sur le Celeron (durée du plan, tag de
-   métadonnées, ONNX Runtime). À reprendre pour l'automatisation et l'accès à
-   distance, si Container Station est installé.
-3. Case « classer automatiquement » : surveillance de l'entrée, fichiers
-   stables seulement, reprenable (nécessite un traitement sans le Mac, donc B).
-4. Accès à distance : voir ci-dessous. En voie A', le NAS doit être joignable
-   par SMB depuis un VPN ; **SMB n'est jamais exposé sur internet**. Avec B, le
-   serveur est écrit autour d'une interface `net.Listener` et l'étape ajoute
-   l'implémentation « overlay » retenue. Un **test de relais** myQNAPcloud Link
-   (conteneur HTTP minimal joint par `qlink.to/<id>` depuis le partage de
-   connexion du téléphone) reste possible en parallèle : seul ce test dit si le
-   relais accepte un service autre que les applis QTS.
+1. **Local connection, route A'** (plan `2026-11-17-nas-local-connection-plan.md`):
+   dedicated QTS account and Advanced Folder Permissions (phase 0b), system names
+   ignored, scoped deduplication, atomic copy, prior `nasCheck` check,
+   NAS mode in the preferences, acceptance test on the NAS, documentation.
+   Tags (metadata and AI) and the weekly planner work unchanged:
+   the library is read over SMB, the PDF is written locally.
+2. **Docker server (route B, deferred)** (plan `…-nas-docker-server-plan-deferred.md`):
+   Go server, token, pinned TLS, fixed roots, `linux/amd64` image and
+   hardened `docker-compose.yml`; measurement on the Celeron (plan duration, metadata
+   tag, ONNX Runtime). To be resumed for automation and remote
+   access, if Container Station is installed.
+3. "Sort automatically" checkbox: input monitoring, stable files
+   only, resumable (requires processing without the Mac, hence B).
+4. Remote access: see below. On route A', the NAS must be reachable
+   over SMB from a VPN; **SMB is never exposed to the internet**. With B, the
+   server is written around a `net.Listener` interface and the step adds
+   the chosen "overlay" implementation. A myQNAPcloud Link **relay test**
+   (minimal HTTP container reached via `qlink.to/<id>` from the phone's
+   connection sharing) remains possible in parallel: only this test tells whether the
+   relay accepts a service other than the QTS apps.
 
-## Accès à distance (plan ultérieur)
+## Remote access (later plan)
 
-Objectif de l'utilisateur : **le moins de configuration possible sur le NAS** et
-la plus grande simplicité d'usage. Aucun accès distant n'existe aujourd'hui.
+User's goal: **as little configuration as possible on the NAS** and
+the greatest simplicity of use. No remote access exists today.
 
-### Comparaison
+### Comparison
 
-| Critère | myQNAPcloud Link | Tailscale | NetBird |
+| Criterion | myQNAPcloud Link | Tailscale | NetBird |
 | --- | --- | --- | --- |
-| Principe | Relais QNAP `qlink.to/<id>`, compte QNAP | Réseau privé WireGuard maillé, coordination par Tailscale Inc. | Idem ; client open source, plan de contrôle auto-hébergeable |
-| Sur le NAS | Appli QNAP + compte QNAP | Appli QPKG officielle, **ou aucune** si intégré au serveur (`tsnet`) | Pas de QPKG ; conteneur Docker (`netbirdio/netbird`), **ou aucune** si intégré (`client/embed`) |
-| Sur la box internet | Rien | Rien | Rien |
-| Sur le Mac | Rien (si le relais convient) | Appli Tailscale + compte | Appli NetBird + compte (Google, GitHub... via OIDC) |
-| Exposition | **URL publique** : tout internet atteint la page du service, d'où jeton et TLS obligatoires | Privée (visible des seuls appareils du compte) | Privée |
-| Coût | Inclus avec le NAS | Gratuit en usage personnel (limites exactes non vérifiées) | Free : 5 utilisateurs, 100 machines (vérifié) |
-| Licence | Fermée | Clients BSD-3 ; coordination propriétaire (Headscale, communautaire, comme alternative) | Client BSD-3 ; gestion, signal et relais en AGPLv3 |
-| Intégration Go | — | **`tsnet`** : mature, serveur HTTPS avec certificat automatique | **`client/embed`** : `Dial` et `ListenTCP`, plus récent, dépendances plus lourdes (à mesurer) |
-| TLS | Fourni par le relais | Certificat automatique (HTTPS à activer une fois dans la console Tailscale) | Aucun certificat automatique ; le tunnel WireGuard chiffre déjà, jeton conservé |
-| Auto-hébergement du plan de contrôle | Non | Non (Headscale non officiel) | Oui, mais exige une VM publique, un domaine et les ports 443 et 3478 : contraire à la simplicité voulue, donc NetBird Cloud |
-| Principal risque | Relais d'un service non-QTS **non vérifié** | Dépendance à un éditeur | Écosystème plus jeune ; aucune intégration QNAP officielle |
+| Principle | QNAP relay `qlink.to/<id>`, QNAP account | Meshed WireGuard private network, coordination by Tailscale Inc. | Same; open-source client, self-hostable control plane |
+| On the NAS | QNAP app + QNAP account | Official QPKG app, **or none** if integrated into the server (`tsnet`) | No QPKG; Docker container (`netbirdio/netbird`), **or none** if integrated (`client/embed`) |
+| On the internet router | Nothing | Nothing | Nothing |
+| On the Mac | Nothing (if the relay is suitable) | Tailscale app + account | NetBird app + account (Google, GitHub... via OIDC) |
+| Exposure | **Public URL**: the whole internet reaches the service's page, hence token and TLS mandatory | Private (visible only to the account's devices) | Private |
+| Cost | Included with the NAS | Free for personal use (exact limits not verified) | Free: 5 users, 100 machines (verified) |
+| Licence | Closed | BSD-3 clients; proprietary coordination (Headscale, community-run, as an alternative) | BSD-3 client; management, signal and relay under AGPLv3 |
+| Go integration | — | **`tsnet`**: mature, HTTPS server with automatic certificate | **`client/embed`**: `Dial` and `ListenTCP`, more recent, heavier dependencies (to be measured) |
+| TLS | Provided by the relay | Automatic certificate (HTTPS to be enabled once in the Tailscale console) | No automatic certificate; the WireGuard tunnel already encrypts, token kept |
+| Control-plane self-hosting | No | No (Headscale unofficial) | Yes, but requires a public VM, a domain and ports 443 and 3478: contrary to the desired simplicity, hence NetBird Cloud |
+| Main risk | Relay of a non-QTS service **not verified** | Dependence on a vendor | Younger ecosystem; no official QNAP integration |
 
-QVPN et le DDNS myQNAPcloud (`id.myqnapcloud.com`) sont écartés : ils demandent
-d'ouvrir un port sur la box (inutilisable derrière un CGNAT, service exposé
-directement sur internet).
+QVPN and the myQNAPcloud DDNS (`id.myqnapcloud.com`) are ruled out: they require
+opening a port on the router (unusable behind CGNAT, service exposed
+directly to the internet).
 
-### Constat déterminant : l'overlay s'intègre dans le serveur Go
+### Deciding finding: the overlay is built into the Go server
 
-Tailscale (`tsnet`) comme NetBird (`client/embed`) existent en **bibliothèques
-Go** : le serveur `photosort-server` peut rejoindre le réseau privé **lui-même**,
-sans appli QNAP, sans conteneur supplémentaire, sans configuration réseau du NAS.
-La mise en place sur le NAS se réduit à **un `docker-compose.yml` et une clé
-d'authentification** à saisir une fois. Avantages : aucun port exposé, un seul
-conteneur, aucune dépendance au QPKG de l'éditeur.
+Tailscale (`tsnet`) and NetBird (`client/embed`) both exist as **Go
+libraries**: the `photosort-server` server can join the private network **itself**,
+with no QNAP app, no additional container, no NAS network configuration.
+Setup on the NAS comes down to **a `docker-compose.yml` and an authentication
+key** to enter once. Advantages: no exposed port, a single
+container, no dependence on the vendor's QPKG.
 
-Côté Mac, l'utilisateur installe l'appli du service choisi (v1 de l'accès
-distant). Une évolution possible (hors v1) : intégrer la même bibliothèque dans
-le sidecar Go du Mac, pour qu'il n'y ait **rien à installer** et qu'un code
-d'appairage suffise.
+On the Mac side, the user installs the chosen service's app (v1 of remote
+access). A possible evolution (outside v1): integrate the same library into
+the Mac's Go sidecar, so that there is **nothing to install** and a pairing
+code is enough.
 
-### Recommandation
+### Recommendation
 
-1. **v1 : réseau local seulement.** TLS avec certificat auto-signé épinglé, jeton.
-2. **Accès à distance : Tailscale par `tsnet` dans le serveur.** Raisons :
-   bibliothèque la plus mature, certificat HTTPS automatique, repli officiel par
-   QPKG, appli Mac et mobile très répandues. La configuration NAS se limite à la
-   clé d'authentification dans le compose.
-3. **NetBird reste un échange facile** : le serveur n'a besoin que d'un
-   `net.Listener`, le client que d'un `Dialer`. À privilégier si l'open source du
-   plan de contrôle prime sur la simplicité ; il ne se justifie pas sinon.
-4. **myQNAPcloud Link : option secondaire**, seulement si le test de relais
-   réussit ; son URL publique est son principal défaut.
+1. **v1: local network only.** TLS with pinned self-signed certificate, token.
+2. **Remote access: Tailscale via `tsnet` in the server.** Reasons:
+   most mature library, automatic HTTPS certificate, official fallback via
+   QPKG, widely used Mac and mobile apps. NAS configuration is limited to the
+   authentication key in the compose file.
+3. **NetBird remains an easy swap**: the server only needs a
+   `net.Listener`, the client only a `Dialer`. To be preferred if open source of the
+   control plane matters more than simplicity; otherwise it is not justified.
+4. **myQNAPcloud Link: secondary option**, only if the relay test
+   succeeds; its public URL is its main flaw.
 
-Décision à confirmer par l'utilisateur avant d'aborder l'accès à distance. Points à vérifier à ce
-moment-là : limites du plan gratuit Tailscale, expiration des clés (désactiver
-l'expiration du nœud NAS dans la console), taille de l'image Docker avec la
-bibliothèque choisie.
+Decision to be confirmed by the user before tackling remote access. Points to check at that
+time: limits of the Tailscale free plan, key expiry (disable
+expiry of the NAS node in the console), size of the Docker image with the
+chosen library.
 
-### Sécurité de l'accès distant (remarques de l'utilisateur)
+### Remote access security (user's remarks)
 
-- **MFA** : l'URL publique de myQNAPcloud Link est un défaut, mais l'authentification
-  multifacteur du compte QNAP renforce l'accès ; à peser contre l'absence
-  d'exposition d'un réseau privé.
-- **Failles** : Tailscale, NetBird (comme tout logiciel d'accès) peuvent en avoir.
-  Invariant de conception : la sécurité du NAS **ne dépend pas** du mode d'accès.
-  Un compte QTS dédié (lecture seule sur l'entrée, écriture seulement sur la
-  bibliothèque, rien d'autre) et un conteneur durci (F8) limitent les dégâts si
-  le serveur ou l'overlay est compromis. L'overlay n'ajoute aucun droit.
+- **MFA**: the public URL of myQNAPcloud Link is a flaw, but multi-factor
+  authentication on the QNAP account strengthens access; to be weighed against the lack of
+  exposure of a private network.
+- **Flaws**: Tailscale, NetBird (like any access software) may have some.
+  Design invariant: the NAS's security **does not depend** on the access mode.
+  A dedicated QTS account (read-only on the input, write only on the
+  library, nothing else) and a hardened container (F8) limit the damage if
+  the server or the overlay is compromised. The overlay adds no rights.
 
-## Hors périmètre (YAGNI)
+## Out of scope (YAGNI)
 
-Exposition directe sur internet, multi-utilisateurs, synchronisation avec les
-albums QuMagie, déplacement ou suppression des originaux, architecture ARM,
-reconnaissance de visages nominative.
+Direct exposure to the internet, multi-user, synchronisation with QuMagie
+albums, moving or deleting originals, ARM architecture,
+named face recognition.
 
-## Questions ouvertes
+## Open questions
 
-1. ~~Volume de photos~~ : quelques centaines dans l'entrée (F7).
-2. ~~Étape 0 sur le NAS~~ : sans objet en voie A' (ni SSH ni Container Station).
-3. ~~Lien physique ou copie~~ : copie, imposée par la lecture seule de l'entrée (F6).
-4. Accès à distance (second plan) : en voie A', un VPN donnant accès au NAS
-   (SMB jamais exposé sur internet) ; en voie B, Tailscale intégré au serveur
-   (recommandé), NetBird (open source), ou myQNAPcloud Link (URL publique,
-   renforcée par le MFA du compte QNAP, si le test de relais réussit). Le choix
-   n'affecte pas les droits du compte dédié (F8).
-5. ~~Un ou deux partages~~ : un partage, deux sous-dossiers ; bibliothèque
-   existante et massive (F2). Ouvert : suit-elle l'arborescence `AAAA/AAAA-MM`
-   de Photosort (conditionne le dédoublonnage à portée) ?
-6. ~~Container Station, SSH~~ : ni l'un ni l'autre (F1).
-7. Advanced Folder Permissions (réglage global du NAS) : accepté pour séparer
-   les droits des deux sous-dossiers ? Sinon, l'entrée n'est protégée que par l'app.
-8. QuMagie indexe-t-il l'entrée, la bibliothèque, ou les deux ?
+1. ~~Photo volume~~: a few hundred in the input (F7).
+2. ~~Step 0 on the NAS~~: not applicable on route A' (neither SSH nor Container Station).
+3. ~~Hard link or copy~~: copy, imposed by the read-only input (F6).
+4. Remote access (second plan): on route A', a VPN giving access to the NAS
+   (SMB never exposed to the internet); on route B, Tailscale integrated into the server
+   (recommended), NetBird (open source), or myQNAPcloud Link (public URL,
+   strengthened by the QNAP account's MFA, if the relay test succeeds). The choice
+   does not affect the rights of the dedicated account (F8).
+5. ~~One or two shares~~: one share, two subfolders; existing and
+   massive library (F2). Open: does it follow Photosort's `YYYY/YYYY-MM`
+   tree (determines the scoped deduplication)?
+6. ~~Container Station, SSH~~: neither (F1).
+7. Advanced Folder Permissions (global NAS setting): accepted to separate
+   the rights of the two subfolders? Otherwise, the input is protected only by the app.
+8. Does QuMagie index the input, the library, or both?
