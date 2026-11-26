@@ -9,8 +9,11 @@ interface Props {
   pending: string;
   tilt?: number;
   class?: string;
+  sizes?: string;
+  widths?: number[];
+  eager?: boolean;
 }
-const { name, alt, caption, pending, tilt = 0, class: className = '' } = Astro.props;
+const { name, alt, caption, pending, tilt = 0, class: className = '', sizes = '(min-width: 900px) 40vw, 90vw', widths = [480, 800, 1200], eager = false } = Astro.props;
 
 const modules = import.meta.glob<{ default: ImageMetadata }>('../assets/screenshots/*.{png,jpg,jpeg,webp}', { eager: true });
 const match = Object.entries(modules).find(([path]) => path.split('/').pop()?.replace(/\.[^.]+$/, '') === name);
@@ -21,7 +24,7 @@ const image = match?.[1].default;
   <span class="tape" aria-hidden="true"></span>
   {
     image ? (
-      <Image src={image} alt={alt} widths={[480, 800, 1200]} sizes="(min-width: 900px) 40vw, 90vw" format="webp" loading="lazy" />
+      <Image src={image} alt={alt} widths={widths} sizes={sizes} format="webp" loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : undefined} />
     ) : (
       <div class="print-empty" data-placeholder={name}>
         <span>{pending}</span>

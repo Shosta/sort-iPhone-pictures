@@ -1,11 +1,9 @@
 ---
-import Herbarium from '../../components/Herbarium.astro';
 import Print from '../../components/Print.astro';
-import ScrapbookSheet from '../../components/ScrapbookSheet.astro';
-import Stamp from '../../components/Stamp.astro';
 import SiteFooter from '../../components/SiteFooter.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { copies, languages, type Lang } from '../../i18n';
+import { home as homeCopies } from '../../i18n/home';
 import '../../styles/global.css';
 
 export function getStaticPaths() {
@@ -14,6 +12,7 @@ export function getStaticPaths() {
 
 const lang = Astro.params.lang as Lang;
 const t = copies[lang];
+const h = homeCopies[lang];
 
 const base = import.meta.env.BASE_URL;
 const home = base.endsWith('/') ? base : `${base}/`;
@@ -24,9 +23,12 @@ const repositoryUrl = import.meta.env.PUBLIC_REPOSITORY_URL?.trim();
 if (repositoryUrl && new URL(repositoryUrl).protocol !== 'https:') {
   throw new Error('PUBLIC_REPOSITORY_URL doit être une URL HTTPS.');
 }
-const releasesUrl = repositoryUrl ? `${repositoryUrl.replace(/\/$/, '')}/releases/latest` : undefined;
-
-const tilts = [-2.2, 1.6, -1.2, 2.4];
+// Tant qu'aucune release n'est publiée (PUBLIC_HAS_RELEASE != "true"), on pointe vers la liste des releases.
+const hasRelease = import.meta.env.PUBLIC_HAS_RELEASE === 'true';
+const repoBase = repositoryUrl?.replace(/\/$/, '');
+const downloadUrl = repoBase ? (hasRelease ? `${repoBase}/releases/latest` : `${repoBase}/releases`) : undefined;
+const mainLabel = hasRelease ? h.download.generic : h.download.soon;
+const tilts = [1.4, -1.6, 1.2, -1.4, 1.6, -1.2];
 ---
 
 <!doctype html>
@@ -34,16 +36,16 @@ const tilts = [-2.2, 1.6, -1.2, 2.4];
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{t.meta.title}</title>
-    <meta name="description" content={t.meta.description} />
+    <title>{h.meta.title}</title>
+    <meta name="description" content={h.meta.description} />
     <meta name="theme-color" content="#f4ecdd" />
     <link rel="canonical" href={absolute(pageUrl(lang))} />
     {languages.map((l) => <link rel="alternate" hreflang={l} href={absolute(pageUrl(l))} />)}
     <link rel="alternate" hreflang="x-default" href={absolute(home)} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content={t.ogLocale} />
-    <meta property="og:title" content={t.meta.title} />
-    <meta property="og:description" content={t.meta.description} />
+    <meta property="og:title" content={h.meta.title} />
+    <meta property="og:description" content={h.meta.description} />
     <link rel="icon" href={`${home}favicon-16.png`} type="image/png" sizes="16x16" />
     <link rel="icon" href={`${home}favicon-32.png`} type="image/png" sizes="32x32" />
   </head>
@@ -53,125 +55,88 @@ const tilts = [-2.2, 1.6, -1.2, 2.4];
     <SiteHeader lang={lang} />
 
     <main id="contenu">
-      <section class="hero shell" aria-labelledby="hero-title">
-        <Herbarium variant="fern" class="herb-hero" />
-        <div class="hero-copy">
-          <p class="eyebrow">{t.hero.eyebrow}</p>
-          <h1 id="hero-title"><span class="h1-a">{t.hero.titleA}</span> <em>{t.hero.titleB}</em></h1>
-          <p class="lead">{t.hero.lead}</p>
-          <div class="actions">
-            <a class="button button-primary" href="#classement">{t.hero.ctaHow}</a>
-            <a class="text-link" href="#telecharger">{t.hero.ctaDownload} <span aria-hidden="true">↓</span></a>
-          </div>
-          <p class="hero-note">{t.hero.note}</p>
+      <section class="product-hero shell" aria-labelledby="hero-title">
+        <p class="eyebrow">{h.hero.eyebrow}</p>
+        <h1 id="hero-title">{h.hero.title}</h1>
+        <p class="lead">{h.hero.subtitle}</p>
+        <div class="actions">
+          <a id="download-main" class="button button-primary" href={downloadUrl ?? '#telecharger'} rel={downloadUrl ? 'noopener noreferrer' : undefined}>{mainLabel}</a>
+          <a class="text-link" href={`${home}${lang}/presentation/`}>{h.more.cta} <span aria-hidden="true">→</span></a>
         </div>
-        <div class="hero-art">
-          <ScrapbookSheet caption={t.hero.sheetCaption} alt={t.hero.sheetAlt} />
-          <Stamp id="hero" class="stamp-hero" top={t.stamp.top} main={t.stamp.main} bottom={t.stamp.bottom} />
-        </div>
+        <p class="hero-note">{h.hero.note}</p>
+        <Print class="print--hero" name="hero" alt={h.hero.alt} caption={h.hero.caption} pending={t.shots.pending} tilt={-0.8} sizes="(min-width: 1100px) 1000px, 94vw" widths={[640, 1000, 1600]} eager />
       </section>
 
-      <section class="section shell" id="classement" aria-labelledby="how-title">
-        <div class="section-heading">
-          <p class="eyebrow">{t.how.eyebrow}</p>
-          <h2 id="how-title">{t.how.title}</h2>
-        </div>
-        <ol class="steps">
-          {t.how.items.map((step, index) => (
-            <li><span class="step-no" aria-hidden="true">0{index + 1}</span><h3>{step.title}</h3><p>{step.text}</p></li>
-          ))}
-        </ol>
-        <p class="info-note">{t.how.note}</p>
-      </section>
+      {
+        h.sections.map((s, i) => (
+          <section class={`product-section shell${i % 2 ? ' is-reversed' : ''}`} id={s.id} aria-labelledby={`${s.id}-title`}>
+            <div class="product-copy">
+              <p class="eyebrow">{s.eyebrow}</p>
+              <h2 id={`${s.id}-title`}>{s.title}</h2>
+              <p>{s.text}</p>
+              <ul class="ticks">{s.bullets.map((b) => <li>{b}</li>)}</ul>
+            </div>
+            <Print class="print--product" name={s.shot} alt={s.alt} caption={s.caption} pending={t.shots.pending} tilt={tilts[i]} sizes="(min-width: 900px) 600px, 94vw" widths={[480, 800, 1200]} />
+          </section>
+        ))
+      }
 
-      <section class="section features shell" id="fonctions" aria-labelledby="features-title">
-        <Herbarium variant="oak" class="herb-oak" />
-        <Herbarium variant="grass" class="herb-grass" />
-        <div class="section-heading">
-          <p class="eyebrow">{t.features.eyebrow}</p>
-          <h2 id="features-title">{t.features.title}</h2>
-          <p class="lead">{t.features.lead}</p>
-        </div>
-        <ul class="specimens">
-          {t.features.items.map((item, index) => (
-            <li class="specimen" style={`--i:${index}`}>
-              <p class="specimen-no">{t.features.specimen} n° {String(index + 1).padStart(2, '0')}</p>
-              <h3>{item.name}</h3>
-              <p class="latin">{item.latin}</p>
-              <p>{item.text}</p>
-            </li>
-          ))}
+      <section class="section shell" id="fonctions" aria-labelledby="features-title">
+        <p class="eyebrow">{h.features.eyebrow}</p>
+        <h2 id="features-title" class="section-heading">{h.features.title}</h2>
+        <ul class="feature-grid">
+          {h.features.items.map((f) => <li><strong>{f.name}</strong><span>{f.text}</span></li>)}
         </ul>
       </section>
 
-      <section class="section scrapbook shell" id="semainier" aria-labelledby="scrapbook-title">
-        <Herbarium variant="ginkgo" class="herb-scrapbook" />
-        <div class="scrapbook-intro">
-          <p class="eyebrow">{t.scrapbook.eyebrow}</p>
-          <h2 id="scrapbook-title">{t.scrapbook.title}</h2>
-          <p class="lead">{t.scrapbook.lead}</p>
-        </div>
-        <ol class="week-steps">
-          {t.scrapbook.steps.map((step, index) => (
-            <li><span class="numeral" aria-hidden="true">{index + 1}</span><h3>{step.title}</h3><p>{step.text}</p></li>
-          ))}
-        </ol>
-        <dl class="facts">
-          {t.scrapbook.facts.map((fact) => <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
-        </dl>
-        <p class="kbd-note">{t.scrapbook.note}</p>
+      <section class="section shell free-block" aria-labelledby="free-title">
+        <p class="eyebrow">{h.free.eyebrow}</p>
+        <h2 id="free-title">{h.free.title}</h2>
+        <p class="lead">{h.free.text}</p>
+        <ul class="ticks ticks--row">{h.free.items.map((i) => <li>{i}</li>)}</ul>
       </section>
 
-      <section class="section shots shell" aria-labelledby="shots-title">
-        <div class="section-heading">
-          <p class="eyebrow">{t.shots.eyebrow}</p>
-          <h2 id="shots-title">{t.shots.title}</h2>
-        </div>
-        <div class="print-board">
-          {t.shots.items.map((shot, index) => (
-            <Print class={`print--${index + 1}`} name={shot.key} alt={shot.alt} caption={shot.caption} pending={t.shots.pending} tilt={tilts[index]} />
-          ))}
-        </div>
-      </section>
-
-      <section class="section download shell" id="telecharger" aria-labelledby="download-title">
-        <Herbarium variant="fern" class="herb-download" />
-        <div class="download-copy">
-          <p class="eyebrow">{t.download.eyebrow}</p>
-          <h2 id="download-title">{t.download.title}</h2>
-          <p class="lead">{t.download.lead}</p>
-          <ul class="platforms">
-            {t.download.platforms.map((p) => <li><strong>{p.os}</strong><span>{p.detail}</span></li>)}
-          </ul>
-          {
-            releasesUrl && repositoryUrl ? (
+      <section class="section shell download-block" id="telecharger" aria-labelledby="download-title">
+        <p class="eyebrow">{h.download.eyebrow}</p>
+        <h2 id="download-title">{h.download.title}</h2>
+        <p class="lead">{h.download.lead}</p>
+        {
+          downloadUrl ? (
+            <>
               <div class="actions">
-                <a class="button button-primary" href={releasesUrl} target="_blank" rel="noopener noreferrer">{t.download.button} <span aria-hidden="true">↗</span></a>
-                <a class="text-link" href={repositoryUrl} target="_blank" rel="noopener noreferrer">{t.download.repoButton} <span aria-hidden="true">↗</span></a>
+                <a id="download-cta" class="button button-primary" href={downloadUrl} rel="noopener noreferrer">{mainLabel}</a>
               </div>
-            ) : (
-              <p class="availability-note">{t.download.pendingRepo}</p>
-            )
-          }
-          <p class="fine-print">{t.download.unsigned}</p>
-        </div>
-        <Stamp id="download" class="stamp-small" top={t.stamp.top} main={t.stamp.main} bottom={t.stamp.bottom} />
-      </section>
-
-      <section class="section split shell" id="faq" aria-labelledby="faq-title">
-        <div class="limits">
-          <p class="eyebrow">{t.limits.eyebrow}</p>
-          <h2>{t.limits.title}</h2>
-          <ul>{t.limits.items.map((item) => <li>{item}</li>)}</ul>
-        </div>
-        <div class="faq">
-          <p class="eyebrow">{t.faq.eyebrow}</p>
-          <h2 id="faq-title">{t.faq.title}</h2>
-          {t.faq.items.map((item) => <details><summary>{item.q}</summary><p>{item.a}</p></details>)}
-        </div>
+              {!hasRelease && <p class="availability-note">{h.download.soonNote}</p>}
+              <h3 class="others-title">{h.download.others}</h3>
+              <ul class="platforms platforms--links">
+                {h.download.platforms.map((p) => (
+                  <li>
+                    <a href={downloadUrl} rel="noopener noreferrer" data-os={p.key}>
+                      <strong>{p.os}</strong>
+                      <span>{p.detail}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p class="fine-print"><a href={repoBase} rel="noopener noreferrer">{h.download.source}</a></p>
+            </>
+          ) : (
+            <p class="availability-note">{h.download.pendingRepo}</p>
+          )
+        }
+        <p class="fine-print">{h.download.unsigned}</p>
       </section>
     </main>
 
     <SiteFooter lang={lang} repositoryUrl={repositoryUrl} />
+    {
+      downloadUrl && hasRelease && (
+        <script is:inline define:vars={{ labels: h.download.forOs }}>
+          var u = navigator.userAgent;
+          var os = /Android|iPhone|iPad/.test(u) ? '' : /Mac/.test(u) ? 'mac' : /Win/.test(u) ? 'windows' : /Linux|X11/.test(u) ? 'linux' : '';
+          if (os) ['download-main', 'download-cta'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = labels[os]; });
+        </script>
+      )
+    }
   </body>
 </html>

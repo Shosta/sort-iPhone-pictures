@@ -7,20 +7,22 @@ const rawBase = process.env.ASTRO_BASE ?? '/';
 const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
 const escapedBase = base.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const dist = (path) => new URL(`../dist/${path}`, import.meta.url);
-const pages = Object.fromEntries(
-  await Promise.all(languages.map(async (lang) => [lang, await readFile(dist(`${lang}/index.html`), 'utf8')])),
-);
+// `pages` = présentation détaillée (ancien accueil) ; `homes` = nouvelle page produit.
+const read = async (path) => Object.fromEntries(await Promise.all(languages.map(async (lang) => [lang, await readFile(dist(`${lang}/${path}`), 'utf8')])));
+const pages = await read('presentation/index.html');
+const homes = await read('index.html');
 const chooser = await readFile(dist('index.html'), 'utf8');
 const count = (html, pattern) => (html.match(pattern) ?? []).length;
 
 test('chaque langue a sa page, sa balise lang, un titre unique et des métadonnées', () => {
   for (const lang of languages) {
-    const html = pages[lang];
+    for (const html of [pages[lang], homes[lang]]) {
     assert.match(html, new RegExp(`<html lang="${lang}">`));
     assert.match(html, /<title>[^<]*Photosort/);
     assert.match(html, /<meta name="description" content="[^"]+"/);
     assert.equal(count(html, /<h1\b/g), 1, lang);
     assert.doesNotMatch(html, /undefined|\[object Object\]/, lang);
+    }
   }
 });
 
@@ -34,15 +36,16 @@ test('les trois langues ont la même structure', () => {
 
 test('hreflang, canonical et sélecteur de langue sont présents', () => {
   for (const lang of languages) {
-    const html = pages[lang];
+    for (const [html, sub] of [[pages[lang], 'presentation/'], [homes[lang], '']]) {
     for (const other of languages) {
-      assert.match(html, new RegExp(`<link rel="alternate" hreflang="${other}" href="[^"]*${escapedBase}${other}/"`));
-      assert.match(html, new RegExp(`<a href="${escapedBase}${other}/" lang="${other}" hreflang="${other}"`));
+      assert.match(html, new RegExp(`<link rel="alternate" hreflang="${other}" href="[^"]*${escapedBase}${other}/${sub}"`));
+      assert.match(html, new RegExp(`<a href="${escapedBase}${other}/${sub}" lang="${other}" hreflang="${other}"`));
     }
     assert.match(html, /<link rel="alternate" hreflang="x-default"/);
-    assert.match(html, new RegExp(`<link rel="canonical" href="[^"]*${escapedBase}${lang}/"`));
+    assert.match(html, new RegExp(`<link rel="canonical" href="[^"]*${escapedBase}${lang}/${sub}"`));
     assert.equal(count(html, /aria-current="true"/g), 1);
-    assert.match(html, new RegExp(`href="${escapedBase}${lang}/" lang="${lang}" hreflang="${lang}" aria-current="true"`));
+    assert.match(html, new RegExp(`href="${escapedBase}${lang}/${sub}" lang="${lang}" hreflang="${lang}" aria-current="true"`));
+    }
   }
 });
 
@@ -62,7 +65,7 @@ test('les pages de langue fonctionnent sans JavaScript ni ressource distante', (
 
 test('les ancres et les liens de marque respectent la base', () => {
   for (const lang of languages) {
-    const html = pages[lang];
+    for (const html of [pages[lang], homes[lang]]) {
     assert.doesNotMatch(html, /href="(?:#)?"/);
     const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
     for (const [, anchor] of html.matchAll(/href="#([^"]+)"/g)) {
@@ -73,12 +76,13 @@ test('les ancres et les liens de marque respectent la base', () => {
     for (const [link] of brands) {
       assert.match(link, new RegExp(`href="${escapedBase}${lang}/"`));
     }
+    }
   }
 });
 
 test('les logos et favicons sont optimisés', async () => {
   const html = pages.fr;
-  const logos = [...html.matchAll(/<img\b[^>]*\balt\b[^>]*>/g)].map((match) => match[0]);
+  const logos = [...html.matchAll(/<img\b[^>]*\balt\b[^>]*>/g)].map((match) => match[0]).filter((img) => img.includes('/photosort.'));
   assert.equal(logos.length, 2);
   for (const logo of logos) {
     assert.match(logo, new RegExp(`src="${escapedBase}_astro/photosort[^" ]+\\.webp"`));
@@ -133,7 +137,7 @@ test('sans capture, un emplacement propre remplace l’image', () => {
 });
 
 test('les ressources locales existent et le CSS ne charge rien à distance', async () => {
-  const assets = [...pages.fr.matchAll(/(?:href|src)="(\/[^"]+)"/g)].map((match) => match[1]).filter((asset) => !asset.endsWith('/'));
+  const assets = [...pages.fr.matchAll(/(?:href|src)="(\/[^"]+)"/g)].map((match) => match[1]).filter((asset) => !asset.endsWith('/') && !asset.includes('#'));
   const css = assets.filter((asset) => asset.endsWith('.css'));
   assert.ok(css.length > 0);
   for (const asset of assets) {
@@ -168,11 +172,75 @@ test('la page « tri distant » existe dans chaque langue, est liée depuis l’
     }
     const ids = new Set([...guide.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]));
     for (const [, anchor] of guide.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.has(anchor), `${lang} : ${anchor}`);
-    for (const html of [pages[lang], guide]) {
+    for (const html of [homes[lang], pages[lang], guide]) {
       assert.ok(html.includes(`href="${base}${lang}/tri-distant/"`), `${lang} : lien vers le guide`);
     }
     assert.ok(guide.includes(`href="${base}${lang}/#telecharger"`), `${lang} : ancres de l’accueil`);
+    assert.ok(guide.includes(`href="${base}${lang}/presentation/"`), `${lang} : lien vers la présentation`);
   }
   const counts = await Promise.all(languages.map(async (lang) => count(await readFile(dist(`${lang}/tri-distant/index.html`), 'utf8'), /<li class="|<details\b|<dt>/g)));
   assert.deepEqual(counts, [counts[0], counts[0], counts[0]]);
+});
+
+test('la page produit : un h1, six sections avec capture, grille de fonctions, bloc gratuit', () => {
+  for (const lang of languages) {
+    const html = homes[lang];
+    assert.equal(count(html, /<h1\b/g), 1, lang);
+    assert.equal(count(html, /<section class="product-section/g), 6, lang);
+    assert.equal(count(html, /<figure class="print /g), 7, lang);
+    assert.equal(count(html, /data-placeholder="/g), 0, `${lang} : captures présentes`);
+    const imgs = [...html.matchAll(/<img\b(?![^>]*photosort)[^>]*>/g)].map((m) => m[0]);
+    assert.equal(imgs.length, 7);
+    for (const img of imgs) {
+      assert.match(img, /\balt="[^"]{10,}"/);
+      assert.match(img, /\bwidth="\d+"/);
+      assert.match(img, /\bheight="\d+"/);
+      assert.match(img, /srcset="[^"]+"/);
+      assert.match(img, /\.webp/);
+    }
+    assert.equal(count(html, /<ul class="feature-grid"[\s\S]*?<\/ul>/g), 1);
+    assert.ok(count(html.match(/<ul class="feature-grid"[\s\S]*?<\/ul>/)[0], /<li>/g) >= 6);
+    assert.match(html, /class="[^"]*free-block/);
+    assert.match(html, /id="telecharger"/);
+    assert.match(html, /id="fonctions"/);
+    assert.doesNotMatch(html, /shostarsync|shosta-qnap|rsync:\/\/|\/Users\//i);
+  }
+  assert.match(homes.fr, /Oubliez le fastidieux travail de classement de vos photos\./);
+});
+
+test('la page produit : lien de téléchargement et détection du système', () => {
+  const repositoryUrl = process.env.PUBLIC_REPOSITORY_URL?.trim();
+  const hasRelease = process.env.PUBLIC_HAS_RELEASE === 'true';
+  for (const lang of languages) {
+    const html = homes[lang];
+    const scripts = count(html, /<script\b/g);
+    assert.doesNotMatch(html, /<iframe\b/);
+    if (!repositoryUrl) {
+      assert.match(html, /class="availability-note"/);
+      assert.doesNotMatch(html, /href="https:\/\/github\.com\//);
+      assert.equal(scripts, 0);
+    } else if (hasRelease) {
+      assert.ok(html.includes(`href="${repositoryUrl}/releases/latest"`));
+      assert.equal(scripts, 1);
+      assert.match(html, /id="download-main"/);
+      assert.match(html, /navigator\.userAgent/);
+    } else {
+      assert.ok(html.includes(`href="${repositoryUrl}/releases"`));
+      assert.doesNotMatch(html, /releases\/latest/);
+      assert.equal(scripts, 0);
+      assert.match(html, /class="availability-note"/);
+    }
+  }
+  if (repositoryUrl && !hasRelease) {
+    assert.match(homes.fr, /Bientôt disponible/);
+    assert.match(homes.en, /Coming soon/);
+    assert.match(homes.da, /Kommer snart/);
+  }
+});
+
+test('les trois langues de la page produit ont la même structure', () => {
+  for (const pattern of [/<h2\b/g, /<li\b/g, /<figure class="print /g, /<section\b/g, /<a\b/g]) {
+    const counts = languages.map((lang) => count(homes[lang], pattern));
+    assert.deepEqual(counts, [counts[0], counts[0], counts[0]], String(pattern));
+  }
 });

@@ -139,9 +139,9 @@ renderer (React, src/renderer)  ──window.photosort (preload)──►  main 
 
 ## 5. Website (`website/`)
 
-Astro 7, static, **no JS/remote resources required**. Pages `src/pages/[lang]/{index,tri-distant}.astro`, root `index.astro` redirects by browser language.
+Astro 7, static, **no JS/remote resources required**. Pages `src/pages/[lang]/{index,presentation/index,tri-distant}.astro`, root `index.astro` redirects by browser language. `[lang]/index` = product-style home (copy `src/i18n/home.ts`, 6 screenshot sections `src/assets/screenshots/*.webp` — see its README/CREDITS; one tiny inline script sets the download label per OS, only when `PUBLIC_HAS_RELEASE=true`; else « Bientôt disponible » → `/releases`); `[lang]/presentation/` = the previous home kept intact (copy `src/i18n/{fr,en,da}.ts`). `pages.yml` also runs on `release` events and sets `PUBLIC_HAS_RELEASE` via `gh api`.
 Copy in `src/i18n/{fr,en,da}.ts` (typed by `Copy` in `types.ts`; change all three) and `nas.ts` (NAS guide, 3 langs).
-Components `src/components/*.astro`, styles `src/styles/global.css`. Env: `PUBLIC_REPOSITORY_URL`, `ASTRO_SITE`, `ASTRO_BASE`
+Components `src/components/*.astro`, styles `src/styles/global.css`. Env: `PUBLIC_REPOSITORY_URL`, `PUBLIC_HAS_RELEASE`, `ASTRO_SITE`, `ASTRO_BASE`
 (internal links must use `import.meta.env.BASE_URL`). Tests: `tests/site.test.mjs` run on the built `dist/` (structure parity across languages, hreflang, no dead links, honest claims).
 
 ## 6. Commands

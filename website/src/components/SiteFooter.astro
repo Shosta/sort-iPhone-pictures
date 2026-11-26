@@ -19,5 +19,5 @@ const home = base.endsWith('/') ? base : `${base}/`;
     <span>photosort</span>
   </a>
   <p>{t.footer.tagline}</p>
-  <p class="fine-print"><a href={`${home}${lang}/tri-distant/`}>{t.nav.remote}</a> · {t.footer.made} · {repositoryUrl ? <a href={`${repositoryUrl.replace(/\/$/, '')}/blob/main/LICENSE`} rel="noopener noreferrer">{t.footer.license}</a> : t.footer.license}</p>
+  <p class="fine-print"><a href={`${home}${lang}/presentation/`}>{t.nav.details}</a> · <a href={`${home}${lang}/tri-distant/`}>{t.nav.remote}</a> · {t.footer.made} · {repositoryUrl ? <a href={`${repositoryUrl.replace(/\/$/, '')}/blob/main/LICENSE`} rel="noopener noreferrer">{t.footer.license}</a> : t.footer.license}</p>
 </footer>

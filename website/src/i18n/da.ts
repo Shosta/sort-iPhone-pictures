@@ -10,7 +10,7 @@ export const da: Copy = {
       'Photosort sorterer tusindvis af rodede iPhone-billeder efter optagelsesdato og tilføjer tags, så du let kan finde dem igen, uden cloud. Som bonus en scrapbook-PDF til din ugekalender. Open source til macOS, Linux og Windows.',
   },
   skip: 'Gå til indholdet',
-  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', remote: 'Fjernsortering', languages: 'Sprog' },
+  nav: { label: 'Hovednavigation', how: 'Sortering', scrapbook: 'Ugekalender', features: 'Funktioner', download: 'Download', faq: 'FAQ', remote: 'Fjernsortering', details: 'Detaljeret præsentation', languages: 'Sprog' },
   hero: {
     eyebrow: 'Open source · lokalt · ingen konto',
     titleA: 'Tusindvis af rodede iPhone-billeder,',
@@ -94,8 +94,8 @@ export const da: Copy = {
     eyebrow: 'For fuld åbenhed',
     title: 'Det kan Photosort ikke (endnu).',
     items: [
-      'Ingen direkte import fra iPhonen: det arbejder på mapper på din computer.',
-      'Et billede uden EXIF-dato springes over og rapporteres, aldrig sorteret på må og få.',
+      'iPhone-import læser DCIM-mappen på en iPhone, der er tilsluttet computeren: ingen Wi-Fi, ingen iCloud.',
+      'Et billede uden EXIF-dato sorteres efter en reserve (dato i filnavnet, ellers filens dato), aldrig på må og få.',
       'Videoer, Live Photos og XMP/AAE-filer håndteres ikke.',
       'AI-tags findes ikke på Mac med Intel-processor.',
     ],
@@ -104,10 +104,10 @@ export const da: Copy = {
     eyebrow: 'Ofte stillede spørgsmål',
     title: 'Før du sorterer.',
     items: [
-      { q: 'Importerer Photosort direkte fra min iPhone?', a: 'Nej. Hent først dine billeder med dit sædvanlige overførselsværktøj, og bevar originalerne og deres metadata. Photosort organiserer derefter filerne, der allerede ligger på din computer.' },
+      { q: 'Importerer Photosort direkte fra min iPhone?', a: 'Ja, fra DCIM-mappen på en iPhone, der er tilsluttet computeren (kabel), med genoptagelse efter afbrydelse. Du kan også blot vælge mapper, der allerede er kopieret til computeren.' },
       { q: 'Forlader mine billeder min computer?', a: 'Aldrig. Sortering, stedsopslag, dubletsøgning og AI-tags kører offline, uden konto og uden server.' },
       { q: 'Bliver mine originaler ændret?', a: 'Nej. Billederne kopieres til et nyt bibliotek; ingen eksisterende fil overskrives, flyttes eller omdøbes.' },
-      { q: 'Hvilke formater understøttes?', a: 'Blandt andet JPEG, HEIC/HEIF, PNG, TIFF, AVIF og flere RAW-formater. Sortering kræver en læsbar optagelsesdato i EXIF-metadata: et billede uden dato springes over og nævnes i oversigten.' },
+      { q: 'Hvilke formater understøttes?', a: 'Blandt andet JPEG, HEIC/HEIF, PNG, TIFF, AVIF og flere RAW-formater. Optagelsesdatoen kommer fra EXIF-metadata; ellers læser Photosort datoen i filnavnet og derefter filens dato.' },
       { q: 'Hvordan virker scrapbogen?', a: 'Fra det sorterede bibliotek vælger du en uge og sætter kryds ved billeder. Photosort placerer dem på A4-sider med plads til udklipning og åbner derefter PDF’en. Print bare i 100 %.' },
       { q: 'Hvilke systemer kører det på?', a: 'macOS (Apple silicon og Intel), Linux x86_64 (AppImage) og Windows (bærbar programfil). Pakkerne er ikke signeret, og AI-tags findes ikke på Mac med Intel-processor.' },
     ],
