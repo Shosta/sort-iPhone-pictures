@@ -3,10 +3,11 @@
 // Variables optionnelles : GOOS (darwin|windows|linux), GOARCH (amd64|arm64).
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readZipEntry } from './zip-entry.mjs'
 
 const ORT = '1.31.1'
 const here = dirname(fileURLToPath(import.meta.url))
@@ -34,13 +35,17 @@ const models = [
   }
 ]
 
-// Bibliotheque ONNX Runtime par plateforme (pas de build macOS Intel en 1.31).
+// ONNX Runtime : les binaires ne sont plus publies sur GitHub Releases ; onnxruntime.ai (Install) renvoie vers
+// le paquet NuGet Microsoft.ML.OnnxRuntime, un zip unique qui contient la bibliotheque de chaque plateforme.
+// Pas de build macOS Intel. Garder en phase avec src/main/assets.ts.
+const ORT_URL = `https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ORT}/microsoft.ml.onnxruntime.${ORT}.nupkg`
+const ORT_SHA256 = '6871ccbc97f3d5bdb4095a1dcec33aa78d56f6ed8de5980ef5fa1d9f2e7c679a'
 const runtimes = {
-  'darwin-arm64': { name: 'osx-arm64', ext: 'tgz', lib: /^libonnxruntime\.\d[\d.]*\.dylib$/, dest: 'libonnxruntime.dylib', sha256: '2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f' },
-  'linux-amd64': { name: 'linux-x64', ext: 'tgz', lib: /^libonnxruntime\.so\.\d[\d.]*$/, dest: 'libonnxruntime.so', sha256: 'c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9' },
-  'linux-arm64': { name: 'linux-aarch64', ext: 'tgz', lib: /^libonnxruntime\.so\.\d[\d.]*$/, dest: 'libonnxruntime.so', sha256: '5317505e2da99be65f8e2775ba3c2afd6d2961fd78aba1bd8f56159f48820c78' },
-  'windows-amd64': { name: 'win-x64', ext: 'zip', lib: /^onnxruntime\.dll$/, dest: 'onnxruntime.dll', sha256: '5869e26bb25314375f2d5ef1877e3ea06b1543d6c710e6e4a1ec2f7177ab4b2c' },
-  'windows-arm64': { name: 'win-arm64', ext: 'zip', lib: /^onnxruntime\.dll$/, dest: 'onnxruntime.dll', sha256: '817f4129073f84f81cde3ff92b1a4e06d007691e7208deed08a8b6d6df143f7f' }
+  'darwin-arm64': { entry: 'runtimes/osx-arm64/native/libonnxruntime.dylib', dest: 'libonnxruntime.dylib' },
+  'linux-amd64': { entry: 'runtimes/linux-x64/native/libonnxruntime.so', dest: 'libonnxruntime.so' },
+  'linux-arm64': { entry: 'runtimes/linux-arm64/native/libonnxruntime.so', dest: 'libonnxruntime.so' },
+  'windows-amd64': { entry: 'runtimes/win-x64/native/onnxruntime.dll', dest: 'onnxruntime.dll' },
+  'windows-arm64': { entry: 'runtimes/win-arm64/native/onnxruntime.dll', dest: 'onnxruntime.dll' }
 }
 
 const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex')
@@ -58,17 +63,6 @@ function download(url, dest, expected) {
   }
 }
 
-function findFile(dir, pattern) {
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry)
-    if (statSync(path).isDirectory()) {
-      const found = findFile(path, pattern)
-      if (found) return found
-    } else if (pattern.test(entry)) return path
-  }
-  return null
-}
-
 mkdirSync(out, { recursive: true })
 for (const model of models) download(model.url, join(out, model.file), model.sha256)
 
@@ -78,13 +72,11 @@ if (!runtime) {
 } else {
   const work = mkdtempSync(join(tmpdir(), 'ort-'))
   try {
-    const archive = join(work, `ort.${runtime.ext}`)
-    download(`https://github.com/microsoft/onnxruntime/releases/download/v${ORT}/onnxruntime-${runtime.name}-${ORT}.${runtime.ext}`, archive, runtime.sha256)
-    // bsdtar (macOS, Linux, Windows 10+) lit aussi les .zip.
-    execFileSync('tar', ['-xf', archive, '-C', work])
-    const lib = findFile(work, runtime.lib)
-    if (!lib) throw new Error('bibliotheque ONNX Runtime introuvable dans l archive')
-    copyFileSync(lib, join(out, runtime.dest))
+    const archive = join(work, 'ort.nupkg')
+    download(ORT_URL, archive, ORT_SHA256)
+    const lib = readZipEntry(readFileSync(archive), runtime.entry)
+    if (!lib) throw new Error(`${runtime.entry} introuvable dans l archive`)
+    writeFileSync(join(out, runtime.dest), lib)
   } finally {
     rmSync(work, { recursive: true, force: true })
   }

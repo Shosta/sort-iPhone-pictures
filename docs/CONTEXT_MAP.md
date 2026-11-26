@@ -124,7 +124,7 @@ renderer (React, src/renderer)  ──window.photosort (preload)──►  main 
 |---|---|
 | `src/main/index.ts` | window, menu (Prefs ⌘, / Tags ⌘T / Scrapbook ⌘P), sidecar spawn (`resources/bin/photosort-sidecar`, env `PHOTOSORT_AI_DIR`), IPC handlers, safeStorage secrets (`remote-secrets.json`), `PathApprovals` for `shell:reveal`, AI asset provisioning |
 | `src/main/guards.ts` | **IPC security**: `SIDECAR_OPS` allow-list, `FIELDS` allow-list+types+size caps, `validateSidecarRequest`, `isAllowedExternalUrl` (https only), `isTrustedPage`, `checkOpenablePath`, secret account/value checks. Pure module, tested with `node --test` |
-| `src/main/assets.ts` | downloads Places365/YuNet models + ONNX Runtime 1.31.1 into `userData/ai` with pinned SHA-256 (duplicated checksums in `scripts/fetch-ai-assets.mjs`) |
+| `src/main/assets.ts` | downloads Places365/YuNet models + ONNX Runtime 1.31.1 into `userData/ai` with pinned SHA-256 (ORT comes from the NuGet `Microsoft.ML.OnnxRuntime` nupkg, library extracted via `scripts/zip-entry.mjs`; checksums duplicated in `scripts/fetch-ai-assets.mjs`) |
 | `src/preload/index.ts` | `contextBridge` API: `send`, `onEvent`, `pickFolders/pickFile`, `secrets.*`, `pathsFromDrop`, menu hooks, `getAssets/retryAssets/onAssets`, `downloadsDir`, `openPath` |
 | `src/renderer/App.tsx` | main screen/state machine (`Phase`: idle→analyzing→ready→copying→done), drag-drop sources, draft/plan streaming, copy animation, tag job, remote flow |
 | `src/renderer/sidecar.ts` | `request(payload, listener)` with id routing + `planChunk` assembly; thumbnail loader (LIFO queue, LRU 1500, 256 px) |
@@ -160,7 +160,7 @@ Components `src/components/*.astro`, styles `src/styles/global.css`. Env: `PUBLI
 | Regenerate geo data | `go run ./internal/geo/gen cities1000.txt internal/geo/cities.tsv.gz` (and `poi allCountries.txt internal/geo/places.tsv.gz`) |
 
 CI (`.github/workflows/ci.yml`, all actions pinned by SHA): jobs `go` (build, vet, test, govulncheck), `perf`, `electron`, `website`, `workflows` (actionlint).
-`package.yml` builds installers on push to `main`/tag `v*` after CI; `pages.yml` deploys `website/**`.
+`package.yml` builds installers on push to `main`/tag `v*` after CI (macOS Apple Silicon only on tag/manual — flaky hosted runners; one unzipped artifact per file, so .AppImage and .deb are separate); `pages.yml` deploys `website/**`.
 
 ## 7. Where to change what (recipes)
 

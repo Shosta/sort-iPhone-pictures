@@ -1,9 +1,9 @@
 import { net } from 'electron'
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readZipEntry } from '../../scripts/zip-entry.mjs'
 
 const ORT = '1.31.1'
 
@@ -31,20 +31,23 @@ const models: Asset[] = [
   }
 ]
 
+// onnxruntime.ai (Install) distributes the runtime as the NuGet package Microsoft.ML.OnnxRuntime: one zip holding
+// every platform's library (GitHub Releases no longer hosts the binaries). No macOS Intel build.
+// Keep in sync with scripts/fetch-ai-assets.mjs.
+const ORT_URL = `https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ORT}/microsoft.ml.onnxruntime.${ORT}.nupkg`
+const ORT_SHA256 = '6871ccbc97f3d5bdb4095a1dcec33aa78d56f6ed8de5980ef5fa1d9f2e7c679a'
+
 interface Runtime {
-  name: string
-  ext: string
-  lib: RegExp
+  entry: string
   dest: string
-  sha256: string
 }
 
 const runtimes: Record<string, Runtime> = {
-  'darwin-arm64': { name: 'osx-arm64', ext: 'tgz', lib: /^libonnxruntime\.\d[\d.]*\.dylib$/, dest: 'libonnxruntime.dylib', sha256: '2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f' },
-  'linux-x64': { name: 'linux-x64', ext: 'tgz', lib: /^libonnxruntime\.so\.\d[\d.]*$/, dest: 'libonnxruntime.so', sha256: 'c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9' },
-  'linux-arm64': { name: 'linux-aarch64', ext: 'tgz', lib: /^libonnxruntime\.so\.\d[\d.]*$/, dest: 'libonnxruntime.so', sha256: '5317505e2da99be65f8e2775ba3c2afd6d2961fd78aba1bd8f56159f48820c78' },
-  'win32-x64': { name: 'win-x64', ext: 'zip', lib: /^onnxruntime\.dll$/, dest: 'onnxruntime.dll', sha256: '5869e26bb25314375f2d5ef1877e3ea06b1543d6c710e6e4a1ec2f7177ab4b2c' },
-  'win32-arm64': { name: 'win-arm64', ext: 'zip', lib: /^onnxruntime\.dll$/, dest: 'onnxruntime.dll', sha256: '817f4129073f84f81cde3ff92b1a4e06d007691e7208deed08a8b6d6df143f7f' }
+  'darwin-arm64': { entry: 'runtimes/osx-arm64/native/libonnxruntime.dylib', dest: 'libonnxruntime.dylib' },
+  'linux-x64': { entry: 'runtimes/linux-x64/native/libonnxruntime.so', dest: 'libonnxruntime.so' },
+  'linux-arm64': { entry: 'runtimes/linux-arm64/native/libonnxruntime.so', dest: 'libonnxruntime.so' },
+  'win32-x64': { entry: 'runtimes/win-x64/native/onnxruntime.dll', dest: 'onnxruntime.dll' },
+  'win32-arm64': { entry: 'runtimes/win-arm64/native/onnxruntime.dll', dest: 'onnxruntime.dll' }
 }
 
 export interface AssetsState {
@@ -106,17 +109,6 @@ async function download(asset: { file: string; url: string; sha256: string }, de
   renameSync(tmp, dest)
 }
 
-function findFile(dir: string, pattern: RegExp): string | null {
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry)
-    if (statSync(path).isDirectory()) {
-      const found = findFile(path, pattern)
-      if (found) return found
-    } else if (pattern.test(entry)) return path
-  }
-  return null
-}
-
 export function runtimeLibName(): string {
   return { darwin: 'libonnxruntime.dylib', win32: 'onnxruntime.dll' }[process.platform as string] ?? 'libonnxruntime.so'
 }
@@ -154,18 +146,16 @@ async function ensureRuntime(dir: string, report: Report): Promise<void> {
   const runtime = runtimes[`${process.platform}-${process.arch}`]
   if (!runtime) throw new AssetError('ONNX Runtime', '', `no ONNX Runtime ${ORT} build for ${process.platform}/${process.arch}`)
   const marker = join(dir, `${runtime.dest}.sha256`)
-  if (existsSync(join(dir, runtime.dest)) && existsSync(marker) && readFileSync(marker, 'utf8') === runtime.sha256) return
+  if (existsSync(join(dir, runtime.dest)) && existsSync(marker) && readFileSync(marker, 'utf8') === ORT_SHA256) return
 
   const work = mkdtempSync(join(tmpdir(), 'ort-'))
   try {
-    const archive = join(work, `ort.${runtime.ext}`)
-    const url = `https://github.com/microsoft/onnxruntime/releases/download/v${ORT}/onnxruntime-${runtime.name}-${ORT}.${runtime.ext}`
-    await download({ file: `ONNX Runtime ${ORT}`, url, sha256: runtime.sha256 }, archive, report)
-    execFileSync('tar', ['-xf', archive, '-C', work])
-    const lib = findFile(work, runtime.lib)
-    if (!lib) throw new AssetError('ONNX Runtime', url, 'library not found in archive')
-    writeFileSync(join(dir, runtime.dest), readFileSync(lib))
-    writeFileSync(marker, runtime.sha256)
+    const archive = join(work, 'ort.nupkg')
+    await download({ file: `ONNX Runtime ${ORT}`, url: ORT_URL, sha256: ORT_SHA256 }, archive, report)
+    const lib = readZipEntry(readFileSync(archive), runtime.entry)
+    if (!lib) throw new AssetError('ONNX Runtime', ORT_URL, `${runtime.entry} not found in archive`)
+    writeFileSync(join(dir, runtime.dest), lib)
+    writeFileSync(marker, ORT_SHA256)
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
