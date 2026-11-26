@@ -17,6 +17,8 @@ export interface HomeCopy {
     forOs: { mac: string; windows: string; linux: string };
     soon: string;
     soonNote: string;
+    prerelease: string;
+    prereleaseNote: string;
     others: string;
     platforms: { key: 'mac' | 'windows' | 'linux'; os: string; detail: string }[];
     source: string;
@@ -132,6 +134,8 @@ export const home: Record<Lang, HomeCopy> = {
       forOs: { mac: 'Télécharger pour macOS', windows: 'Télécharger pour Windows', linux: 'Télécharger pour Linux' },
       soon: 'Bientôt disponible',
       soonNote: 'Aucune version n’est encore publiée. Le bouton mène à la page des versions.',
+      prerelease: 'Voir la préversion',
+      prereleaseNote: 'Pas encore de version stable : seule une préversion (release candidate) est publiée, à réserver aux testeurs.',
       others: 'Autres plateformes',
       platforms: [
         { key: 'mac', os: 'macOS', detail: 'image disque .dmg' },
@@ -253,6 +257,8 @@ export const home: Record<Lang, HomeCopy> = {
       forOs: { mac: 'Download for macOS', windows: 'Download for Windows', linux: 'Download for Linux' },
       soon: 'Coming soon',
       soonNote: 'No release has been published yet. The button leads to the releases page.',
+      prerelease: 'View the pre-release',
+      prereleaseNote: 'No stable version yet: only a pre-release (release candidate) is published, meant for testers.',
       others: 'Other platforms',
       platforms: [
         { key: 'mac', os: 'macOS', detail: '.dmg disk image' },
@@ -374,6 +380,8 @@ export const home: Record<Lang, HomeCopy> = {
       forOs: { mac: 'Download til macOS', windows: 'Download til Windows', linux: 'Download til Linux' },
       soon: 'Kommer snart',
       soonNote: 'Der er endnu ikke udgivet nogen version. Knappen fører til siden med udgivelser.',
+      prerelease: 'Se førsteudgivelsen',
+      prereleaseNote: 'Endnu ingen stabil version: kun en forhåndsversion (release candidate) er udgivet, beregnet til testere.',
       others: 'Andre platforme',
       platforms: [
         { key: 'mac', os: 'macOS', detail: '.dmg-diskbillede' },

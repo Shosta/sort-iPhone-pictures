@@ -20,6 +20,7 @@ npm run preview
 | --- | --- | --- |
 | `PUBLIC_REPOSITORY_URL` | URL HTTPS du dépôt (active les boutons) | absente : « Publication du dépôt à venir » |
 | `PUBLIC_HAS_RELEASE` | `true` si une release est publiée : le bouton mène à `/releases/latest` avec détection du système. Sinon il mène à `/releases` avec « Bientôt disponible » | absente (= `false`) |
+| `PUBLIC_HAS_PRERELEASE` | `true` si seule une préversion (`-rc.N`) est publiée (sans effet si `PUBLIC_HAS_RELEASE=true`) : le bouton mène à `/releases` avec « Voir la préversion », jamais présentée comme le téléchargement stable | absente (= `false`) |
 | `ASTRO_SITE` | origine du site | `https://shosta.github.io` |
 | `ASTRO_BASE` | sous-chemin (`/<dépôt>` sur Pages) | `/` |
 
@@ -31,7 +32,7 @@ Les liens internes passent par `import.meta.env.BASE_URL`. Les tests lisent
 Le workflow `.github/workflows/pages.yml` publie à chaque push sur `main` qui
 touche `website/**`, ou à la demande (*Run workflow*). Il compile, teste, puis
 déploie. `ASTRO_BASE` et `PUBLIC_REPOSITORY_URL` sont déduits du dépôt ; `PUBLIC_HAS_RELEASE`
-vient d'un appel à `gh api releases/latest`. Le workflow se relance aussi à la publication ou
+vient d'un appel à `gh api releases/latest` (qui ignore les préversions) et `PUBLIC_HAS_PRERELEASE` de la liste des releases. Le workflow se relance aussi à la publication ou
 suppression d'une release (`release`), ce qui fait apparaître le téléchargement sans commit.
 
 Réglage unique : **Settings > Pages > Build and deployment > Source : GitHub Actions**.

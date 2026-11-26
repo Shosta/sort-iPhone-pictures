@@ -1,8 +1,9 @@
 name: Package Photosort
 
 # - Push sur main : CI puis construction des paquets, disponibles en artefacts du run (non signés, version de package.json).
-# - Tag `vX.Y.Z` ou `vX.Y.Z-rc.1` sur un commit de main : CI, paquets (version = celle du tag), SHA256SUMS,
-#   puis publication de la release (pré-version GitHub quand le tag contient un `-`).
+# - Tag `vX.Y.Z` ou `vX.Y.Z-rc.1` sur un commit de main (créé par `npm run release`, le tag doit égaler la version de
+#   package.json) : CI, paquets, SHA256SUMS, puis publication de la release. Un tag avec suffixe (`-rc.N`) donne une
+#   pré-version GitHub (`--prerelease`, jamais « latest »).
 # - Lancement manuel : onglet Actions > "Package Photosort" > Run workflow (depuis un tag : republie la release).
 # - macOS Apple Silicon n'est construit que sur un tag ou un lancement manuel (case « macOS Apple Silicon », cochée par
 #   défaut) : sur les pushes sur main, les runners macOS hébergés échouaient régulièrement avec « The job was not
@@ -87,6 +88,12 @@ jobs:
             exit 1
           fi
           version="${TAG#v}"
+          # Le script de release (npm run release) aligne package.json sur le tag ; le suffixe -rc.N est compris.
+          pkg=$(jq -r .version photosort-electron/package.json)
+          if [ "$pkg" != "$version" ]; then
+            echo "::error::Le tag $TAG ne correspond pas à la version de photosort-electron/package.json ($pkg)."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"

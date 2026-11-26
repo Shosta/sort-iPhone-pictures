@@ -134,7 +134,8 @@ renderer (React, src/renderer)  ──window.photosort (preload)──►  main 
 | `src/renderer/themes.ts` | 8 themes → CSS vars |
 | `src/renderer/types.ts` | shared TS types (`Plan`, `Entry`, `TagJob`, `Scrap*`, `Year*`, `Travel*`…) + `window.photosort` typing |
 | `src/renderer/components/` | `Preferences`, `TagsPanel`, `ScrapbookPanel` (+`Calendar`), `YearMapPanel`, `TravelMapPanel`, `RemotePanel`, `DropZone`, `ImportCard` (DCIM *source picker*: polls `importDetect` every 3 s, replaces DropZone while a device is present or the manual link is open; reports `{devicePath, deviceId, mode, from, to}` to `App`, no action button; portal `⋯` menu), `IssueList`, `Thumb`, `VirtualGrid`, `Flights`, `Select`, `Flag` |
-| `scripts/` | `build-sidecar.mjs` (go build, CGO, GOOS/GOARCH), `fetch-ai-assets.mjs`, `checksums.mjs`, `audit-gate.mjs`, `after-pack.cjs` (Linux launcher), `rename-dev-electron.mjs` |
+| `src/main/version.ts` | `formatVersion` (« 1.0.0 (b89b82e) »); SHA injected by `electron.vite.config.ts` (`__PHOTOSORT_COMMIT__` via `scripts/build-info.mjs`), exposed as IPC `app:version`, shown in Preferences + About panel |
+| `scripts/` | `release.mjs`/`release-lib.mjs` (`npm run release -- X.Y.Z[-rc.N]`: bumps package.json+lock, CHANGELOG from `feat:`/`fix:`, local commit+tag, never pushes), `build-info.mjs`, `build-sidecar.mjs` (go build, CGO, GOOS/GOARCH), `fetch-ai-assets.mjs`, `checksums.mjs`, `audit-gate.mjs`, `after-pack.cjs` (Linux launcher), `rename-dev-electron.mjs` |
 | `electron-builder.yml` | dmg / portable exe / AppImage+deb; macOS signing+notarization only when secrets present |
 
 ## 5. Website (`website/`)
@@ -160,7 +161,7 @@ Components `src/components/*.astro`, styles `src/styles/global.css`. Env: `PUBLI
 | Regenerate geo data | `go run ./internal/geo/gen cities1000.txt internal/geo/cities.tsv.gz` (and `poi allCountries.txt internal/geo/places.tsv.gz`) |
 
 CI (`.github/workflows/ci.yml`, all actions pinned by SHA): jobs `go` (build, vet, test, govulncheck), `perf`, `electron`, `website`, `workflows` (actionlint).
-`package.yml` builds installers on push to `main`/tag `v*` after CI (macOS Apple Silicon only on tag/manual — flaky hosted runners; one unzipped artifact per file, so .AppImage and .deb are separate); `pages.yml` deploys `website/**`.
+`package.yml` builds installers on push to `main`/tag `v*` after CI (macOS Apple Silicon only on tag/manual — flaky hosted runners; one unzipped artifact per file, so .AppImage and .deb are separate); `pages.yml` deploys `website/**`. Versioning: strict SemVer, tag `vX.Y.Z[-rc.N]` must equal `photosort-electron/package.json` version (checked in `prepare`); `-rc.N` → GitHub prerelease (not "latest"). Website: `PUBLIC_HAS_RELEASE` = stable only (`releases/latest` ignores prereleases), `PUBLIC_HAS_PRERELEASE` shows "View the pre-release" instead of a stable download.
 
 ## 7. Where to change what (recipes)
 

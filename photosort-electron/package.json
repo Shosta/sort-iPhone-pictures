@@ -1,7 +1,7 @@
 {
   "name": "photosort-electron",
   "productName": "Photosort",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "description": "Classement de photos par date EXIF - application Electron avec moteur Go",
   "homepage": "https://github.com/shosta/sort-iPhone-pictures",
   "main": "out/main/index.js",
@@ -13,6 +13,7 @@
     "build": "npm run sidecar && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"src/main/*.test.ts\" \"src/renderer/*.test.ts\" \"scripts/*.test.cjs\" \"scripts/*.test.mjs\"",
+    "release": "node scripts/release.mjs",
     "audit:gate": "node scripts/audit-gate.mjs",
     "checksums": "node scripts/checksums.mjs release",
     "checksums:verify": "node scripts/checksums.mjs release --check",

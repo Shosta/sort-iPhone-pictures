@@ -40,6 +40,7 @@ const api = {
     ipcRenderer.on('assets:state', listener)
     return () => ipcRenderer.removeListener('assets:state', listener)
   },
+  getVersion: (): Promise<{ version: string; commit: string; display: string }> => ipcRenderer.invoke('app:version'),
   downloadsDir: (): Promise<string> => ipcRenderer.invoke('app:downloadsDir'),
   openPath: (path: string): Promise<string> => ipcRenderer.invoke('shell:reveal', path)
 }

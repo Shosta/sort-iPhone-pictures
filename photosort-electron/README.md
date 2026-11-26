@@ -26,6 +26,24 @@ compilé pour l'OS courant ; pour une autre cible, définir `GOOS`/`GOARCH`
 (`scripts/build-sidecar.mjs`). Les installeurs sont à générer sur chaque OS
 (voir « Packaging via GitHub Actions »).
 
+## Versionnage
+
+SemVer strict `MAJEUR.MINEUR.CORRECTIF` (entiers, jamais de SHA dans le champ version), préversions
+`1.0.0-rc.1`, `-rc.2`… puis `1.0.0`. L'application affiche la version suivie du SHA court du commit
+(`1.0.0 (b89b82e)`, Préférences et fenêtre « À propos » macOS) ; le SHA est injecté au build
+(`PHOTOSORT_COMMIT`, `GITHUB_SHA` ou `git rev-parse`, sinon la version seule est affichée).
+
+```bash
+npm run release -- 1.0.0-rc.2 --dry-run   # affiche le changelog sans rien modifier
+npm run release -- 1.0.0-rc.2             # package.json + lockfile + ../CHANGELOG.md, commit « release: v… », tag annoté
+```
+
+Le script (`scripts/release.mjs`, logique dans `release-lib.mjs`) exige un dépôt propre, un tag inexistant et une
+version non antérieure à l'actuelle ; il ne garde que les commits `feat:`/`fix:` depuis le tag précédent (pour
+une version stable, depuis la dernière version stable). **Il ne pousse jamais** : fusion sur `main` puis
+`git push origin vX.Y.Z` restent des actions manuelles. Une préversion n'est jamais « latest » sur GitHub ni
+proposée comme téléchargement stable par le site.
+
 ## GitHub Actions : CI, paquets et releases
 
 Trois workflows dans `.github/workflows/` (actions épinglées par SHA, permissions
@@ -64,11 +82,12 @@ temps de démarrage (aucun benchmark n'existe dans le dépôt).
   version de `package.json`. Les changements limités à `docs/`, aux `.md`, à `website/`
   ou à `pages.yml`/`dependabot.yml` ne déclenchent rien.
 - **Tag `vX.Y.Z` ou `vX.Y.Z-rc.1` sur un commit de `main`** :
-  `git tag v1.2.3 && git push origin v1.2.3`. Le tag doit être du SemVer strict (sans
-  `+build`) et pointer sur un commit de `main`, sinon le workflow échoue avant de
+  créé par `npm run release -- 1.2.3` (voir « Versionnage » ci-dessous), puis `git push origin v1.2.3`.
+  Le tag doit être du SemVer strict (sans
+  `+build`), être **égal à la version de `package.json`** (sinon `prepare` échoue) et pointer sur `main` : sinon le
+  workflow s'arrête avant de
   consommer des minutes de runner. **La version de l'application est celle du tag**
-  (`electron-builder -c.extraMetadata.version=…`) : `package.json` n'a pas besoin
-  d'être modifié avant de taguer. Un tag avec `-` (`-rc.1`, `-beta.2`) publie une
+  (`electron-builder -c.extraMetadata.version=…`). Un tag avec `-` (`-rc.1`, `-beta.2`) publie une
   *pré-version* GitHub. Les paquets sont signés si les secrets ci-dessous existent,
   puis `SHA256SUMS` est généré, vérifié (`--check`) et publié avec la release (notes
   générées). Relancer le workflow sur le tag (*Run workflow*, ref = le tag) remplace

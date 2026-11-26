@@ -51,7 +51,8 @@ jobs:
             *) echo "ASTRO_BASE=/${REPO}" >> "$GITHUB_ENV" ;;
           esac
 
-      # Sans release publiée, la page d'accueil affiche « Bientôt disponible » (lien vers /releases).
+      # /releases/latest ignore les préversions (-rc.N) : PUBLIC_HAS_RELEASE ne vaut true que pour une version stable.
+      # Sans version stable, la page affiche « Bientôt disponible » (ou « Voir la préversion » si une préversion existe).
       - name: Détecter une release publiée
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,6 +62,10 @@ jobs:
             echo "PUBLIC_HAS_RELEASE=true" >> "$GITHUB_ENV"
           else
             echo "PUBLIC_HAS_RELEASE=false" >> "$GITHUB_ENV"
+            pre=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.prerelease and (.draft | not))] | length' 2>/dev/null || echo 0)
+            if [ "${pre:-0}" -gt 0 ]; then
+              echo "PUBLIC_HAS_PRERELEASE=true" >> "$GITHUB_ENV"
+            fi
           fi
 
       - run: npm ci --ignore-scripts

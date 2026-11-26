@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { formatVersion } from './version'
 import { type AssetsState, assetsComplete, ensureAssets } from './assets'
 import {
   PathApprovals,
@@ -249,6 +250,8 @@ handleApp('shell:reveal', async (_event, path: unknown) => {
 handleApp('assets:get', () => assets)
 handleApp('assets:retry', () => provisionAssets())
 
+const appCommit = typeof __PHOTOSORT_COMMIT__ === 'string' ? __PHOTOSORT_COMMIT__ : ''
+handleApp('app:version', () => ({ version: app.getVersion(), commit: appCommit, display: formatVersion(app.getVersion(), appCommit) }))
 handleApp('app:downloadsDir', () => app.getPath('downloads'))
 
 interface MenuLabels {
@@ -292,6 +295,7 @@ onApp('menu:labels', (_event, labels: unknown) => {
 })
 
 app.whenReady().then(async () => {
+  app.setAboutPanelOptions({ applicationVersion: app.getVersion(), version: appCommit })
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
   buildMenu({ preferences: 'Preferences…', tags: 'AI tags…', scrapbook: 'Weekly planner sheet…' })

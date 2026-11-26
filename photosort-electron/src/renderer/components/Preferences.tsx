@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import { LANGUAGES, useT } from '../i18n'
 import type { Prefs } from '../prefs'
 import { THEMES, themeById } from '../themes'
@@ -23,6 +24,10 @@ export function Switch({ on, accent }: { on: boolean; accent: string }): JSX.Ele
 export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Element {
   const t = useT()
   const accent = themeById(prefs.theme).vars.accent
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void window.photosort.getVersion().then((v) => setVersion(v.display))
+  }, [])
 
   return (
     <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -145,6 +150,11 @@ export function Preferences({ prefs, busy, onChange, onClose }: Props): JSX.Elem
           </div>
         </div>
 
+        {version && (
+          <p className="hint">
+            {t('prefs.version')} {version}
+          </p>
+        )}
         <p className="hint">{t('prefs.saved')}</p>
         <button className="btn" onClick={onClose}>
           {t('close')}

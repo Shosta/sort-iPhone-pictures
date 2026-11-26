@@ -231,7 +231,13 @@ test('la page produit : lien de téléchargement et détection du système', () 
       assert.match(html, /class="availability-note"/);
     }
   }
-  if (repositoryUrl && !hasRelease) {
+  if (repositoryUrl && !hasRelease && process.env.PUBLIC_HAS_PRERELEASE === 'true') {
+    // Une préversion n'est jamais présentée comme le téléchargement principal stable.
+    assert.match(homes.fr, /Voir la préversion/);
+    assert.match(homes.en, /View the pre-release/);
+    assert.match(homes.da, /Se førsteudgivelsen/);
+    for (const lang of languages) assert.doesNotMatch(homes[lang], /releases\/latest/);
+  } else if (repositoryUrl && !hasRelease) {
     assert.match(homes.fr, /Bientôt disponible/);
     assert.match(homes.en, /Coming soon/);
     assert.match(homes.da, /Kommer snart/);

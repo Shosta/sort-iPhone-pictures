@@ -23,11 +23,13 @@ const repositoryUrl = import.meta.env.PUBLIC_REPOSITORY_URL?.trim();
 if (repositoryUrl && new URL(repositoryUrl).protocol !== 'https:') {
   throw new Error('PUBLIC_REPOSITORY_URL doit être une URL HTTPS.');
 }
-// Tant qu'aucune release n'est publiée (PUBLIC_HAS_RELEASE != "true"), on pointe vers la liste des releases.
+// PUBLIC_HAS_RELEASE = une version stable existe (/releases/latest ignore les préversions).
+// Sans version stable, on pointe vers la liste des releases ; PUBLIC_HAS_PRERELEASE précise qu'une préversion y figure.
 const hasRelease = import.meta.env.PUBLIC_HAS_RELEASE === 'true';
+const hasPrerelease = !hasRelease && import.meta.env.PUBLIC_HAS_PRERELEASE === 'true';
 const repoBase = repositoryUrl?.replace(/\/$/, '');
 const downloadUrl = repoBase ? (hasRelease ? `${repoBase}/releases/latest` : `${repoBase}/releases`) : undefined;
-const mainLabel = hasRelease ? h.download.generic : h.download.soon;
+const mainLabel = hasRelease ? h.download.generic : hasPrerelease ? h.download.prerelease : h.download.soon;
 const tilts = [1.4, -1.6, 1.2, -1.4, 1.6, -1.2];
 ---
 
@@ -106,7 +108,7 @@ const tilts = [1.4, -1.6, 1.2, -1.4, 1.6, -1.2];
               <div class="actions">
                 <a id="download-cta" class="button button-primary" href={downloadUrl} rel="noopener noreferrer">{mainLabel}</a>
               </div>
-              {!hasRelease && <p class="availability-note">{h.download.soonNote}</p>}
+              {!hasRelease && <p class="availability-note">{hasPrerelease ? h.download.prereleaseNote : h.download.soonNote}</p>}
               <h3 class="others-title">{h.download.others}</h3>
               <ul class="platforms platforms--links">
                 {h.download.platforms.map((p) => (
